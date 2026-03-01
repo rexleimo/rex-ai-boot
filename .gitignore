@@ -14,6 +14,7 @@ secrets.json
 *.log
 .DS_Store
 Thumbs.db
+temp/
 
 # 大文件（图片、视频）
 images/
