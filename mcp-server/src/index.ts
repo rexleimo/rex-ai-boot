@@ -5,11 +5,11 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { tools } from './tools.js';
+import { tools as playwrightTools, browserLauncher, navigate, click, type, snapshot, screenshot } from './browser/index.js';
 
 const server = new Server(
   {
-    name: 'puppeteer-stealth-mcp',
+    name: 'playwright-browser-mcp',
     version: '1.0.0',
   },
   {
@@ -23,189 +23,80 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
+      // Playwright 浏览器工具
+      ...playwrightTools,
       {
-        name: 'stealth_navigate',
-        description: 'Navigate to a URL with stealth mode',
+        name: 'browser_close',
+        description: 'Close browser',
         inputSchema: {
           type: 'object',
           properties: {
-            url: { type: 'string', description: 'URL to navigate to' },
-            pageId: { type: 'number', description: 'Optional page ID' },
-          },
-          required: ['url'],
-        },
-      },
-      {
-        name: 'stealth_click',
-        description: 'Click an element with human-like behavior',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            selector: { type: 'string', description: 'CSS or XPath selector' },
-            pageId: { type: 'number', description: 'Optional page ID' },
-          },
-          required: ['selector'],
-        },
-      },
-      {
-        name: 'stealth_fill',
-        description: 'Fill an input field',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            selector: { type: 'string', description: 'CSS or XPath selector' },
-            value: { type: 'string', description: 'Value to fill' },
-            pageId: { type: 'number', description: 'Optional page ID' },
-          },
-          required: ['selector', 'value'],
-        },
-      },
-      {
-        name: 'stealth_type',
-        description: 'Type text with human-like delays',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            selector: { type: 'string', description: 'CSS or XPath selector' },
-            text: { type: 'string', description: 'Text to type' },
-            pageId: { type: 'number', description: 'Optional page ID' },
-          },
-          required: ['selector', 'text'],
-        },
-      },
-      {
-        name: 'stealth_screenshot',
-        description: 'Take a screenshot',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            fullPage: { type: 'boolean', description: 'Capture full page' },
-            pageId: { type: 'number', description: 'Optional page ID' },
+            profile: { type: 'string', default: 'default' },
           },
         },
       },
       {
-        name: 'stealth_snapshot',
-        description: 'Get page HTML snapshot',
+        name: 'browser_list_tabs',
+        description: 'List all tabs',
         inputSchema: {
           type: 'object',
           properties: {
-            pageId: { type: 'number', description: 'Optional page ID' },
+            profile: { type: 'string', default: 'default' },
           },
         },
       },
-      {
-        name: 'stealth_evaluate',
-        description: 'Evaluate JavaScript in page context',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            script: { type: 'string', description: 'JavaScript code' },
-            pageId: { type: 'number', description: 'Optional page ID' },
-          },
-          required: ['script'],
-        },
-      },
-      {
-        name: 'stealth_wait_for',
-        description: 'Wait for an element to appear',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            selector: { type: 'string', description: 'CSS or XPath selector' },
-            timeout: { type: 'number', description: 'Timeout in ms' },
-            pageId: { type: 'number', description: 'Optional page ID' },
-          },
-          required: ['selector'],
-        },
-      },
-      {
-        name: 'stealth_scroll',
-        description: 'Scroll the page with human-like behavior',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            y: { type: 'number', description: 'Pixels to scroll' },
-            pageId: { type: 'number', description: 'Optional page ID' },
-          },
-        },
-      },
-      {
-        name: 'stealth_mouse_move',
-        description: 'Move mouse with human-like trajectory',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            x: { type: 'number', description: 'X coordinate' },
-            y: { type: 'number', description: 'Y coordinate' },
-            pageId: { type: 'number', description: 'Optional page ID' },
-          },
-          required: ['x', 'y'],
-        },
-      },
-      {
-        name: 'stealth_new_tab',
-        description: 'Create a new browser tab',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            url: { type: 'string', description: 'Optional URL to open' },
-          },
-        },
-      },
-      {
-        name: 'stealth_switch_tab',
-        description: 'Switch to another tab',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            target: {
-              oneOf: [
-                { type: 'number' },
-                { type: 'string', enum: ['previous', 'next'] }
-              ],
-              description: 'Page ID or direction'
-            },
-          },
-          required: ['target'],
-        },
-      },
-      {
-        name: 'stealth_close_tab',
-        description: 'Close a tab',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            pageId: { type: 'number', description: 'Page ID to close' },
-          },
-        },
-      },
-      {
-        name: 'stealth_list_tabs',
-        description: 'List all open tabs',
-        inputSchema: {
-          type: 'object',
-          properties: {},
-        },
-      },
-      {
-        name: 'stealth_close_browser',
-        description: 'Close the browser',
-        inputSchema: {
-          type: 'object',
-          properties: {},
-        },
-      },
+      // 保留旧版 puppeteer 工具（可选）
     ],
   };
 });
+
+// 工具处理器映射
+const toolHandlers: Record<string, (args: any) => Promise<any>> = {
+  browser_launch: async (args) => {
+    const { profile = 'default', url } = args;
+    const state = await browserLauncher.launch(profile, url);
+    return { success: true, profile };
+  },
+  browser_navigate: async (args) => {
+    return await navigate(args.url, args.profile);
+  },
+  browser_click: async (args) => {
+    return await click(args.selector, args.profile, args.double);
+  },
+  browser_type: async (args) => {
+    return await type(args.selector, args.text, args.profile);
+  },
+  browser_snapshot: async (args) => {
+    return await snapshot(args.profile);
+  },
+  browser_screenshot: async (args) => {
+    return await screenshot(args.fullPage, args.profile);
+  },
+  browser_close: async (args) => {
+    const profile = args.profile || 'default';
+    await browserLauncher.close(profile);
+    return { success: true, profile };
+  },
+  browser_list_tabs: async (args) => {
+    const state = browserLauncher.getState(args.profile || 'default');
+    if (!state) {
+      return { tabs: [], profile: args.profile || 'default' };
+    }
+    const tabs = Array.from(state.pages.entries()).map(([id, page]) => ({
+      id,
+      url: page.url(),
+      title: page.title(),
+    }));
+    return { tabs, profile: args.profile || 'default' };
+  },
+};
 
 // 处理工具调用
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
-    const tool = tools[name as keyof typeof tools] as ((args: unknown) => Promise<unknown>) | undefined;
+    const tool = toolHandlers[name];
     if (!tool) {
       throw new Error(`Unknown tool: ${name}`);
     }
@@ -236,7 +127,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('Puppeteer Stealth MCP Server running on stdio');
+  console.error('Playwright Browser MCP Server running on stdio');
 }
 
 main().catch(console.error);
