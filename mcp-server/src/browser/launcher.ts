@@ -63,6 +63,9 @@ export class BrowserLauncher {
       fs.mkdirSync(profileDir, { recursive: true });
     }
 
+    // 使用配置的用户数据目录（用于保存登录状态）
+    const userDataDir = profile.userDataDir || profileDir;
+
     // 构建启动选项
     const launchOptions: any = {
       headless: false,
@@ -70,16 +73,22 @@ export class BrowserLauncher {
       executablePath: profile.executablePath,
     };
 
-    // 使用配置的用户数据目录（用于保存登录状态）
-    if (profile.userDataDir || profileDir) {
-      launchOptions.userDataDir = profile.userDataDir || profileDir;
+    let browser: Browser;
+    let context: BrowserContext;
+
+    // 使用 launchPersistentContext 来支持 userDataDir（持久化登录状态）
+    if (userDataDir) {
+      context = await chromium.launchPersistentContext(userDataDir, {
+        ...launchOptions,
+        viewport: { width: 1280, height: 720 },
+      });
+      browser = context.browser()!;
+    } else {
+      browser = await chromium.launch(launchOptions);
+      context = await browser.newContext({
+        viewport: { width: 1280, height: 720 },
+      });
     }
-
-    const browser = await chromium.launch(launchOptions);
-
-    const context = await browser.newContext({
-      viewport: { width: 1280, height: 720 },
-    });
 
     // 注入反检测脚本
     await context.addInitScript(STEALTH_SCRIPT);
