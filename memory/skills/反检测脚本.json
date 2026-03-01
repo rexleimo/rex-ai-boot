@@ -19,5 +19,8 @@
     "when": "在页面加载完成后立即执行",
     "how": "使用 CDP 的 Page.addScriptToEvaluateOnNewDocument 或在控制台执行",
     "verification": "执行后检查 navigator.webdriver === false"
+  },
+  "notes": {
+    "new_mcp": "新的 puppeteer-stealth-mcp 已内置所有反检测功能，使用 puppeteer-extra-plugin-stealth 自动处理这些脚本。此文件作为知识库参考。"
   }
 }

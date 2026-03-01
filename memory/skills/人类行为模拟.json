@@ -71,5 +71,8 @@
       "max": 60,
       "unit": "seconds"
     }
+  },
+  "notes": {
+    "new_mcp": "新的 puppeteer-stealth-mcp 已内置所有人类行为模拟功能，使用 ghost-cursor 自动处理鼠标行为和随机延迟。此文件作为知识库参考。"
   }
 }
