@@ -205,7 +205,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
-    const tool = (tools as any)[name];
+    const tool = tools[name as keyof typeof tools] as ((args: unknown) => Promise<unknown>) | undefined;
     if (!tool) {
       throw new Error(`Unknown tool: ${name}`);
     }
