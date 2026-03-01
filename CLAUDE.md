@@ -112,6 +112,41 @@ aios/
   - `memory/skills/人类行为模拟.json` - human behavior
   - `config/stealth-chrome-args.json` - Chrome args
 
+## Browser MCP (Playwright-based)
+
+The project now includes a **Playwright-based browser MCP** (参照 OpenClaw 架构):
+
+### MCP Server
+
+- **Path**: `mcp-server/`
+- **Build**: `cd mcp-server && npm run build`
+- **Dev**: `cd mcp-server && npm run dev`
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `browser_launch` | Launch browser with optional profile |
+| `browser_navigate` | Navigate to URL |
+| `browser_click` | Click element |
+| `browser_type` | Type text into element |
+| `browser_snapshot` | Get page snapshot |
+| `browser_screenshot` | Take screenshot |
+| `browser_close` | Close browser |
+| `browser_list_tabs` | List all tabs |
+
+### Profile Support
+
+Multi-profile support for isolated browser instances:
+- Each profile has independent user data directory
+- Config: `config/browser-profiles.json`
+
+### Tech Stack
+
+- Playwright (与 OpenClaw 相同)
+- TypeScript
+- MCP SDK
+
 ## Important Notes
 
 - All operations use Chrome DevTools MCP for browser automation
