@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "default": {
+      "name": "default",
+      "userDataDir": ".browser-profiles/default"
+    }
+  }
+}
