@@ -54,3 +54,8 @@ mcp-server/test-persistence.cjs
 
 # 小红书图片输出
 xhs-images/
+
+# skills 工具安装的各客户端目录
+memory/skills/. */
+memory/skills/skills-lock.json
+memory/skills/skills/
