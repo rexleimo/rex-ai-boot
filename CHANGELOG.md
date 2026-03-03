@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-03-03
+
+- docs: align superpowers workflow route and add RexAI friend links
+
 ## [0.5.0] - 2026-03-03
 
 - feat(contextdb): add SQLite sidecar index (`memory/context-db/index/context.db`) with `index:rebuild`

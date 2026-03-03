@@ -62,6 +62,25 @@ PRs should include:
 - Prefer CDP-based profile config in `config/browser-profiles.json` for stable login reuse.
 - Preserve human-in-the-loop checks for auth walls and sensitive outbound actions.
 
+## Default Superpowers Route
+For substantial user requests, use this route by default:
+
+1. Select process skill before coding:
+   - Design/new behavior: `superpowers:brainstorming`
+   - Multi-step delivery: `superpowers:writing-plans`
+   - Debug/failure analysis: `superpowers:systematic-debugging`
+2. Create a plan artifact in `docs/plans/YYYY-MM-DD-<topic>.md`.
+3. Apply long-running controls with `aios-long-running-harness`:
+   - Lock objective, budgets, stop conditions, and required evidence.
+   - Persist progress through ContextDB lifecycle (`init -> session -> event -> checkpoint -> context:pack`).
+4. Choose execution mode:
+   - 2+ independent problem domains: use `superpowers:dispatching-parallel-agents`.
+   - Shared-state or coupled changes: execute sequentially.
+   - If real subagents are unavailable in the current runtime, emulate dispatch by splitting domain tasks explicitly and running only safe independent reads/checks in parallel.
+5. Finish with `superpowers:verification-before-completion`; do not claim success without checkpoint + artifact evidence.
+
+For long tasks, announce the chosen route in the first progress update.
+
 ## Agent Shortcut Conventions
 - `cap` is a repository shortcut for `commit + push`.
 - Trigger: when the user message is exactly `cap`, execute this flow in the current repo.

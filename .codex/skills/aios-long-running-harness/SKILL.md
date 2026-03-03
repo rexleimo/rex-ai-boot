@@ -17,6 +17,12 @@ Use this harness to keep long tasks stable under UI drift, model variability, an
 6. Recover: on failure, classify and retry only with a changed hypothesis.
 7. Complete: run final verification and write summary doc.
 
+## Pairing with Superpowers Skills
+- Plan step should be produced through `superpowers:writing-plans` (or `superpowers:brainstorming` first when scope is unclear).
+- For 2+ independent domains, use `superpowers:dispatching-parallel-agents`; for coupled domains, run sequentially.
+- If the runtime has no true subagent tool, emulate dispatch with explicit per-domain task queues and only parallelize safe independent reads/checks.
+- Always finish with `superpowers:verification-before-completion` before claiming run success.
+
 ## Required Controls
 - Time budget per step and per run.
 - Retry budget per failure class.

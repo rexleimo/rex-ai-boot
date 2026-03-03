@@ -24,6 +24,15 @@ claude
 gemini
 ```
 
+## 파트너 링크
+
+- [os.rexai.top](https://os.rexai.top)
+  - RexOS AI Agent OS: harness-first 장기 작업 실행, SQLite 기반 메모리, 샌드박스 도구 런타임을 제공.
+- [rexai.top](https://rexai.top)
+  - RexAI 콘텐츠 허브: AI 엔지니어링 글, 튜토리얼, 도구 분석, 제품 업데이트를 모아둔 사이트.
+- [tool.rexai.top](https://tool.rexai.top)
+  - RexAI 도구 포털: 무료/무광고/빠른 접속을 지향하는 개발자 친화 온라인 도구 모음.
+
 ## 다음 읽기
 
 - [빠른 시작](getting-started.md)

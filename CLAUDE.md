@@ -157,3 +157,20 @@ Multi-profile support for isolated browser instances:
 - Before executing any plan, use `superpowers:brainstorming` skill
 - When implementing features, use `superpowers:test-driven-development`
 - Before claiming completion, use `superpowers:verification-before-completion`
+
+## Default Task Route (Superpowers + Harness)
+
+For substantial tasks, route execution in this order:
+
+1. Process selection
+   - `superpowers:brainstorming` for design/new behavior
+   - `superpowers:writing-plans` for multi-step implementation
+   - `superpowers:systematic-debugging` for failures
+2. Write a plan artifact in `docs/plans/YYYY-MM-DD-<topic>.md`.
+3. Use `aios-long-running-harness` controls (preflight budgets, evidence checkpoints, retry classes).
+4. Persist session state with ContextDB (`init -> session -> event -> checkpoint -> context:pack`).
+5. Dispatch strategy
+   - Independent domains: use `superpowers:dispatching-parallel-agents`.
+   - Coupled/shared-state changes: stay sequential.
+   - If no true subagent tool is available, emulate parallelism with explicit domain queues and only safe parallel reads/checks.
+6. Close only after `superpowers:verification-before-completion` and concrete artifact evidence.

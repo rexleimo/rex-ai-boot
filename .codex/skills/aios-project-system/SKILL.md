@@ -22,6 +22,15 @@ Use this skill as the repository map for `aios`. It explains where state lives, 
 - Prefer `browser_snapshot`/DOM evidence before using screenshots.
 - Keep safety constraints aligned with `memory/specs` and `memory/skills/技能使用约束.json`.
 
+## Superpowers Route Bridge
+When requests are substantial, chain process skills and harness controls in this order:
+1. Choose process: `superpowers:brainstorming` / `superpowers:writing-plans` / `superpowers:systematic-debugging`.
+2. Produce plan artifact in `docs/plans/YYYY-MM-DD-<topic>.md`.
+3. Apply `aios-long-running-harness` preflight, evidence gates, and retry policy.
+4. Persist run state via ContextDB checkpoints.
+5. If work splits into independent domains, use `superpowers:dispatching-parallel-agents`; if domains are coupled, stay sequential.
+6. End only with `superpowers:verification-before-completion`.
+
 ## Default Operating Order
 1. Read task context and matching `memory/skills` + `memory/specs` files.
 2. Confirm available MCP tools and selector strategy.
