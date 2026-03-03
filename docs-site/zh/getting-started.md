@@ -11,7 +11,14 @@ description: 安装、启用包装器并在项目内运行。
 - `node` 与 `npm`
 - 已安装至少一个 CLI：`codex` / `claude` / `gemini`
 
-## 1) 构建 ContextDB CLI
+## 1) 一键安装 Browser MCP
+
+```bash
+scripts/install-browser-mcp.sh
+scripts/doctor-browser-mcp.sh
+```
+
+## 2) 构建 ContextDB CLI
 
 ```bash
 cd mcp-server
@@ -19,7 +26,7 @@ npm install
 npm run build
 ```
 
-## 2) 配置 shell 包装
+## 3) 配置 shell 包装
 
 向 `~/.zshrc` 添加：
 
@@ -37,13 +44,13 @@ fi
 source ~/.zshrc
 ```
 
-## 3) 在目标项目启用
+## 4) 在目标项目启用
 
 ```bash
 touch .contextdb-enable
 ```
 
-## 4) 直接使用
+## 5) 直接使用
 
 ```bash
 codex

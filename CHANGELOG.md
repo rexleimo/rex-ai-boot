@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-03
+
+- feat: add one-command browser mcp install/doctor and default cdp fallback
+
 ## [0.2.0] - 2026-03-03
 
 - feat: add semver governance and versioning-by-impact skill

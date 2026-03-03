@@ -5,6 +5,20 @@ description: 常见报错与修复步骤。
 
 # 故障排查
 
+## Browser MCP 工具不可用
+
+先执行：
+
+```bash
+scripts/doctor-browser-mcp.sh
+```
+
+如果诊断提示缺依赖，再执行：
+
+```bash
+scripts/install-browser-mcp.sh
+```
+
 ## `EXTRA_ARGS[@]: unbound variable`
 
 原因：旧版 `ctx-agent.sh` 在 `bash set -u` 下展开空数组。

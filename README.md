@@ -37,15 +37,25 @@ User -> codex/claude/gemini
 
 ## Quick Start
 
-### 1) Build MCP server and ContextDB CLI
+### 1) One-command Browser MCP setup (for new developers)
+
+```bash
+scripts/install-browser-mcp.sh
+scripts/doctor-browser-mcp.sh
+```
+
+This installs browser runtime, builds `mcp-server`, and prints MCP config JSON to copy into your CLI client.
+
+### 2) Build MCP server and ContextDB CLI (manual path)
 
 ```bash
 cd mcp-server
 npm install
+npx playwright install chromium
 npm run build
 ```
 
-### 2) Install transparent shell integration (one-time)
+### 3) Install transparent shell integration (one-time)
 
 > Safety first: prefer manual `~/.zshrc` editing and back it up before changes.
 
@@ -76,7 +86,7 @@ If your repo path is different, set `ROOTPATH` to your actual location.
 
 Optional helper script: [`scripts/install-contextdb-shell.sh`](scripts/install-contextdb-shell.sh)
 
-### 2.1 Scope control (avoid cross-project reuse)
+### 3.1 Scope control (avoid cross-project reuse)
 
 By default, wrappers run in **all git repositories** (`CTXDB_WRAP_MODE=all`).
 If you want isolation, set one of these in `~/.zshrc`:
@@ -95,7 +105,7 @@ For `opt-in`, create marker file in a project root:
 touch .contextdb-enable
 ```
 
-### 2.2 Skill scope (important)
+### 3.2 Skill scope (important)
 
 ContextDB wrapping and CLI skill loading are different layers:
 
@@ -105,7 +115,7 @@ ContextDB wrapping and CLI skill loading are different layers:
 
 If you don't want cross-project skill reuse, keep custom skills in repo-local folders instead of global home directories.
 
-### 3) Use original commands directly
+### 4) Use original commands directly
 
 ```bash
 codex

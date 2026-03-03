@@ -11,7 +11,14 @@ description: Install, enable wrappers, and run your first project-scoped session
 - `node` + `npm`
 - One or more CLIs installed: `codex`, `claude`, `gemini`
 
-## 1) Build ContextDB CLI
+## 1) Install Browser MCP (one command)
+
+```bash
+scripts/install-browser-mcp.sh
+scripts/doctor-browser-mcp.sh
+```
+
+## 2) Build ContextDB CLI
 
 ```bash
 cd mcp-server
@@ -19,7 +26,7 @@ npm install
 npm run build
 ```
 
-## 2) Enable shell wrappers
+## 3) Enable shell wrappers
 
 Add this block to `~/.zshrc`:
 
@@ -39,7 +46,7 @@ Reload shell:
 source ~/.zshrc
 ```
 
-## 3) Enable current project
+## 4) Enable current project
 
 In each target project root:
 
@@ -49,7 +56,7 @@ touch .contextdb-enable
 
 This prevents accidental cross-project wrapping.
 
-## 4) Start working
+## 5) Start working
 
 ```bash
 cd /path/to/your/project
@@ -60,7 +67,7 @@ claude
 gemini
 ```
 
-## 5) Verify data created
+## 6) Verify data created
 
 ```bash
 ls memory/context-db

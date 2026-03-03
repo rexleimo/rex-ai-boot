@@ -5,25 +5,42 @@
 ## Quick Start
 
 ```bash
-cd mcp-server
-npm install
-npm run build
+scripts/install-browser-mcp.sh
+scripts/doctor-browser-mcp.sh
 ```
 
-Configure Claude Code:
+Configure your client MCP config (use the absolute path printed by installer):
 
 ```json
 {
   "mcpServers": {
-    "puppeteer-stealth": {
+    "playwright-browser-mcp": {
       "command": "node",
-      "args": ["/Users/you/path/to/aios/mcp-server/dist/index.js"]
+      "args": ["/ABS/PATH/rex-ai-boot/mcp-server/dist/index.js"]
     }
   }
 }
 ```
 
-Then restart Claude Code.
+Then restart your client and smoke test:
+
+1. `browser_launch` `{"profile":"default"}`
+2. `browser_navigate` `{"url":"https://example.com"}`
+3. `browser_snapshot` `{}`
+4. `browser_close` `{}`
+
+## Installer and Doctor Scripts
+
+- `scripts/install-browser-mcp.sh`
+  - installs npm deps
+  - installs Playwright Chromium runtime
+  - builds `mcp-server`
+  - prints ready-to-copy MCP config snippet
+- `scripts/doctor-browser-mcp.sh`
+  - checks Node/npm/npx
+  - checks `node_modules`, `dist/index.js`, Playwright runtime
+  - validates `config/browser-profiles.json`
+  - warns if default profile depends on CDP but port is not reachable
 
 ## Available Tools
 
@@ -50,8 +67,7 @@ Use `config/browser-profiles.json` (project root):
     },
     "local": {
       "name": "local",
-      "userDataDir": ".browser-profiles/local",
-      "executablePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+      "userDataDir": ".browser-profiles/local"
     }
   }
 }
@@ -67,8 +83,8 @@ Priority for launch mode:
 If you see `Google Chrome for Testing 意外退出`:
 
 1. Start fingerprint browser with remote debugging on `9222` and keep it running.
-2. Use `browser_launch` without profile (now defaults to CDP) or pass `{ "profile": "default" }`.
-3. If you need local Playwright launch, explicitly use `{ "profile": "local" }`.
+2. Use `browser_launch` with `{ "profile": "default" }` (the server will auto-fallback to `local` if CDP is unavailable).
+3. For explicit local Playwright launch, use `{ "profile": "local" }`.
 4. Optionally set `BROWSER_HEADLESS=true` for non-GUI environments.
 
 ## Notes

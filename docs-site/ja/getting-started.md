@@ -11,7 +11,14 @@ description: セットアップと初回実行手順。
 - `node` / `npm`
 - `codex` / `claude` / `gemini` のいずれか
 
-## 1) ContextDB CLI をビルド
+## 1) Browser MCP をワンコマンドで導入
+
+```bash
+scripts/install-browser-mcp.sh
+scripts/doctor-browser-mcp.sh
+```
+
+## 2) ContextDB CLI をビルド
 
 ```bash
 cd mcp-server
@@ -19,7 +26,7 @@ npm install
 npm run build
 ```
 
-## 2) `~/.zshrc` を設定
+## 3) `~/.zshrc` を設定
 
 ```zsh
 # >>> contextdb-shell >>>
@@ -35,7 +42,7 @@ fi
 source ~/.zshrc
 ```
 
-## 3) プロジェクトで有効化
+## 4) プロジェクトで有効化
 
 ```bash
 touch .contextdb-enable

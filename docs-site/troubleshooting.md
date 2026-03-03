@@ -5,6 +5,20 @@ description: Common setup/runtime issues and direct fixes.
 
 # Troubleshooting
 
+## Browser MCP tools unavailable
+
+Run:
+
+```bash
+scripts/doctor-browser-mcp.sh
+```
+
+If doctor reports missing dependencies, run:
+
+```bash
+scripts/install-browser-mcp.sh
+```
+
 ## `EXTRA_ARGS[@]: unbound variable`
 
 Cause: old `ctx-agent.sh` with `bash set -u` empty-array expansion edge case.

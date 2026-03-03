@@ -11,7 +11,14 @@ description: 설치, 래퍼 설정, 프로젝트 활성화.
 - `node`, `npm`
 - `codex` / `claude` / `gemini` 중 하나
 
-## 1) ContextDB CLI 빌드
+## 1) Browser MCP 원클릭 설치
+
+```bash
+scripts/install-browser-mcp.sh
+scripts/doctor-browser-mcp.sh
+```
+
+## 2) ContextDB CLI 빌드
 
 ```bash
 cd mcp-server
@@ -19,7 +26,7 @@ npm install
 npm run build
 ```
 
-## 2) `~/.zshrc` 설정
+## 3) `~/.zshrc` 설정
 
 ```zsh
 # >>> contextdb-shell >>>
@@ -35,7 +42,7 @@ fi
 source ~/.zshrc
 ```
 
-## 3) 프로젝트에서 활성화
+## 4) 프로젝트에서 활성화
 
 ```bash
 touch .contextdb-enable

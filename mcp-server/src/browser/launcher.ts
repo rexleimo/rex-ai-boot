@@ -120,12 +120,40 @@ export class BrowserLauncher {
     try {
       // 优先支持指纹浏览器/CDP 接入，避免本地启动 Chrome for Testing 崩溃。
       if (cdpEndpoint) {
-        browser = await chromium.connectOverCDP(cdpEndpoint);
-        connectedOverCdp = true;
-        const contexts = browser.contexts();
-        context = contexts.length > 0
-          ? contexts[0]
-          : await browser.newContext({ viewport: { width: 1280, height: 720 } });
+        try {
+          browser = await chromium.connectOverCDP(cdpEndpoint);
+          connectedOverCdp = true;
+          const contexts = browser.contexts();
+          context = contexts.length > 0
+            ? contexts[0]
+            : await browser.newContext({ viewport: { width: 1280, height: 720 } });
+        } catch (cdpError) {
+          // 新用户最常见问题：默认 profile 配置了 CDP，但本机没有启动 9222。
+          // 对 default profile 自动降级到 local，减少首次接入成本。
+          if (profileName !== 'default') {
+            throw cdpError;
+          }
+
+          const fallbackProfile = profileManager.getProfile('local') || { name: 'local', userDataDir: '.browser-profiles/local' };
+          const fallbackUserDataDir = fallbackProfile.userDataDir
+            ? profileManager.resolveWorkspacePath(fallbackProfile.userDataDir)
+            : profileManager.getProfileDir('local');
+          const fallbackExecutablePath = resolveExecutablePath(fallbackProfile);
+
+          context = await chromium.launchPersistentContext(fallbackUserDataDir, {
+            headless: resolvedHeadless,
+            args: STEALTH_ARGS,
+            ignoreDefaultArgs: IGNORE_DEFAULT_ARGS,
+            executablePath: fallbackExecutablePath,
+            viewport: { width: 1280, height: 720 },
+          });
+          browser = context.browser()!;
+
+          const reason = cdpError instanceof Error ? cdpError.message : String(cdpError);
+          console.error(
+            `[browser_launch] default profile cdp fallback -> local. reason=${reason}`
+          );
+        }
       } else if (userDataDir) {
         // 使用 launchPersistentContext 来支持 userDataDir（持久化登录状态）
         context = await chromium.launchPersistentContext(userDataDir, {

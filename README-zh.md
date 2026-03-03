@@ -37,15 +37,25 @@ User -> codex/claude/gemini
 
 ## 快速开始
 
-### 1) 构建 MCP 与 ContextDB CLI
+### 1) 一键安装 Browser MCP（给新同学）
+
+```bash
+scripts/install-browser-mcp.sh
+scripts/doctor-browser-mcp.sh
+```
+
+这会自动安装浏览器运行时、构建 `mcp-server`，并输出可复制到 CLI 客户端的 MCP 配置 JSON。
+
+### 2) 手动构建 MCP 与 ContextDB CLI（可选路径）
 
 ```bash
 cd mcp-server
 npm install
+npx playwright install chromium
 npm run build
 ```
 
-### 2) 安装透明接管（一次即可）
+### 3) 安装透明接管（一次即可）
 
 > 安全建议：优先手动编辑 `~/.zshrc`，并先备份。不要盲目执行会改写 shell 配置的命令。
 
@@ -76,7 +86,7 @@ source ~/.zshrc
 
 可选：你也可以运行安装脚本 [`scripts/install-contextdb-shell.sh`](scripts/install-contextdb-shell.sh)，但仍建议先手动备份 `~/.zshrc`。
 
-### 2.1 作用域控制（避免跨项目复用）
+### 3.1 作用域控制（避免跨项目复用）
 
 默认行为是 **所有 git 项目都启用包装**（`CTXDB_WRAP_MODE=all`）。
 如果你希望隔离，可在 `~/.zshrc` 设置：
@@ -95,7 +105,7 @@ export CTXDB_WRAP_MODE=opt-in
 touch .contextdb-enable
 ```
 
-### 2.2 Skills 作用域（重要）
+### 3.2 Skills 作用域（重要）
 
 ContextDB 包装和 CLI 的 Skills 加载是两层机制：
 
@@ -105,7 +115,7 @@ ContextDB 包装和 CLI 的 Skills 加载是两层机制：
 
 如果你不希望跨项目复用技能，请把自定义技能放在仓库本地目录，而不是 `~` 下的全局目录。
 
-### 3) 直接使用原命令
+### 4) 直接使用原命令
 
 ```bash
 codex
