@@ -19,3 +19,25 @@
   border-radius: 10px;
   padding: 0.75rem;
 }
+
+.rexai-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.rexai-footer-links a {
+  color: var(--md-footer-fg-color--light);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.rexai-footer-links a:hover {
+  color: var(--md-footer-fg-color);
+  text-decoration: underline;
+}
+
+.rexai-footer-links__sep {
+  color: var(--md-footer-fg-color--lighter);
+}

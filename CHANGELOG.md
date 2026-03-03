@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-03-03
+
+- docs(site): move rexai links to global footer navigation
+
 ## [0.5.1] - 2026-03-03
 
 - docs: align superpowers workflow route and add RexAI friend links

@@ -34,15 +34,6 @@ gemini
 scripts/ctx-agent.sh --agent codex-cli --prompt "Continue from latest checkpoint"
 ```
 
-## Friend Links
-
-- [os.rexai.top](https://os.rexai.top)
-  - RexOS AI Agent OS: harness-first long-task execution, SQLite-backed memory, and sandboxed tool runtime for autonomous workflows.
-- [rexai.top](https://rexai.top)
-  - RexAI content hub: AI engineering articles, tutorials, tool analysis, and product updates for builders.
-- [tool.rexai.top](https://tool.rexai.top)
-  - RexAI tools portal: free no-ad online tools with fast global access and developer-friendly continuous updates.
-
 ## Read Next
 
 - [Quick Start](getting-started.md)

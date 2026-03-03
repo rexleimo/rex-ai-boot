@@ -94,6 +94,16 @@ extra:
     product: https://cli.rexai.top
     blog: https://cli.rexai.top/blog/
     tools: https://tool.rexai.top
+  footer_links:
+    - text: os.rexai.top (RexOS Agent OS)
+      href: https://os.rexai.top
+      title: RexOS AI Agent OS focused on harness-first long-running workflows
+    - text: rexai.top (Content Hub)
+      href: https://rexai.top
+      title: RexAI content hub for AI engineering articles and tutorials
+    - text: tool.rexai.top (Free Tools)
+      href: https://tool.rexai.top
+      title: RexAI free no-ad online tools portal
 
 extra_javascript:
   - assets/analytics-placeholder.js
