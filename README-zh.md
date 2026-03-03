@@ -161,6 +161,32 @@ npm run contextdb -- checkpoint --session <id> --summary "blocked by auth" --sta
 npm run contextdb -- context:pack --session <id> --out memory/context-db/exports/<id>-context.md
 ```
 
+## 版本与发布
+
+仓库使用语义化版本（SemVer），根目录维护：
+
+- `VERSION`：当前版本号
+- `CHANGELOG.md`：发布历史
+
+升级版本命令：
+
+```bash
+scripts/release-version.sh patch "fix: 非破坏性问题修复"
+scripts/release-version.sh minor "feat: 向后兼容的新能力"
+scripts/release-version.sh major "breaking: 不兼容行为变更"
+```
+
+仅预览，不改文件：
+
+```bash
+scripts/release-version.sh --dry-run patch "示例说明"
+```
+
+版本判断技能文件：
+
+- `.codex/skills/versioning-by-impact/SKILL.md`
+- `.claude/skills/versioning-by-impact/SKILL.md`
+
 ## 开发验证
 
 ```bash

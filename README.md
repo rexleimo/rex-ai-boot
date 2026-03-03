@@ -161,6 +161,32 @@ npm run contextdb -- checkpoint --session <id> --summary "blocked by auth" --sta
 npm run contextdb -- context:pack --session <id> --out memory/context-db/exports/<id>-context.md
 ```
 
+## Versioning and Releases
+
+This repository uses Semantic Versioning via root files:
+
+- `VERSION`: current version
+- `CHANGELOG.md`: release history
+
+Bump with:
+
+```bash
+scripts/release-version.sh patch "fix: non-breaking runtime issue"
+scripts/release-version.sh minor "feat: backward-compatible capability"
+scripts/release-version.sh major "breaking: incompatible behavior change"
+```
+
+Preview without changing files:
+
+```bash
+scripts/release-version.sh --dry-run patch "example summary"
+```
+
+Versioning skill files:
+
+- `.codex/skills/versioning-by-impact/SKILL.md`
+- `.claude/skills/versioning-by-impact/SKILL.md`
+
 ## Verification
 
 ```bash
