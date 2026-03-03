@@ -25,6 +25,9 @@ markdown_extensions:
   - admonition
   - attr_list
   - md_in_html
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
   - tables
   - toc:
       permalink: true
@@ -54,7 +57,6 @@ plugins:
           nav_translations:
             Overview: 概览
             Quick Start: 快速开始
-            Windows Guide: Windows 指南
             CLI Workflows: CLI 工作流
             Architecture: 架构
             ContextDB: ContextDB
@@ -67,7 +69,6 @@ plugins:
           nav_translations:
             Overview: 概要
             Quick Start: クイックスタート
-            Windows Guide: Windows ガイド
             CLI Workflows: CLI ワークフロー
             Architecture: アーキテクチャ
             ContextDB: ContextDB
@@ -80,7 +81,6 @@ plugins:
           nav_translations:
             Overview: 개요
             Quick Start: 빠른 시작
-            Windows Guide: Windows 가이드
             CLI Workflows: CLI 워크플로
             Architecture: 아키텍처
             ContextDB: ContextDB
@@ -101,7 +101,6 @@ extra_css:
 nav:
   - Overview: index.md
   - Quick Start: getting-started.md
-  - Windows Guide: windows-guide.md
   - CLI Workflows: use-cases.md
   - Architecture: architecture.md
   - ContextDB: contextdb.md

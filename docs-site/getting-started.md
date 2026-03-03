@@ -1,33 +1,33 @@
 ---
 title: Quick Start
-description: Install, enable wrappers, and run your first project-scoped session.
+description: One setup flow for macOS, Linux, and Windows with OS tabs.
 ---
 
 # Quick Start
 
-If you are on Windows, start with [Windows Guide](windows-guide.md) for PowerShell wrappers and project opt-in setup.
+This page combines macOS, Linux, and Windows setup into one flow. Use the OS tabs when commands differ.
 
 ## Prerequisites
 
-- macOS/Linux shell with `zsh`
-- `node` + `npm`
-- One or more CLIs installed: `codex`, `claude`, `gemini`
+- Node.js 18+ and `npm`
+- At least one CLI installed: `codex`, `claude`, or `gemini`
+- A git repository where you want project-scoped ContextDB memory
 
-## 1) Install Browser MCP (one command)
+## 1) Install Browser MCP
 
-macOS / Linux:
+=== "macOS / Linux"
 
-```bash
-scripts/install-browser-mcp.sh
-scripts/doctor-browser-mcp.sh
-```
+    ```bash
+    scripts/install-browser-mcp.sh
+    scripts/doctor-browser-mcp.sh
+    ```
 
-Windows (PowerShell):
+=== "Windows (PowerShell)"
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
-powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-browser-mcp.ps1
-```
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\scripts\install-browser-mcp.ps1
+    powershell -ExecutionPolicy Bypass -File .\scripts\doctor-browser-mcp.ps1
+    ```
 
 ## 2) Build ContextDB CLI
 
@@ -37,35 +37,49 @@ npm install
 npm run build
 ```
 
-## 3) Enable shell wrappers
+## 3) Enable command wrappers
 
-Add this block to `~/.zshrc`:
+=== "macOS / Linux (zsh)"
 
-```zsh
-# >>> contextdb-shell >>>
-export ROOTPATH="${ROOTPATH:-$HOME/cool.cnb/rex-ai-boot}"
-export CTXDB_WRAP_MODE=opt-in
-if [[ -f "$ROOTPATH/scripts/contextdb-shell.zsh" ]]; then
-  source "$ROOTPATH/scripts/contextdb-shell.zsh"
-fi
-# <<< contextdb-shell <<<
-```
+    Add this block to `~/.zshrc`:
 
-Reload shell:
+    ```zsh
+    # >>> contextdb-shell >>>
+    export ROOTPATH="${ROOTPATH:-$HOME/cool.cnb/rex-ai-boot}"
+    export CTXDB_WRAP_MODE=opt-in
+    if [[ -f "$ROOTPATH/scripts/contextdb-shell.zsh" ]]; then
+      source "$ROOTPATH/scripts/contextdb-shell.zsh"
+    fi
+    # <<< contextdb-shell <<<
+    ```
 
-```bash
-source ~/.zshrc
-```
+    Reload shell:
+
+    ```bash
+    source ~/.zshrc
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-shell.ps1
+    . $PROFILE
+    $env:CTXDB_WRAP_MODE = "opt-in"
+    ```
 
 ## 4) Enable current project
 
-In each target project root:
+=== "macOS / Linux"
 
-```bash
-touch .contextdb-enable
-```
+    ```bash
+    touch .contextdb-enable
+    ```
 
-This prevents accidental cross-project wrapping.
+=== "Windows (PowerShell)"
+
+    ```powershell
+    New-Item -ItemType File -Path .contextdb-enable -Force
+    ```
 
 ## 5) Start working
 
@@ -80,8 +94,16 @@ gemini
 
 ## 6) Verify data created
 
-```bash
-ls memory/context-db
-```
+=== "macOS / Linux"
+
+    ```bash
+    ls memory/context-db
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell
+    Get-ChildItem memory/context-db
+    ```
 
 You should see `sessions/`, `index/`, and `exports/`.
