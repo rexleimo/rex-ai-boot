@@ -5,6 +5,8 @@ description: 설치, 래퍼 설정, 프로젝트 활성화.
 
 # 빠른 시작
 
+Windows 사용자라면 PowerShell 래퍼와 프로젝트 opt-in 설정을 포함한 [Windows 가이드](windows-guide.md)를 먼저 확인하세요.
+
 ## 사전 요구사항
 
 - macOS/Linux + `zsh`

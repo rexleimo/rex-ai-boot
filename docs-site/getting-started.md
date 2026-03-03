@@ -5,6 +5,8 @@ description: Install, enable wrappers, and run your first project-scoped session
 
 # Quick Start
 
+If you are on Windows, start with [Windows Guide](windows-guide.md) for PowerShell wrappers and project opt-in setup.
+
 ## Prerequisites
 
 - macOS/Linux shell with `zsh`

@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-03-03
+
+- docs: add dedicated windows guide pages and quick-start cross-links
+
 ## [0.4.0] - 2026-03-03
 
 - feat: add Windows PowerShell support for browser/contextdb setup

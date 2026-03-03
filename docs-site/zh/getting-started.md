@@ -5,6 +5,8 @@ description: 安装、启用包装器并在项目内运行。
 
 # 快速开始
 
+如果你是 Windows 用户，请先阅读 [Windows 指南](windows-guide.md) 完整完成 PowerShell 包装与项目 opt-in 配置。
+
 ## 前置条件
 
 - macOS/Linux + `zsh`

@@ -5,6 +5,8 @@ description: セットアップと初回実行手順。
 
 # クイックスタート
 
+Windows ユーザーは、PowerShell ラッパーとプロジェクト opt-in の手順を含む [Windows ガイド](windows-guide.md) を先に参照してください。
+
 ## 前提
 
 - macOS/Linux + `zsh`
