@@ -7,16 +7,26 @@ description: 常见报错与修复步骤。
 
 ## Browser MCP 工具不可用
 
-先执行：
+先执行（macOS / Linux）：
 
 ```bash
 scripts/doctor-browser-mcp.sh
 ```
 
-如果诊断提示缺依赖，再执行：
+Windows（PowerShell）执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-browser-mcp.ps1
+```
+
+如果诊断提示缺依赖，再执行安装脚本：
 
 ```bash
 scripts/install-browser-mcp.sh
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
 ```
 
 ## `EXTRA_ARGS[@]: unbound variable`

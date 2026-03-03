@@ -39,9 +39,18 @@ User -> codex/claude/gemini
 
 ### 1) 一键安装 Browser MCP（给新同学）
 
+macOS / Linux：
+
 ```bash
 scripts/install-browser-mcp.sh
 scripts/doctor-browser-mcp.sh
+```
+
+Windows（PowerShell）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-browser-mcp.ps1
 ```
 
 这会自动安装浏览器运行时、构建 `mcp-server`，并输出可复制到 CLI 客户端的 MCP 配置 JSON。
@@ -86,6 +95,9 @@ source ~/.zshrc
 
 可选：你也可以运行安装脚本 [`scripts/install-contextdb-shell.sh`](scripts/install-contextdb-shell.sh)，但仍建议先手动备份 `~/.zshrc`。
 
+Windows PowerShell 可使用：
+`scripts/install-contextdb-shell.ps1`
+
 ### 3.1 作用域控制（避免跨项目复用）
 
 默认行为是 **所有 git 项目都启用包装**（`CTXDB_WRAP_MODE=all`）。
@@ -122,6 +134,8 @@ codex
 claude
 gemini
 ```
+
+PowerShell 包装入口是 `scripts/contextdb-shell.ps1`，底层跨平台运行器是 `scripts/ctx-agent.mjs`。
 
 配置完成后，在其他 git 项目里也同样生效（上下文写入该项目自己的 `memory/context-db/`）。
 

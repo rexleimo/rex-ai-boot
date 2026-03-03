@@ -1,0 +1,336 @@
+#!/usr/bin/env node
+import { spawnSync } from 'node:child_process';
+import { promises as fs } from 'node:fs';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const ROOT_DIR = path.resolve(__dirname, '..');
+const MCP_DIR = path.join(ROOT_DIR, 'mcp-server');
+
+function usage() {
+  console.log(`Usage:
+  scripts/ctx-agent.mjs --agent <claude-code|gemini-cli|codex-cli> [options] [-- <extra agent args>]
+
+Options:
+  --agent <name>      Agent name: claude-code | gemini-cli | codex-cli
+  --workspace <path>  Workspace root to store context-db (default: current git root, else current dir)
+  --project <name>    Project name (default: current directory name)
+  --goal <text>       Session goal (used when creating a new session)
+  --session <id>      Reuse a specific session id
+  --prompt <text>     Run one-shot mode and auto log request/response/checkpoint
+  --limit <n>         Number of recent events in context packet (default: 30)
+  --status <state>    Checkpoint status on success: running|blocked|done (default: running)
+  --no-checkpoint     Disable automatic checkpoint write in one-shot mode
+  --dry-run           Skip remote model call, write synthetic response for pipeline testing
+  --max-log-chars <n> Max characters stored in event logs (default: 8000)
+  -h, --help          Show this help`);
+}
+
+function runCommand(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    cwd: options.cwd,
+    encoding: 'utf8',
+    stdio: options.stdio ?? ['pipe', 'pipe', 'pipe'],
+    shell: false,
+  });
+
+  return result;
+}
+
+function ensureSuccess(result, context) {
+  if (result.error) {
+    const reason = result.error.message || String(result.error);
+    throw new Error(`${context}: ${reason}`);
+  }
+  if (result.status !== 0) {
+    const stderr = (result.stderr || '').trim();
+    const stdout = (result.stdout || '').trim();
+    const detail = stderr || stdout || `exit=${result.status}`;
+    throw new Error(`${context}: ${detail}`);
+  }
+}
+
+function resolveWorkspaceRoot(cwd) {
+  const git = runCommand('git', ['-C', cwd, 'rev-parse', '--show-toplevel']);
+  if (git.status === 0) {
+    return (git.stdout || '').trim();
+  }
+  return cwd;
+}
+
+function parseArgs(argv) {
+  const opts = {
+    agent: '',
+    project: '',
+    workspaceRoot: '',
+    goal: '',
+    sessionId: '',
+    prompt: '',
+    eventLimit: '30',
+    checkpointStatus: 'running',
+    autoCheckpoint: true,
+    dryRun: false,
+    maxLogChars: '8000',
+    extraArgs: [],
+  };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    switch (arg) {
+      case '--agent':
+        opts.agent = argv[++i] || '';
+        break;
+      case '--workspace':
+        opts.workspaceRoot = argv[++i] || '';
+        break;
+      case '--project':
+        opts.project = argv[++i] || '';
+        break;
+      case '--goal':
+        opts.goal = argv[++i] || '';
+        break;
+      case '--session':
+        opts.sessionId = argv[++i] || '';
+        break;
+      case '--prompt':
+        opts.prompt = argv[++i] || '';
+        break;
+      case '--limit':
+        opts.eventLimit = argv[++i] || '30';
+        break;
+      case '--status':
+        opts.checkpointStatus = argv[++i] || 'running';
+        break;
+      case '--no-checkpoint':
+        opts.autoCheckpoint = false;
+        break;
+      case '--dry-run':
+        opts.dryRun = true;
+        break;
+      case '--max-log-chars':
+        opts.maxLogChars = argv[++i] || '8000';
+        break;
+      case '-h':
+      case '--help':
+        usage();
+        process.exit(0);
+        break;
+      case '--':
+        opts.extraArgs = argv.slice(i + 1);
+        i = argv.length;
+        break;
+      default:
+        opts.extraArgs.push(arg);
+        break;
+    }
+  }
+
+  return opts;
+}
+
+function validateOpts(opts) {
+  if (!opts.agent) {
+    throw new Error('Missing required --agent');
+  }
+  const validAgents = new Set(['claude-code', 'gemini-cli', 'codex-cli']);
+  if (!validAgents.has(opts.agent)) {
+    throw new Error('--agent must be one of: claude-code, gemini-cli, codex-cli');
+  }
+  const validStatus = new Set(['running', 'blocked', 'done']);
+  if (!validStatus.has(opts.checkpointStatus)) {
+    throw new Error('--status must be one of: running, blocked, done');
+  }
+  if (!/^\d+$/.test(opts.maxLogChars)) {
+    throw new Error('--max-log-chars must be a non-negative integer');
+  }
+}
+
+function ctx(workspaceRoot, subcommand, args) {
+  const result = runCommand('npm', ['run', '-s', 'contextdb', '--', subcommand, '--workspace', workspaceRoot, ...args], {
+    cwd: MCP_DIR,
+  });
+  ensureSuccess(result, `contextdb ${subcommand} failed`);
+  return (result.stdout || '').trim();
+}
+
+function parseJsonValue(text, getter) {
+  if (!text) return '';
+  const data = JSON.parse(text);
+  return getter(data) || '';
+}
+
+function extractLatestSessionId(jsonText) {
+  return parseJsonValue(jsonText, (x) => x?.data?.session?.sessionId || x?.session?.sessionId);
+}
+
+function extractCreatedSessionId(jsonText) {
+  return parseJsonValue(jsonText, (x) => x?.data?.sessionId || x?.sessionId);
+}
+
+function runOneShotAgent(agent, contextText, prompt, extraArgs) {
+  let cmd = '';
+  let args = [];
+
+  if (agent === 'claude-code') {
+    cmd = 'claude';
+    args = ['--print', '--append-system-prompt', contextText, prompt, ...extraArgs];
+  } else if (agent === 'gemini-cli') {
+    const fullPrompt = `${contextText}\n\n## New User Request\n${prompt}`;
+    cmd = 'gemini';
+    args = ['-p', fullPrompt, ...extraArgs];
+  } else {
+    const fullPrompt = `${contextText}\n\n## New User Request\n${prompt}`;
+    cmd = 'codex';
+    args = ['exec', fullPrompt, ...extraArgs];
+  }
+
+  const result = runCommand(cmd, args);
+  const output = `${result.stdout || ''}${result.stderr || ''}`;
+  const exitCode = result.status ?? 1;
+  return { output, exitCode };
+}
+
+function runInteractiveAgent(agent, contextText, extraArgs) {
+  let cmd = '';
+  let args = [];
+
+  if (agent === 'claude-code') {
+    cmd = 'claude';
+    args = ['--append-system-prompt', contextText, ...extraArgs];
+  } else if (agent === 'gemini-cli') {
+    cmd = 'gemini';
+    args = ['-i', contextText, ...extraArgs];
+  } else {
+    cmd = 'codex';
+    args = [...extraArgs, contextText];
+  }
+
+  const result = runCommand(cmd, args, { stdio: 'inherit' });
+  if (result.error) {
+    console.error(result.error.message || String(result.error));
+    process.exit(1);
+  }
+  process.exit(result.status ?? 1);
+}
+
+async function main() {
+  const opts = parseArgs(process.argv.slice(2));
+  validateOpts(opts);
+
+  if (!opts.workspaceRoot) {
+    opts.workspaceRoot = resolveWorkspaceRoot(process.cwd());
+  }
+
+  if (!existsSync(opts.workspaceRoot)) {
+    throw new Error(`--workspace is not a directory: ${opts.workspaceRoot}`);
+  }
+
+  opts.workspaceRoot = path.resolve(opts.workspaceRoot);
+
+  if (!opts.project) {
+    opts.project = path.basename(opts.workspaceRoot);
+  }
+
+  ctx(opts.workspaceRoot, 'init', []);
+
+  if (!opts.sessionId) {
+    const latestJson = ctx(opts.workspaceRoot, 'session:latest', ['--agent', opts.agent, '--project', opts.project]);
+    opts.sessionId = extractLatestSessionId(latestJson);
+    if (!opts.sessionId) {
+      if (!opts.goal) {
+        opts.goal = `Shared context session for ${opts.agent} on ${opts.project}`;
+      }
+      const createJson = ctx(opts.workspaceRoot, 'session:new', [
+        '--agent', opts.agent,
+        '--project', opts.project,
+        '--goal', opts.goal,
+      ]);
+      opts.sessionId = extractCreatedSessionId(createJson);
+    }
+  }
+
+  if (!opts.sessionId) {
+    throw new Error('Failed to resolve session id from contextdb output');
+  }
+
+  const packPath = path.join('memory', 'context-db', 'exports', `${opts.sessionId}-context.md`);
+  ctx(opts.workspaceRoot, 'context:pack', ['--session', opts.sessionId, '--limit', opts.eventLimit, '--out', packPath]);
+  const packAbs = path.join(opts.workspaceRoot, packPath);
+  const contextText = await fs.readFile(packAbs, 'utf8');
+
+  console.log(`Session: ${opts.sessionId}`);
+  console.log(`Workspace: ${opts.workspaceRoot}`);
+  console.log(`Context packet: ${packAbs}`);
+
+  if (opts.prompt) {
+    ctx(opts.workspaceRoot, 'event:add', [
+      '--session', opts.sessionId,
+      '--role', 'user',
+      '--kind', 'prompt',
+      '--text', opts.prompt,
+    ]);
+
+    let responseStatus = opts.checkpointStatus;
+    let output = '';
+    let exitCode = 0;
+
+    if (opts.dryRun) {
+      output = `[dry-run] ${opts.agent} would execute prompt with context packet: ${packAbs}\nPrompt: ${opts.prompt}`;
+    } else {
+      const result = runOneShotAgent(opts.agent, contextText, opts.prompt, opts.extraArgs);
+      output = result.output;
+      exitCode = result.exitCode;
+    }
+
+    process.stdout.write(output.endsWith('\n') ? output : `${output}\n`);
+
+    if (exitCode !== 0) {
+      responseStatus = 'blocked';
+    }
+
+    const maxChars = Number.parseInt(opts.maxLogChars, 10);
+    const logOutput = output.slice(0, Number.isFinite(maxChars) ? maxChars : 8000);
+    const kind = exitCode === 0 ? 'response' : 'error';
+
+    ctx(opts.workspaceRoot, 'event:add', [
+      '--session', opts.sessionId,
+      '--role', 'assistant',
+      '--kind', kind,
+      '--text', logOutput,
+    ]);
+
+    if (opts.autoCheckpoint) {
+      const promptSnippet = opts.prompt.replace(/\n/g, ' ').slice(0, 200);
+      const responseSnippet = output.replace(/\n/g, ' ').slice(0, 300);
+      const summary = `Auto checkpoint: ${opts.agent} one-shot run completed. prompt=\"${promptSnippet}\" response=\"${responseSnippet}\"`;
+      const nextActions = responseStatus === 'blocked'
+        ? 'Inspect error output|Retry with adjusted prompt'
+        : 'Review response|Continue with next prompt';
+
+      ctx(opts.workspaceRoot, 'checkpoint', [
+        '--session', opts.sessionId,
+        '--summary', summary,
+        '--status', responseStatus,
+        '--next', nextActions,
+      ]);
+    }
+
+    ctx(opts.workspaceRoot, 'context:pack', ['--session', opts.sessionId, '--limit', opts.eventLimit, '--out', packPath]);
+
+    if (exitCode !== 0) {
+      process.exit(exitCode);
+    }
+    return;
+  }
+
+  runInteractiveAgent(opts.agent, contextText, opts.extraArgs);
+}
+
+main().catch((error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(message);
+  process.exit(1);
+});

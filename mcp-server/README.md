@@ -4,9 +4,18 @@
 
 ## Quick Start
 
+macOS / Linux:
+
 ```bash
 scripts/install-browser-mcp.sh
 scripts/doctor-browser-mcp.sh
+```
+
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-browser-mcp.ps1
 ```
 
 Configure your client MCP config (use the absolute path printed by installer):
@@ -36,11 +45,13 @@ Then restart your client and smoke test:
   - installs Playwright Chromium runtime
   - builds `mcp-server`
   - prints ready-to-copy MCP config snippet
+- `scripts/install-browser-mcp.ps1` (Windows PowerShell variant)
 - `scripts/doctor-browser-mcp.sh`
   - checks Node/npm/npx
   - checks `node_modules`, `dist/index.js`, Playwright runtime
   - validates `config/browser-profiles.json`
   - warns if default profile depends on CDP but port is not reachable
+- `scripts/doctor-browser-mcp.ps1` (Windows PowerShell variant)
 
 ## Available Tools
 

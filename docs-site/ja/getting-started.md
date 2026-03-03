@@ -13,9 +13,18 @@ description: セットアップと初回実行手順。
 
 ## 1) Browser MCP をワンコマンドで導入
 
+macOS / Linux:
+
 ```bash
 scripts/install-browser-mcp.sh
 scripts/doctor-browser-mcp.sh
+```
+
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-browser-mcp.ps1
 ```
 
 ## 2) ContextDB CLI をビルド

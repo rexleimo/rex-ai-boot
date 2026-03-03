@@ -13,9 +13,18 @@ description: 설치, 래퍼 설정, 프로젝트 활성화.
 
 ## 1) Browser MCP 원클릭 설치
 
+macOS / Linux:
+
 ```bash
 scripts/install-browser-mcp.sh
 scripts/doctor-browser-mcp.sh
+```
+
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-browser-mcp.ps1
 ```
 
 ## 2) ContextDB CLI 빌드

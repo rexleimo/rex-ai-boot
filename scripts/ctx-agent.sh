@@ -128,7 +128,7 @@ ctx init >/dev/null
 if [[ -z "$SESSION_ID" ]]; then
   # Step 2a: try latest session for agent+project
   LATEST_JSON="$(ctx session:latest --agent "$AGENT" --project "$PROJECT")"
-  SESSION_ID="$(printf '%s' "$LATEST_JSON" | json_get 'data.session && data.session.sessionId')"
+  SESSION_ID="$(printf '%s' "$LATEST_JSON" | json_get '(data.session && data.session.sessionId) || (session && session.sessionId)')"
 
   if [[ -z "$SESSION_ID" ]]; then
     # Step 2b: create session if absent
@@ -136,8 +136,13 @@ if [[ -z "$SESSION_ID" ]]; then
       GOAL="Shared context session for $AGENT on $PROJECT"
     fi
     CREATE_JSON="$(ctx session:new --agent "$AGENT" --project "$PROJECT" --goal "$GOAL")"
-    SESSION_ID="$(printf '%s' "$CREATE_JSON" | json_get 'data.sessionId')"
+    SESSION_ID="$(printf '%s' "$CREATE_JSON" | json_get 'data.sessionId || sessionId')"
   fi
+fi
+
+if [[ -z "$SESSION_ID" ]]; then
+  echo "Failed to resolve session id from contextdb output."
+  exit 1
 fi
 
 PACK_PATH="memory/context-db/exports/${SESSION_ID}-context.md"

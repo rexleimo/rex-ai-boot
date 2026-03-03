@@ -7,16 +7,26 @@ description: Common setup/runtime issues and direct fixes.
 
 ## Browser MCP tools unavailable
 
-Run:
+Run (macOS / Linux):
 
 ```bash
 scripts/doctor-browser-mcp.sh
 ```
 
-If doctor reports missing dependencies, run:
+Run (Windows PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-browser-mcp.ps1
+```
+
+If doctor reports missing dependencies, run installer:
 
 ```bash
 scripts/install-browser-mcp.sh
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
 ```
 
 ## `EXTRA_ARGS[@]: unbound variable`

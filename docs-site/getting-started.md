@@ -13,9 +13,18 @@ description: Install, enable wrappers, and run your first project-scoped session
 
 ## 1) Install Browser MCP (one command)
 
+macOS / Linux:
+
 ```bash
 scripts/install-browser-mcp.sh
 scripts/doctor-browser-mcp.sh
+```
+
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-browser-mcp.ps1
 ```
 
 ## 2) Build ContextDB CLI

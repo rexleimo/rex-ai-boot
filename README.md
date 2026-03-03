@@ -39,9 +39,18 @@ User -> codex/claude/gemini
 
 ### 1) One-command Browser MCP setup (for new developers)
 
+macOS / Linux:
+
 ```bash
 scripts/install-browser-mcp.sh
 scripts/doctor-browser-mcp.sh
+```
+
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-browser-mcp.ps1
 ```
 
 This installs browser runtime, builds `mcp-server`, and prints MCP config JSON to copy into your CLI client.
@@ -86,6 +95,9 @@ If your repo path is different, set `ROOTPATH` to your actual location.
 
 Optional helper script: [`scripts/install-contextdb-shell.sh`](scripts/install-contextdb-shell.sh)
 
+Windows PowerShell helper script:
+`scripts/install-contextdb-shell.ps1`
+
 ### 3.1 Scope control (avoid cross-project reuse)
 
 By default, wrappers run in **all git repositories** (`CTXDB_WRAP_MODE=all`).
@@ -122,6 +134,8 @@ codex
 claude
 gemini
 ```
+
+PowerShell wrappers source `scripts/contextdb-shell.ps1` and use cross-platform runner `scripts/ctx-agent.mjs`.
 
 After setup, the same behavior works in other git repositories too (they write to each repo's own `memory/context-db/`).
 

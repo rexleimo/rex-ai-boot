@@ -7,16 +7,26 @@ description: 자주 발생하는 이슈와 해결 방법.
 
 ## Browser MCP 도구를 사용할 수 없음
 
-먼저 실행:
+먼저 실행 (macOS / Linux):
 
 ```bash
 scripts/doctor-browser-mcp.sh
 ```
 
-의존성이 부족하면 실행:
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-browser-mcp.ps1
+```
+
+의존성이 부족하면 설치 스크립트 실행:
 
 ```bash
 scripts/install-browser-mcp.sh
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
 ```
 
 ## `EXTRA_ARGS[@]: unbound variable`
