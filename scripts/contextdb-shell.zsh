@@ -188,3 +188,47 @@ gemini() {
   fi
   _ctxdb_run_or_passthrough gemini-cli gemini "$@"
 }
+
+aios() {
+  local sub="${1:-}"
+  shift || true
+
+  local rootpath="${ROOTPATH:-}"
+  if [[ -z "$rootpath" ]]; then
+    echo "[warn] ROOTPATH is not set (install shell integration first)"
+    return 1
+  fi
+
+  case "$sub" in
+    doctor)
+      local script="$rootpath/scripts/verify-aios.sh"
+      if [[ -x "$script" ]]; then
+        "$script" "$@"
+        return $?
+      fi
+      echo "[warn] missing verifier script: $script"
+      return 1
+      ;;
+    update)
+      local script="$rootpath/scripts/update-all.sh"
+      if [[ -x "$script" ]]; then
+        "$script" --components shell,skills --mode opt-in "$@"
+        return $?
+      fi
+      echo "[warn] missing update script: $script"
+      return 1
+      ;;
+    ""|-h|--help|help)
+      echo "Usage: aios <doctor|update> [args]"
+      return 0
+      ;;
+    *)
+      echo "[warn] unknown aios subcommand: $sub"
+      echo "Usage: aios <doctor|update> [args]"
+      return 1
+      ;;
+  esac
+}
+
+alias aios-doctor='aios doctor'
+alias aios-update='aios update'

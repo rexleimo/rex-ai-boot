@@ -92,6 +92,7 @@ if (Has-Component -Set $componentSet -Needle 'skills') {
 if (Has-Component -Set $componentSet -Needle 'shell') {
   Write-Host ""
   Write-Host 'Run: . $PROFILE'
+  Write-Host 'Then: aios doctor'
 }
 
 Write-Host 'Done.'

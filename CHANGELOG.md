@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-03-04
+
+- feat: add cross-CLI doctor + security scan skill pack
+
 ## [0.5.3] - 2026-03-04
 
 - docs(site): wire docs/blog nav both ways and simplify blog home footer sections

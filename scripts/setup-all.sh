@@ -147,6 +147,7 @@ fi
 if has_component shell; then
   echo ""
   echo "Run: source ~/.zshrc"
+  echo "Then: aios doctor"
 fi
 
 echo "Done."

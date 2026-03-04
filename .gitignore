@@ -62,3 +62,14 @@ xhs-images/
 memory/skills/. */
 memory/skills/skills-lock.json
 memory/skills/skills/
+
+# Codex CLI local artifacts (do not commit)
+.codex/.personality_migration
+.codex/config.toml
+.codex/sessions/
+.codex/shell_snapshots/
+.codex/state_*.sqlite*
+.codex/skills/.system/
+
+# Local analysis clones (do not commit)
+everything-claude-code/

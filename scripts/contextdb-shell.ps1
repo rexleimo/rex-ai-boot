@@ -211,3 +211,48 @@ function gemini {
   $code = Invoke-CtxOrPassthrough -Agent "gemini-cli" -Passthrough "gemini" -Arguments $Args
   $global:LASTEXITCODE = $code
 }
+
+function aios {
+  param([Parameter(ValueFromRemainingArguments = $true)] [string[]]$Args)
+
+  $sub = if ($Args.Count -gt 0) { $Args[0] } else { "" }
+  $rest = if ($Args.Count -gt 1) { $Args[1..($Args.Count - 1)] } else { @() }
+
+  if (-not $env:ROOTPATH) {
+    Write-Host "[warn] ROOTPATH is not set (install PowerShell integration first)"
+    return
+  }
+
+  switch ($sub) {
+    "doctor" {
+      $script = Join-Path $env:ROOTPATH "scripts/verify-aios.ps1"
+      if (-not (Test-Path -LiteralPath $script)) {
+        Write-Host "[warn] missing verifier script: $script"
+        return
+      }
+      & $script @rest
+      $global:LASTEXITCODE = $LASTEXITCODE
+      return
+    }
+    "update" {
+      $script = Join-Path $env:ROOTPATH "scripts/update-all.ps1"
+      if (-not (Test-Path -LiteralPath $script)) {
+        Write-Host "[warn] missing update script: $script"
+        return
+      }
+      & $script -Components "shell,skills" -Mode "opt-in" @rest
+      $global:LASTEXITCODE = $LASTEXITCODE
+      return
+    }
+    "" { }
+    "-h" { }
+    "--help" { }
+    "help" { }
+    default {
+      Write-Host "[warn] unknown aios subcommand: $sub"
+    }
+  }
+
+  Write-Host "Usage: aios <doctor|update> [args]"
+  $global:LASTEXITCODE = 0
+}
