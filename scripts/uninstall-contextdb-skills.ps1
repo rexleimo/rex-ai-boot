@@ -1,5 +1,5 @@
 param(
-  [ValidateSet("all", "codex", "claude")]
+  [ValidateSet("all", "codex", "claude", "gemini", "opencode")]
   [string]$Client = "all"
 )
 
@@ -23,6 +23,14 @@ function Normalize-HomeDir {
   }
 
   return $Raw
+}
+
+function Get-ConfigHome {
+  if ($env:XDG_CONFIG_HOME -and [System.IO.Path]::IsPathRooted($env:XDG_CONFIG_HOME)) {
+    return $env:XDG_CONFIG_HOME
+  }
+
+  return (Join-Path $HOME '.config')
 }
 
 function Trim-Path {
@@ -55,38 +63,108 @@ function Test-ManagedLink {
   }
 }
 
+function Client-Enabled {
+  param([string]$Candidate)
+
+  return ($Client -eq 'all' -or $Client -eq $Candidate)
+}
+
+function Get-ClientSourceRoots {
+  param([string]$ClientName)
+
+  switch ($ClientName) {
+    'codex' {
+      return @((Join-Path $RootDir '.codex/skills'))
+    }
+    'claude' {
+      return @((Join-Path $RootDir '.claude/skills'))
+    }
+    'gemini' {
+      return @(
+        (Join-Path $RootDir '.gemini/skills'),
+        (Join-Path $RootDir '.agents/skills'),
+        (Join-Path $RootDir '.codex/skills'),
+        (Join-Path $RootDir '.claude/skills')
+      )
+    }
+    'opencode' {
+      return @(
+        (Join-Path $RootDir '.opencode/skills'),
+        (Join-Path $RootDir '.agents/skills'),
+        (Join-Path $RootDir '.codex/skills'),
+        (Join-Path $RootDir '.claude/skills')
+      )
+    }
+  }
+
+  return @()
+}
+
+function Get-SkillEntries {
+  param([string[]]$SourceRoots)
+
+  $entries = New-Object System.Collections.Generic.List[object]
+  $seen = @{}
+
+  foreach ($root in $SourceRoots) {
+    if (-not (Test-Path -LiteralPath $root)) {
+      continue
+    }
+
+    $skillDirs = Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue | Where-Object {
+      $_.Name -notmatch '^\.' -and (Test-Path (Join-Path $_.FullName 'SKILL.md'))
+    }
+
+    foreach ($skillDir in $skillDirs) {
+      $skillName = $skillDir.Name
+      if ($seen.ContainsKey($skillName)) {
+        continue
+      }
+
+      $sourceAbs = (Resolve-Path -LiteralPath $skillDir.FullName).Path
+      $entries.Add([PSCustomObject]@{
+        Name = $skillName
+        SourcePath = $sourceAbs
+        SourceRoot = $root
+      })
+      $seen[$skillName] = $true
+    }
+  }
+
+  return $entries
+}
+
 function Uninstall-ForClient {
   param(
     [string]$ClientName,
-    [string]$SourceRoot,
-    [string]$TargetRoot
+    [string]$TargetRoot,
+    [string[]]$SourceRoots
   )
 
-  if (-not (Test-Path -LiteralPath $SourceRoot)) {
-    Write-Host "[warn] $ClientName source skills directory not found: $SourceRoot"
+  $entries = Get-SkillEntries -SourceRoots $SourceRoots
+  if ($entries.Count -eq 0) {
+    Write-Host "[warn] $ClientName no skill sources found. Checked roots:"
+    foreach ($root in $SourceRoots) {
+      Write-Host "  - $root"
+    }
     return
   }
 
   [int]$removed = 0
   [int]$skipped = 0
 
-  $skillDirs = Get-ChildItem -LiteralPath $SourceRoot -Directory | Where-Object {
-    $_.Name -notmatch '^\.' -and (Test-Path (Join-Path $_.FullName 'SKILL.md'))
-  }
+  foreach ($entry in $entries) {
+    $targetPath = Join-Path $TargetRoot $entry.Name
 
-  foreach ($skillDir in $skillDirs) {
-    $sourceAbs = (Resolve-Path -LiteralPath $skillDir.FullName).Path
-    $targetPath = Join-Path $TargetRoot $skillDir.Name
-
-    if (Test-ManagedLink -TargetPath $targetPath -SourcePath $sourceAbs) {
+    if (Test-ManagedLink -TargetPath $targetPath -SourcePath $entry.SourcePath) {
       Remove-Item -LiteralPath $targetPath -Recurse -Force
-      Write-Host "[remove] $ClientName skill link removed: $($skillDir.Name)"
+      Write-Host "[remove] $ClientName skill link removed: $($entry.Name)"
       $removed += 1
       continue
     }
 
     if (Test-Path -LiteralPath $targetPath) {
-      Write-Host "[skip] $ClientName skill not managed by this repo: $($skillDir.Name)"
+      Write-Host "[skip] $ClientName skill not managed by this repo: $($entry.Name)"
       $skipped += 1
     }
   }
@@ -94,13 +172,26 @@ function Uninstall-ForClient {
   Write-Host "[done] $ClientName skills -> removed=$removed skipped=$skipped"
 }
 
-$codexHome = Normalize-HomeDir -Raw $env:CODEX_HOME -Fallback (Join-Path $HOME '.codex')
-$claudeHome = Normalize-HomeDir -Raw $env:CLAUDE_HOME -Fallback (Join-Path $HOME '.claude')
-
-if ($Client -eq 'all' -or $Client -eq 'codex') {
-  Uninstall-ForClient -ClientName 'codex' -SourceRoot (Join-Path $RootDir '.codex/skills') -TargetRoot (Join-Path $codexHome 'skills')
+$configHome = Get-ConfigHome
+$homeMap = @{
+  codex = Normalize-HomeDir -Raw $env:CODEX_HOME -Fallback (Join-Path $HOME '.codex')
+  claude = Normalize-HomeDir -Raw $env:CLAUDE_HOME -Fallback (Join-Path $HOME '.claude')
+  gemini = Normalize-HomeDir -Raw $env:GEMINI_HOME -Fallback (Join-Path $HOME '.gemini')
+  opencode = Normalize-HomeDir -Raw $env:OPENCODE_HOME -Fallback (Join-Path $configHome 'opencode')
 }
 
-if ($Client -eq 'all' -or $Client -eq 'claude') {
-  Uninstall-ForClient -ClientName 'claude' -SourceRoot (Join-Path $RootDir '.claude/skills') -TargetRoot (Join-Path $claudeHome 'skills')
+if (Client-Enabled 'codex') {
+  Uninstall-ForClient -ClientName 'codex' -TargetRoot (Join-Path $homeMap.codex 'skills') -SourceRoots (Get-ClientSourceRoots -ClientName 'codex')
+}
+
+if (Client-Enabled 'claude') {
+  Uninstall-ForClient -ClientName 'claude' -TargetRoot (Join-Path $homeMap.claude 'skills') -SourceRoots (Get-ClientSourceRoots -ClientName 'claude')
+}
+
+if (Client-Enabled 'gemini') {
+  Uninstall-ForClient -ClientName 'gemini' -TargetRoot (Join-Path $homeMap.gemini 'skills') -SourceRoots (Get-ClientSourceRoots -ClientName 'gemini')
+}
+
+if (Client-Enabled 'opencode') {
+  Uninstall-ForClient -ClientName 'opencode' -TargetRoot (Join-Path $homeMap.opencode 'skills') -SourceRoots (Get-ClientSourceRoots -ClientName 'opencode')
 }

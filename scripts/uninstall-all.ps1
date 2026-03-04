@@ -1,6 +1,6 @@
 param(
   [string]$Components = "shell,skills",
-  [ValidateSet("all", "codex", "claude")]
+  [ValidateSet("all", "codex", "claude", "gemini", "opencode")]
   [string]$Client = "all"
 )
 

@@ -1,5 +1,5 @@
 param(
-  [ValidateSet("all", "codex", "claude")]
+  [ValidateSet("all", "codex", "claude", "gemini", "opencode")]
   [string]$Client = "all",
   [switch]$Force
 )
@@ -26,9 +26,29 @@ function Normalize-HomeDir {
   return $Raw
 }
 
+function Get-ConfigHome {
+  if ($env:XDG_CONFIG_HOME -and [System.IO.Path]::IsPathRooted($env:XDG_CONFIG_HOME)) {
+    return $env:XDG_CONFIG_HOME
+  }
+
+  return (Join-Path $HOME '.config')
+}
+
+function Warn-RelativeHome {
+  param(
+    [string]$EnvName,
+    [string]$Fallback
+  )
+
+  $raw = [Environment]::GetEnvironmentVariable($EnvName)
+  if ($raw -and -not [System.IO.Path]::IsPathRooted($raw)) {
+    Write-Host "[warn] $EnvName is relative ($raw); using $Fallback"
+  }
+}
+
 function Trim-Path {
   param([string]$Path)
-  return $Path.TrimEnd('\', '/')
+  return $Path.TrimEnd('\\', '/')
 }
 
 function Test-ManagedLink {
@@ -71,36 +91,106 @@ function New-ManagedLink {
   New-Item -Path $TargetPath -ItemType SymbolicLink -Target $SourcePath | Out-Null
 }
 
+function Client-Enabled {
+  param([string]$Candidate)
+
+  return ($Client -eq 'all' -or $Client -eq $Candidate)
+}
+
+function Get-ClientSourceRoots {
+  param([string]$ClientName)
+
+  switch ($ClientName) {
+    'codex' {
+      return @((Join-Path $RootDir '.codex/skills'))
+    }
+    'claude' {
+      return @((Join-Path $RootDir '.claude/skills'))
+    }
+    'gemini' {
+      return @(
+        (Join-Path $RootDir '.gemini/skills'),
+        (Join-Path $RootDir '.agents/skills'),
+        (Join-Path $RootDir '.codex/skills'),
+        (Join-Path $RootDir '.claude/skills')
+      )
+    }
+    'opencode' {
+      return @(
+        (Join-Path $RootDir '.opencode/skills'),
+        (Join-Path $RootDir '.agents/skills'),
+        (Join-Path $RootDir '.codex/skills'),
+        (Join-Path $RootDir '.claude/skills')
+      )
+    }
+  }
+
+  return @()
+}
+
+function Get-SkillEntries {
+  param([string[]]$SourceRoots)
+
+  $entries = New-Object System.Collections.Generic.List[object]
+  $seen = @{}
+
+  foreach ($root in $SourceRoots) {
+    if (-not (Test-Path -LiteralPath $root)) {
+      continue
+    }
+
+    $skillDirs = Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue | Where-Object {
+      $_.Name -notmatch '^\.' -and (Test-Path (Join-Path $_.FullName 'SKILL.md'))
+    }
+
+    foreach ($skillDir in $skillDirs) {
+      $skillName = $skillDir.Name
+      if ($seen.ContainsKey($skillName)) {
+        continue
+      }
+
+      $sourceAbs = (Resolve-Path -LiteralPath $skillDir.FullName).Path
+      $entries.Add([PSCustomObject]@{
+        Name = $skillName
+        SourcePath = $sourceAbs
+        SourceRoot = $root
+      })
+      $seen[$skillName] = $true
+    }
+  }
+
+  return $entries
+}
+
 function Install-ForClient {
   param(
     [string]$ClientName,
-    [string]$SourceRoot,
-    [string]$TargetRoot
+    [string]$TargetRoot,
+    [string[]]$SourceRoots
   )
 
-  if (-not (Test-Path -LiteralPath $SourceRoot)) {
-    Write-Host "[warn] $ClientName source skills directory not found: $SourceRoot"
+  New-Item -Path $TargetRoot -ItemType Directory -Force | Out-Null
+
+  $entries = Get-SkillEntries -SourceRoots $SourceRoots
+  if ($entries.Count -eq 0) {
+    Write-Host "[warn] $ClientName no skill sources found. Checked roots:"
+    foreach ($root in $SourceRoots) {
+      Write-Host "  - $root"
+    }
     return
   }
-
-  New-Item -Path $TargetRoot -ItemType Directory -Force | Out-Null
 
   [int]$installed = 0
   [int]$reused = 0
   [int]$replaced = 0
   [int]$skipped = 0
 
-  $skillDirs = Get-ChildItem -LiteralPath $SourceRoot -Directory | Where-Object {
-    $_.Name -notmatch '^\.' -and (Test-Path (Join-Path $_.FullName 'SKILL.md'))
-  }
-
-  foreach ($skillDir in $skillDirs) {
-    $sourceAbs = (Resolve-Path -LiteralPath $skillDir.FullName).Path
-    $targetPath = Join-Path $TargetRoot $skillDir.Name
+  foreach ($entry in $entries) {
+    $targetPath = Join-Path $TargetRoot $entry.Name
 
     if (Test-Path -LiteralPath $targetPath) {
-      if (Test-ManagedLink -TargetPath $targetPath -SourcePath $sourceAbs) {
-        Write-Host "[ok] $ClientName skill already linked: $($skillDir.Name)"
+      if (Test-ManagedLink -TargetPath $targetPath -SourcePath $entry.SourcePath) {
+        Write-Host "[ok] $ClientName skill already linked: $($entry.Name)"
         $reused += 1
         continue
       }
@@ -109,34 +199,45 @@ function Install-ForClient {
         Remove-Item -LiteralPath $targetPath -Recurse -Force
         $replaced += 1
       } else {
-        Write-Host "[skip] $ClientName skill exists (use -Force to replace): $($skillDir.Name)"
+        Write-Host "[skip] $ClientName skill exists (use -Force to replace): $($entry.Name)"
         $skipped += 1
         continue
       }
     }
 
-    New-ManagedLink -SourcePath $sourceAbs -TargetPath $targetPath
-    Write-Host "[link] $ClientName skill installed: $($skillDir.Name)"
+    New-ManagedLink -SourcePath $entry.SourcePath -TargetPath $targetPath
+    Write-Host "[link] $ClientName skill installed: $($entry.Name)"
     $installed += 1
   }
 
   Write-Host "[done] $ClientName skills -> installed=$installed reused=$reused replaced=$replaced skipped=$skipped"
 }
 
-$codexHome = Normalize-HomeDir -Raw $env:CODEX_HOME -Fallback (Join-Path $HOME '.codex')
-$claudeHome = Normalize-HomeDir -Raw $env:CLAUDE_HOME -Fallback (Join-Path $HOME '.claude')
-
-if ($env:CODEX_HOME -and -not [System.IO.Path]::IsPathRooted($env:CODEX_HOME)) {
-  Write-Host "[warn] CODEX_HOME is relative ($($env:CODEX_HOME)); using $codexHome"
-}
-if ($env:CLAUDE_HOME -and -not [System.IO.Path]::IsPathRooted($env:CLAUDE_HOME)) {
-  Write-Host "[warn] CLAUDE_HOME is relative ($($env:CLAUDE_HOME)); using $claudeHome"
+$configHome = Get-ConfigHome
+$homeMap = @{
+  codex = Normalize-HomeDir -Raw $env:CODEX_HOME -Fallback (Join-Path $HOME '.codex')
+  claude = Normalize-HomeDir -Raw $env:CLAUDE_HOME -Fallback (Join-Path $HOME '.claude')
+  gemini = Normalize-HomeDir -Raw $env:GEMINI_HOME -Fallback (Join-Path $HOME '.gemini')
+  opencode = Normalize-HomeDir -Raw $env:OPENCODE_HOME -Fallback (Join-Path $configHome 'opencode')
 }
 
-if ($Client -eq 'all' -or $Client -eq 'codex') {
-  Install-ForClient -ClientName 'codex' -SourceRoot (Join-Path $RootDir '.codex/skills') -TargetRoot (Join-Path $codexHome 'skills')
+Warn-RelativeHome -EnvName 'CODEX_HOME' -Fallback $homeMap.codex
+Warn-RelativeHome -EnvName 'CLAUDE_HOME' -Fallback $homeMap.claude
+Warn-RelativeHome -EnvName 'GEMINI_HOME' -Fallback $homeMap.gemini
+Warn-RelativeHome -EnvName 'OPENCODE_HOME' -Fallback $homeMap.opencode
+
+if (Client-Enabled 'codex') {
+  Install-ForClient -ClientName 'codex' -TargetRoot (Join-Path $homeMap.codex 'skills') -SourceRoots (Get-ClientSourceRoots -ClientName 'codex')
 }
 
-if ($Client -eq 'all' -or $Client -eq 'claude') {
-  Install-ForClient -ClientName 'claude' -SourceRoot (Join-Path $RootDir '.claude/skills') -TargetRoot (Join-Path $claudeHome 'skills')
+if (Client-Enabled 'claude') {
+  Install-ForClient -ClientName 'claude' -TargetRoot (Join-Path $homeMap.claude 'skills') -SourceRoots (Get-ClientSourceRoots -ClientName 'claude')
+}
+
+if (Client-Enabled 'gemini') {
+  Install-ForClient -ClientName 'gemini' -TargetRoot (Join-Path $homeMap.gemini 'skills') -SourceRoots (Get-ClientSourceRoots -ClientName 'gemini')
+}
+
+if (Client-Enabled 'opencode') {
+  Install-ForClient -ClientName 'opencode' -TargetRoot (Join-Path $homeMap.opencode 'skills') -SourceRoots (Get-ClientSourceRoots -ClientName 'opencode')
 }

@@ -83,6 +83,7 @@ mkdir -p "$CODEX_HOME"
 ## 本仓库 skills 在其他项目不可见
 
 包装器与 skills 是分离设计，需要显式安装全局 skills：
+`--client all` 会同时安装到 `codex`、`claude`、`gemini`、`opencode`。
 
 ```bash
 scripts/install-contextdb-skills.sh --client all

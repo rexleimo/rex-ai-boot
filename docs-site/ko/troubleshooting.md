@@ -74,6 +74,7 @@ mkdir -p "$CODEX_HOME"
 ## 이 저장소 skills가 다른 프로젝트에서 보이지 않음
 
 래퍼와 skills는 분리되어 있습니다. 전역 skills를 별도로 설치하세요:
+`--client all`은 `codex` / `claude` / `gemini` / `opencode`를 함께 대상으로 합니다.
 
 ```bash
 scripts/install-contextdb-skills.sh --client all

@@ -2,7 +2,7 @@ param(
   [string]$Components = "all",
   [ValidateSet("all", "repo-only", "opt-in", "off")]
   [string]$Mode = "opt-in",
-  [ValidateSet("all", "codex", "claude")]
+  [ValidateSet("all", "codex", "claude", "gemini", "opencode")]
   [string]$Client = "all",
   [switch]$WithPlaywrightInstall,
   [switch]$SkipDoctor

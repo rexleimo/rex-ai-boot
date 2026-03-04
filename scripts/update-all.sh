@@ -17,7 +17,8 @@ Options:
   --components <list>            Comma list: browser,shell,skills (default: all)
   --mode <all|repo-only|opt-in|off>
                                  Wrapper mode for update-contextdb-shell.sh
-  --client <all|codex|claude>    Skills target clients (default: all)
+  --client <all|codex|claude|gemini|opencode>
+                                 Skills target clients (default: all)
   --with-playwright-install      Also update playwright runtime when updating browser MCP
   --skip-doctor                  Skip doctor scripts
   -h, --help                     Show this help
@@ -72,9 +73,9 @@ case "$WRAP_MODE" in
 esac
 
 case "$SKILL_CLIENT" in
-  all|codex|claude) ;;
+  all|codex|claude|gemini|opencode) ;;
   *)
-    echo "--client must be one of: all, codex, claude" >&2
+    echo "--client must be one of: all, codex, claude, gemini, opencode" >&2
     exit 1
     ;;
 esac

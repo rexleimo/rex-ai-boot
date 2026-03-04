@@ -172,6 +172,7 @@ gemini
 ## 8) 可选：全局安装本项目 Skills
 
 仅当你希望在其他项目也能直接使用本仓库 skills 时再执行。
+`--client all` 会同时安装到 `codex`、`claude`、`gemini`、`opencode`。
 
 === "macOS / Linux"
 

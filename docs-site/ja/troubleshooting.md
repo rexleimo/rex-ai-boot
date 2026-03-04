@@ -74,6 +74,7 @@ mkdir -p "$CODEX_HOME"
 ## このリポジトリの skills が他プロジェクトで見えない
 
 wrapper と skills は分離です。グローバル skills を明示的にインストールしてください:
+`--client all` は `codex` / `claude` / `gemini` / `opencode` を対象にします。
 
 ```bash
 scripts/install-contextdb-skills.sh --client all

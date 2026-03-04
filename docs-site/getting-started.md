@@ -172,6 +172,7 @@ You should see `sessions/`, `index/`, and `exports/`.
 ## 8) Optional: install project skills globally
 
 Use this only when you want this repo's skills available in other projects.
+`--client all` installs for `codex`, `claude`, `gemini`, and `opencode`.
 
 === "macOS / Linux"
 

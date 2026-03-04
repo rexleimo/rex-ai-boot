@@ -94,7 +94,7 @@ export CTXDB_WRAP_MODE=off
 
 Skill loading scope is separate from ContextDB wrapping:
 
-- Global skills: `~/.codex/skills`, `~/.claude/skills`
+- Global skills: `~/.codex/skills`, `~/.claude/skills`, `~/.gemini/skills`, `~/.config/opencode/skills`
 - Project-only skills: `<repo>/.codex/skills`, `<repo>/.claude/skills`
 
 If you need isolation, keep custom skills in repo-local folders.
@@ -102,6 +102,7 @@ If you need isolation, keep custom skills in repo-local folders.
 ## Repo skills are not available globally
 
 Wrappers and skills are separate by design. Install skills explicitly:
+`--client all` installs for `codex`, `claude`, `gemini`, and `opencode`.
 
 ```bash
 scripts/install-contextdb-skills.sh --client all

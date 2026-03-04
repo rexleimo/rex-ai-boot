@@ -7,10 +7,10 @@ CLIENT="all"
 usage() {
   cat <<USAGE
 Usage:
-  scripts/doctor-contextdb-skills.sh [--client <all|codex|claude>]
+  scripts/doctor-contextdb-skills.sh [--client <all|codex|claude|gemini|opencode>]
 
 Options:
-  --client <value>   Check codex, claude, or both (default: all)
+  --client <value>   Check selected client(s) (default: all)
   -h, --help         Show this help
 USAGE
 }
@@ -34,9 +34,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$CLIENT" in
-  all|codex|claude) ;;
+  all|codex|claude|gemini|opencode) ;;
   *)
-    echo "--client must be one of: all, codex, claude" >&2
+    echo "--client must be one of: all, codex, claude, gemini, opencode" >&2
     exit 1
     ;;
 esac
@@ -55,35 +55,128 @@ normalize_home_dir() {
   printf '%s\n' "$raw"
 }
 
+resolve_xdg_config_home() {
+  local fallback="$HOME/.config"
+  if [[ -n "${XDG_CONFIG_HOME:-}" ]] && [[ "$XDG_CONFIG_HOME" == /* ]]; then
+    printf '%s\n' "$XDG_CONFIG_HOME"
+    return 0
+  fi
+  printf '%s\n' "$fallback"
+}
+
+client_enabled() {
+  local candidate="$1"
+  [[ "$CLIENT" == "all" || "$CLIENT" == "$candidate" ]]
+}
+
+source_roots_for_client() {
+  local client="$1"
+  case "$client" in
+    codex)
+      printf '%s\n' "$ROOT_DIR/.codex/skills"
+      ;;
+    claude)
+      printf '%s\n' "$ROOT_DIR/.claude/skills"
+      ;;
+    gemini)
+      printf '%s\n' \
+        "$ROOT_DIR/.gemini/skills" \
+        "$ROOT_DIR/.agents/skills" \
+        "$ROOT_DIR/.codex/skills" \
+        "$ROOT_DIR/.claude/skills"
+      ;;
+    opencode)
+      printf '%s\n' \
+        "$ROOT_DIR/.opencode/skills" \
+        "$ROOT_DIR/.agents/skills" \
+        "$ROOT_DIR/.codex/skills" \
+        "$ROOT_DIR/.claude/skills"
+      ;;
+  esac
+}
+
+collect_skill_entries() {
+  local output_file="$1"
+  local roots_text="$2"
+
+  : > "$output_file"
+
+  local root=""
+  while IFS= read -r root; do
+    [[ -n "$root" ]] || continue
+    [[ -d "$root" ]] || continue
+
+    local skill_dir=""
+    for skill_dir in "$root"/*; do
+      [[ -d "$skill_dir" ]] || continue
+
+      local skill_name
+      skill_name="$(basename "$skill_dir")"
+      [[ "$skill_name" == .* ]] && continue
+      [[ -f "$skill_dir/SKILL.md" ]] || continue
+
+      if awk -F'\t' -v name="$skill_name" '$1 == name { found = 1; exit } END { exit(found ? 0 : 1) }' "$output_file"; then
+        continue
+      fi
+
+      local source_abs
+      source_abs="$(cd "$skill_dir" && pwd -P)"
+      printf '%s\t%s\n' "$skill_name" "$source_abs" >> "$output_file"
+    done
+  done <<< "$roots_text"
+}
+
+is_managed_link() {
+  local target_path="$1"
+  local source_abs="$2"
+
+  if [[ ! -L "$target_path" ]]; then
+    return 1
+  fi
+
+  local linked=""
+  linked="$(readlink "$target_path" 2>/dev/null || true)"
+  [[ -n "$linked" ]] || return 1
+
+  if [[ "$linked" != /* ]]; then
+    linked="$(cd "$(dirname "$target_path")" && cd "$linked" 2>/dev/null && pwd -P || true)"
+  fi
+
+  [[ "$linked" == "$source_abs" ]]
+}
+
 check_client() {
   local client="$1"
-  local source_root="$2"
-  local target_root="$3"
+  local target_root="$2"
+  local roots_text="$3"
 
   echo "$client target root: $target_root"
 
-  if [[ ! -d "$source_root" ]]; then
-    echo "[warn] $client source skills directory not found: $source_root"
+  local entries_file
+  entries_file="$(mktemp)"
+  collect_skill_entries "$entries_file" "$roots_text"
+
+  local total_entries
+  total_entries="$(wc -l < "$entries_file" | tr -d ' ')"
+  if [[ "$total_entries" == "0" ]]; then
+    echo "[warn] $client no skill sources found. Checked roots:"
+    while IFS= read -r root; do
+      [[ -n "$root" ]] || continue
+      echo "  - $root"
+    done <<< "$roots_text"
+    rm -f "$entries_file"
     return 0
   fi
 
   local ok=0
   local warn=0
 
-  local skill_dir=""
-  for skill_dir in "$source_root"/*; do
-    [[ -d "$skill_dir" ]] || continue
+  while IFS=$'\t' read -r skill_name source_abs; do
+    [[ -n "$skill_name" ]] || continue
 
-    local skill_name
-    skill_name="$(basename "$skill_dir")"
-    [[ "$skill_name" == .* ]] && continue
-    [[ -f "$skill_dir/SKILL.md" ]] || continue
+    local target_path="$target_root/$skill_name"
 
-    local source_abs target_path
-    source_abs="$(cd "$skill_dir" && pwd -P)"
-    target_path="$target_root/$skill_name"
-
-    if [[ -L "$target_path" ]] && [[ "$(readlink "$target_path")" == "$source_abs" ]]; then
+    if is_managed_link "$target_path" "$source_abs"; then
       echo "[ok] $client: $skill_name linked"
       ok=$((ok + 1))
     elif [[ -e "$target_path" || -L "$target_path" ]]; then
@@ -93,21 +186,33 @@ check_client() {
       echo "[warn] $client: $skill_name not installed"
       warn=$((warn + 1))
     fi
-  done
+  done < "$entries_file"
 
+  rm -f "$entries_file"
   echo "[summary] $client ok=$ok warn=$warn"
 }
-
-codex_home="$(normalize_home_dir "${CODEX_HOME:-}" "$HOME/.codex")"
-claude_home="$(normalize_home_dir "${CLAUDE_HOME:-}" "$HOME/.claude")"
 
 echo "ContextDB Skills Doctor"
 echo "-----------------------"
 
-if [[ "$CLIENT" == "all" || "$CLIENT" == "codex" ]]; then
-  check_client "codex" "$ROOT_DIR/.codex/skills" "$codex_home/skills"
+xdg_config_home="$(resolve_xdg_config_home)"
+codex_home="$(normalize_home_dir "${CODEX_HOME:-}" "$HOME/.codex")"
+claude_home="$(normalize_home_dir "${CLAUDE_HOME:-}" "$HOME/.claude")"
+gemini_home="$(normalize_home_dir "${GEMINI_HOME:-}" "$HOME/.gemini")"
+opencode_home="$(normalize_home_dir "${OPENCODE_HOME:-}" "$xdg_config_home/opencode")"
+
+if client_enabled "codex"; then
+  check_client "codex" "$codex_home/skills" "$(source_roots_for_client codex)"
 fi
 
-if [[ "$CLIENT" == "all" || "$CLIENT" == "claude" ]]; then
-  check_client "claude" "$ROOT_DIR/.claude/skills" "$claude_home/skills"
+if client_enabled "claude"; then
+  check_client "claude" "$claude_home/skills" "$(source_roots_for_client claude)"
+fi
+
+if client_enabled "gemini"; then
+  check_client "gemini" "$gemini_home/skills" "$(source_roots_for_client gemini)"
+fi
+
+if client_enabled "opencode"; then
+  check_client "opencode" "$opencode_home/skills" "$(source_roots_for_client opencode)"
 fi

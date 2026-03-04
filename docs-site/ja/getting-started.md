@@ -168,6 +168,7 @@ gemini
 ## 8) 任意: このリポジトリの Skills をグローバル導入
 
 他プロジェクトでもこのリポジトリの skills を使いたい場合のみ実行してください。
+`--client all` は `codex` / `claude` / `gemini` / `opencode` を対象にします。
 
 === "macOS / Linux"
 

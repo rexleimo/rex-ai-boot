@@ -116,7 +116,7 @@ ContextDB wrapping and CLI skill loading are different layers:
 - Wrapping scope is controlled by `CTXDB_WRAP_MODE` above.
 - Use skill lifecycle scripts above for install/update/uninstall/doctor.
 - Skill installers skip existing same-name targets by default; use `--force` / `-Force` only when you intentionally replace them.
-- Skills installed in `~/.codex/skills` or `~/.claude/skills` are global.
+- Skills installed in `~/.codex/skills`, `~/.claude/skills`, `~/.gemini/skills`, or `~/.config/opencode/skills` are global.
 - Project-only skills should live in `<repo>/.codex/skills` or `<repo>/.claude/skills`.
 - Keep `CODEX_HOME` as an absolute home path (recommended: `~/.codex`). Do not set `CODEX_HOME=.codex`.
 

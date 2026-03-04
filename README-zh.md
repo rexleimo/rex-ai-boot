@@ -116,7 +116,7 @@ ContextDB 包装和 CLI 的 Skills 加载是两层机制：
 - 包装范围由上面的 `CTXDB_WRAP_MODE` 控制。
 - 使用上面的 skills 生命周期脚本完成安装/更新/卸载/诊断。
 - skills 安装脚本默认会跳过同名已有目录；只有你明确要替换时再使用 `--force` / `-Force`。
-- 安装在 `~/.codex/skills`、`~/.claude/skills` 的技能是全局可见。
+- 安装在 `~/.codex/skills`、`~/.claude/skills`、`~/.gemini/skills`、`~/.config/opencode/skills` 的技能是全局可见。
 - 仅项目可见的技能应放在 `<repo>/.codex/skills`、`<repo>/.claude/skills`。
 - `CODEX_HOME` 建议保持为绝对路径（推荐 `~/.codex`），不要设置为相对路径 `.codex`。
 

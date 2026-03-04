@@ -168,6 +168,7 @@ gemini
 ## 8) 선택: 이 저장소 Skills를 전역 설치
 
 다른 프로젝트에서도 이 저장소의 skills를 바로 쓰고 싶을 때만 실행하세요.
+`--client all`은 `codex` / `claude` / `gemini` / `opencode`를 함께 대상으로 합니다.
 
 === "macOS / Linux"
 

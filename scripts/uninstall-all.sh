@@ -12,7 +12,8 @@ Usage:
 
 Options:
   --components <list>          Comma list: shell,skills,browser (default: shell,skills)
-  --client <all|codex|claude>  Skills target clients (default: all)
+  --client <all|codex|claude|gemini|opencode>
+                               Skills target clients (default: all)
   -h, --help                   Show this help
 
 Notes:
@@ -43,9 +44,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$SKILL_CLIENT" in
-  all|codex|claude) ;;
+  all|codex|claude|gemini|opencode) ;;
   *)
-    echo "--client must be one of: all, codex, claude" >&2
+    echo "--client must be one of: all, codex, claude, gemini, opencode" >&2
     exit 1
     ;;
 esac
