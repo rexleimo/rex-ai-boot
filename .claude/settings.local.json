@@ -22,7 +22,8 @@
       "mcp__puppeteer-stealth__browser_click",
       "mcp__puppeteer-stealth__browser_type",
       "mcp__puppeteer-stealth__browser_close",
-      "mcp__puppeteer-stealth__browser_list_tabs"
+      "mcp__puppeteer-stealth__browser_list_tabs",
+      "Bash(ls:*)"
     ]
   },
   "approvalMode": "auto",
