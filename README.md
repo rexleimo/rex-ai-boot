@@ -6,6 +6,36 @@ It does not replace those clients. Instead, it adds two shared capabilities:
 1. Unified browser automation via Playwright MCP (`browser_*` tools)
 2. Cross-CLI filesystem Context DB for resumable task memory
 
+## Start Here (Use First, Read Later)
+
+Key links:
+
+- Project (GitHub): `https://github.com/rexleimo/rex-ai-boot`
+- Docs: `https://cli.rexai.top`
+- Blog: `https://cli.rexai.top/blog/`
+- Case Library: `https://cli.rexai.top/case-library/`
+- Friend sites: `https://os.rexai.top` / `https://rexai.top` / `https://tool.rexai.top`
+
+30-second setup (macOS / Linux):
+
+```bash
+git clone https://github.com/rexleimo/rex-ai-boot.git
+cd rex-ai-boot
+scripts/setup-all.sh --components all --mode opt-in
+source ~/.zshrc
+codex
+```
+
+30-second setup (Windows PowerShell):
+
+```powershell
+git clone https://github.com/rexleimo/rex-ai-boot.git
+cd rex-ai-boot
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-all.ps1 -Components all -Mode opt-in
+. $PROFILE
+codex
+```
+
 ## Why does `codex` load ContextDB automatically?
 
 The mechanism is **transparent zsh wrapping**:
@@ -50,7 +80,7 @@ User -> codex/claude/gemini
 Before running any `scripts/*.sh` or `scripts/*.ps1` commands, clone and enter this repository:
 
 ```bash
-git clone https://github.com/rexq57/rex-ai-boot.git
+git clone https://github.com/rexleimo/rex-ai-boot.git
 cd rex-ai-boot
 ```
 

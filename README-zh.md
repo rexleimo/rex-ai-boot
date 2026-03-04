@@ -6,6 +6,36 @@
 1. 统一浏览器自动化能力（Playwright MCP，`browser_*` 工具）
 2. 跨 CLI 共享的文件系统 Context DB（可追溯会话记忆）
 
+## 先用起来（不想看原理就看这里）
+
+关键入口：
+
+- 项目地址（GitHub）：`https://github.com/rexleimo/rex-ai-boot`
+- 文档站：`https://cli.rexai.top`
+- 博客：`https://cli.rexai.top/blog/`
+- 官方案例库：`https://cli.rexai.top/case-library/`
+- 友情链接：`https://os.rexai.top` / `https://rexai.top` / `https://tool.rexai.top`
+
+30 秒上手（macOS / Linux）：
+
+```bash
+git clone https://github.com/rexleimo/rex-ai-boot.git
+cd rex-ai-boot
+scripts/setup-all.sh --components all --mode opt-in
+source ~/.zshrc
+codex
+```
+
+30 秒上手（Windows PowerShell）：
+
+```powershell
+git clone https://github.com/rexleimo/rex-ai-boot.git
+cd rex-ai-boot
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-all.ps1 -Components all -Mode opt-in
+. $PROFILE
+codex
+```
+
 ## 你最关心的点：为什么直接输入 `codex` 也会带 ContextDB？
 
 原理是 **zsh 包装函数透明接管**：
@@ -50,7 +80,7 @@ User -> codex/claude/gemini
 执行 `scripts/*.sh` 或 `scripts/*.ps1` 前，先 clone 并进入仓库根目录：
 
 ```bash
-git clone https://github.com/rexq57/rex-ai-boot.git
+git clone https://github.com/rexleimo/rex-ai-boot.git
 cd rex-ai-boot
 ```
 
