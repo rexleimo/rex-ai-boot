@@ -31,5 +31,6 @@ gemini
 - [블로그 사이트](https://cli.rexai.top/blog/ko/)
 - [변경 로그](changelog.md)
 - [CLI 워크플로](use-cases.md)
+- [공식 사례 라이브러리](case-library.md)
 - [아키텍처](architecture.md)
 - [ContextDB](contextdb.md)

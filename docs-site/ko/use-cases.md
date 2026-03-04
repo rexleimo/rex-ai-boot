@@ -5,6 +5,8 @@ description: 인터랙티브 모드와 one-shot 모드.
 
 # CLI 워크플로
 
+명령 단위 예시가 포함된 시나리오는 [공식 사례 라이브러리](case-library.md)를 참고하세요.
+
 ## 인터랙티브 모드
 
 `codex` / `claude` / `gemini` 실행 시 시작 컨텍스트를 자동 주입합니다.

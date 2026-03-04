@@ -41,5 +41,6 @@ scripts/ctx-agent.sh --agent codex-cli --prompt "Continue from latest checkpoint
 - [Blog Site](https://cli.rexai.top/blog/)
 - [Changelog](changelog.md)
 - [CLI Workflows](use-cases.md)
+- [Case Library](case-library.md)
 - [Architecture](architecture.md)
 - [ContextDB runtime details](contextdb.md)

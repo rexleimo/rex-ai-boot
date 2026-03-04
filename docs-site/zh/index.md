@@ -39,5 +39,6 @@ scripts/ctx-agent.sh --agent codex-cli --prompt "继续上一阶段并执行下�
 - [博客站点](https://cli.rexai.top/blog/zh/)
 - [更新日志](changelog.md)
 - [CLI 工作流](use-cases.md)
+- [官方案例库](case-library.md)
 - [架构](architecture.md)
 - [ContextDB](contextdb.md)

@@ -30,8 +30,8 @@ function Get-ComponentSet {
   }
 
   foreach ($item in $parts) {
-    if ($item -notin @('all', 'browser', 'shell', 'skills')) {
-      throw "Unsupported component: $item. Allowed: browser,shell,skills (or all)"
+    if ($item -notin @('all', 'browser', 'shell', 'skills', 'superpowers')) {
+      throw "Unsupported component: $item. Allowed: browser,shell,skills,superpowers (or all)"
     }
   }
 
@@ -86,6 +86,13 @@ if (Has-Component -Set $componentSet -Needle 'skills') {
   Run-Script -Path (Join-Path $ScriptDir 'install-contextdb-skills.ps1') -Args @('-Client', $Client)
   if (-not $SkipDoctor) {
     Run-Script -Path (Join-Path $ScriptDir 'doctor-contextdb-skills.ps1') -Args @('-Client', $Client)
+  }
+}
+
+if (Has-Component -Set $componentSet -Needle 'superpowers') {
+  Run-Script -Path (Join-Path $ScriptDir 'install-superpowers.ps1')
+  if (-not $SkipDoctor) {
+    Run-Script -Path (Join-Path $ScriptDir 'doctor-superpowers.ps1')
   }
 }
 

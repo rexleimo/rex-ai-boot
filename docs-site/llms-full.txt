@@ -4,6 +4,7 @@
 - https://cli.rexai.top/
 - https://cli.rexai.top/architecture/
 - https://cli.rexai.top/use-cases/
+- https://cli.rexai.top/case-library/
 
 ## Setup
 - https://cli.rexai.top/getting-started/

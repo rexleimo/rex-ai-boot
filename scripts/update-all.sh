@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMPONENTS="browser,shell,skills"
+COMPONENTS="browser,shell,skills,superpowers"
 WRAP_MODE="opt-in"
 SKILL_CLIENT="all"
 WITH_PLAYWRIGHT_INSTALL="false"
@@ -14,7 +14,7 @@ Usage:
   scripts/update-all.sh [options]
 
 Options:
-  --components <list>            Comma list: browser,shell,skills (default: all)
+  --components <list>            Comma list: browser,shell,skills,superpowers (default: all)
   --mode <all|repo-only|opt-in|off>
                                  Wrapper mode for update-contextdb-shell.sh
   --client <all|codex|claude|gemini|opencode>
@@ -25,7 +25,7 @@ Options:
 
 Examples:
   scripts/update-all.sh
-  scripts/update-all.sh --components shell,skills --mode repo-only
+  scripts/update-all.sh --components shell,skills,superpowers --mode repo-only
   scripts/update-all.sh --components browser --with-playwright-install
 USAGE
 }
@@ -100,10 +100,10 @@ validate_components() {
   for item in "${COMPONENT_LIST[@]}"; do
     [[ -n "$item" ]] || continue
     case "$item" in
-      all|browser|shell|skills) ;;
+      all|browser|shell|skills|superpowers) ;;
       *)
         echo "Unsupported component: $item" >&2
-        echo "Allowed: browser,shell,skills (or all)" >&2
+        echo "Allowed: browser,shell,skills,superpowers (or all)" >&2
         exit 1
         ;;
     esac
@@ -141,6 +141,13 @@ if has_component skills; then
   run_script "$SCRIPT_DIR/update-contextdb-skills.sh" --client "$SKILL_CLIENT"
   if [[ "$SKIP_DOCTOR" != "true" ]]; then
     run_script "$SCRIPT_DIR/doctor-contextdb-skills.sh" --client "$SKILL_CLIENT"
+  fi
+fi
+
+if has_component superpowers; then
+  run_script "$SCRIPT_DIR/update-superpowers.sh"
+  if [[ "$SKIP_DOCTOR" != "true" ]]; then
+    run_script "$SCRIPT_DIR/doctor-superpowers.sh"
   fi
 fi
 

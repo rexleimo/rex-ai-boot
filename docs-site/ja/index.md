@@ -31,5 +31,6 @@ gemini
 - [ブログサイト](https://cli.rexai.top/blog/ja/)
 - [変更履歴](changelog.md)
 - [CLI ワークフロー](use-cases.md)
+- [公式ケースライブラリ](case-library.md)
 - [アーキテクチャ](architecture.md)
 - [ContextDB](contextdb.md)

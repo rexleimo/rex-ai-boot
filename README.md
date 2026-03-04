@@ -54,6 +54,13 @@ git clone https://github.com/rexq57/rex-ai-boot.git
 cd rex-ai-boot
 ```
 
+## Official Case Library
+
+If you want concrete, reproducible examples of what this repo can do, start here:
+
+- Docs site: `https://cli.rexai.top/case-library/`
+- Repo doc: [`docs-site/case-library.md`](docs-site/case-library.md)
+
 ### 1) One command setup (recommended)
 
 macOS / Linux:
@@ -70,20 +77,20 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-all.ps1 -Components all
 . $PROFILE
 ```
 
-This installs Browser MCP, shell wrappers, and optional global skills in one flow.
+This installs Browser MCP, shell wrappers, optional global skills, and superpowers in one flow.
 
 Component selection examples:
 
 ```bash
-# only shell + skills
-scripts/setup-all.sh --components shell,skills --mode opt-in
+# only shell + skills + superpowers
+scripts/setup-all.sh --components shell,skills,superpowers --mode opt-in
 
 # only browser MCP
 scripts/setup-all.sh --components browser
 ```
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\setup-all.ps1 -Components shell,skills -Mode opt-in
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-all.ps1 -Components shell,skills,superpowers -Mode opt-in
 powershell -ExecutionPolicy Bypass -File .\scripts\setup-all.ps1 -Components browser
 ```
 
@@ -106,6 +113,7 @@ If you prefer explicit per-component lifecycle, use the individual scripts in `s
 - Browser MCP: `install-browser-mcp.*`, `doctor-browser-mcp.*`
 - Shell wrappers: `install/update/uninstall/doctor-contextdb-shell.*`
 - Global skills: `install/update/uninstall/doctor-contextdb-skills.*`
+- Superpowers: `install/update/doctor-superpowers.*`
 
 ### 3.1 Scope control (avoid cross-project reuse)
 

@@ -9,6 +9,8 @@ description: Practical usage patterns for interactive and one-shot agent executi
 
 Use interactive mode for daily coding with automatic resume, and one-shot mode for deterministic full-loop execution (`init -> session -> event -> checkpoint -> pack`).
 
+Need concrete scenarios with command-level examples? See the [Official Case Library](case-library.md).
+
 ## Mode A: Interactive Resume (default)
 
 Use native commands. Wrapper auto-runs:

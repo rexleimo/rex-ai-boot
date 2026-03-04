@@ -60,6 +60,7 @@ plugins:
             Quick Start: 快速开始
             Changelog: 更新日志
             CLI Workflows: CLI 工作流
+            Case Library: 官方案例库
             Architecture: 架构
             ContextDB: ContextDB
             Troubleshooting: 故障排查
@@ -74,6 +75,7 @@ plugins:
             Quick Start: クイックスタート
             Changelog: 変更履歴
             CLI Workflows: CLI ワークフロー
+            Case Library: 公式ケースライブラリ
             Architecture: アーキテクチャ
             ContextDB: ContextDB
             Troubleshooting: トラブルシューティング
@@ -88,6 +90,7 @@ plugins:
             Quick Start: 빠른 시작
             Changelog: 변경 로그
             CLI Workflows: CLI 워크플로
+            Case Library: 공식 사례 라이브러리
             Architecture: 아키텍처
             ContextDB: ContextDB
             Troubleshooting: 문제 해결
@@ -120,6 +123,7 @@ nav:
   - Quick Start: getting-started.md
   - Changelog: changelog.md
   - CLI Workflows: use-cases.md
+  - Case Library: case-library.md
   - Architecture: architecture.md
   - ContextDB: contextdb.md
   - Troubleshooting: troubleshooting.md

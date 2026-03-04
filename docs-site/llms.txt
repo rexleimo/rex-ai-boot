@@ -8,6 +8,7 @@
 ## Core Docs
 - https://cli.rexai.top/getting-started/
 - https://cli.rexai.top/use-cases/
+- https://cli.rexai.top/case-library/
 - https://cli.rexai.top/contextdb/
 - https://cli.rexai.top/troubleshooting/
 - https://cli.rexai.top/changelog/

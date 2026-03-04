@@ -54,6 +54,13 @@ git clone https://github.com/rexq57/rex-ai-boot.git
 cd rex-ai-boot
 ```
 
+## 官方案例库
+
+如果你要快速了解“这个仓库到底能做什么”，请直接看：
+
+- 文档站：`https://cli.rexai.top/case-library/`
+- 仓库文档：[`docs-site/case-library.md`](docs-site/case-library.md)
+
 ### 1) 一条命令完成安装（推荐）
 
 macOS / Linux：
@@ -70,20 +77,20 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-all.ps1 -Components all
 . $PROFILE
 ```
 
-这会在一次流程里安装 Browser MCP、shell 包装层、全局 skills（可选）。
+这会在一次流程里安装 Browser MCP、shell 包装层、全局 skills（可选）和 superpowers。
 
 按需选择组件示例：
 
 ```bash
-# 只安装 shell 包装 + skills
-scripts/setup-all.sh --components shell,skills --mode opt-in
+# 只安装 shell 包装 + skills + superpowers
+scripts/setup-all.sh --components shell,skills,superpowers --mode opt-in
 
 # 只安装 browser MCP
 scripts/setup-all.sh --components browser
 ```
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\setup-all.ps1 -Components shell,skills -Mode opt-in
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-all.ps1 -Components shell,skills,superpowers -Mode opt-in
 powershell -ExecutionPolicy Bypass -File .\scripts\setup-all.ps1 -Components browser
 ```
 
@@ -106,6 +113,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-all.ps1 -Components
 - Browser MCP：`install-browser-mcp.*`、`doctor-browser-mcp.*`
 - Shell 包装：`install/update/uninstall/doctor-contextdb-shell.*`
 - 全局 Skills：`install/update/uninstall/doctor-contextdb-skills.*`
+- Superpowers：`install/update/doctor-superpowers.*`
 
 ### 3.1 作用域控制（避免跨项目复用）
 

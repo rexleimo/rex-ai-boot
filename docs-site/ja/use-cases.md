@@ -5,6 +5,8 @@ description: 対話モードと one-shot モード。
 
 # CLI ワークフロー
 
+具体的な再現コマンド付きシナリオは[公式ケースライブラリ](case-library.md)を参照してください。
+
 ## 対話モード
 
 `codex` / `claude` / `gemini` 実行時に、起動前コンテキストを自動注入します。
