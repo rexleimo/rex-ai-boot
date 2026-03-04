@@ -15,6 +15,7 @@ theme:
   logo: assets/logo.svg
   favicon: assets/favicon.svg
   features:
+    - navigation.tabs
     - navigation.sections
     - navigation.top
     - content.code.copy
@@ -56,7 +57,9 @@ plugins:
           site_description: 面向 Codex CLI、Claude Code、Gemini CLI 及 OpenCode skills 同步的本地优先多 CLI 智能体工作流文档。
           nav_translations:
             Overview: 概览
+            Project: 项目地址
             Blog: 博客
+            Friends: 友情链接
             Quick Start: 快速开始
             Changelog: 更新日志
             CLI Workflows: CLI 工作流
@@ -71,7 +74,9 @@ plugins:
           site_description: Codex CLI、Claude Code、Gemini CLI と OpenCode skills 同期向けのローカルファーストなマルチ CLI エージェント運用ドキュメント。
           nav_translations:
             Overview: 概要
+            Project: プロジェクト
             Blog: ブログ
+            Friends: リンク集
             Quick Start: クイックスタート
             Changelog: 変更履歴
             CLI Workflows: CLI ワークフロー
@@ -86,7 +91,9 @@ plugins:
           site_description: Codex CLI, Claude Code, Gemini CLI와 OpenCode skills 동기화를 위한 로컬 우선 멀티 CLI 에이전트 워크플로 문서.
           nav_translations:
             Overview: 개요
+            Project: 프로젝트
             Blog: 블로그
+            Friends: 추천 링크
             Quick Start: 빠른 시작
             Changelog: 변경 로그
             CLI Workflows: CLI 워크플로
@@ -120,6 +127,8 @@ extra_css:
 nav:
   - Overview: index.md
   - Blog: https://cli.rexai.top/blog/
+  - Friends: friends.md
+  - Project: https://github.com/rexleimo/rex-ai-boot
   - Quick Start: getting-started.md
   - Changelog: changelog.md
   - CLI Workflows: use-cases.md
