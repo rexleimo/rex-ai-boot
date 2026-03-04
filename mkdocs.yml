@@ -1,6 +1,6 @@
 site_name: rex-ai-boot Documentation
 site_url: https://cli.rexai.top
-site_description: Local-first multi-CLI agent workflow docs for Codex CLI, Claude Code, and Gemini CLI.
+site_description: Local-first multi-CLI agent workflow docs for Codex CLI, Claude Code, Gemini CLI, and OpenCode skills sync.
 site_author: RexAI
 repo_url: https://github.com/rexleimo/rex-ai-boot
 repo_name: rexleimo/rex-ai-boot
@@ -48,12 +48,12 @@ plugins:
           default: true
           build: true
           site_name: rex-ai-boot Documentation
-          site_description: Local-first multi-CLI agent workflow docs for Codex CLI, Claude Code, and Gemini CLI.
+          site_description: Local-first multi-CLI agent workflow docs for Codex CLI, Claude Code, Gemini CLI, and OpenCode skills sync.
         - locale: zh
           name: 简体中文
           build: true
           site_name: rex-ai-boot 文档
-          site_description: 面向 Codex CLI、Claude Code、Gemini CLI 的本地优先多 CLI 智能体工作流文档。
+          site_description: 面向 Codex CLI、Claude Code、Gemini CLI 及 OpenCode skills 同步的本地优先多 CLI 智能体工作流文档。
           nav_translations:
             Overview: 概览
             Blog: 博客
@@ -67,7 +67,7 @@ plugins:
           name: 日本語
           build: true
           site_name: rex-ai-boot ドキュメント
-          site_description: Codex CLI、Claude Code、Gemini CLI 向けのローカルファーストなマルチ CLI エージェント運用ドキュメント。
+          site_description: Codex CLI、Claude Code、Gemini CLI と OpenCode skills 同期向けのローカルファーストなマルチ CLI エージェント運用ドキュメント。
           nav_translations:
             Overview: 概要
             Blog: ブログ
@@ -81,7 +81,7 @@ plugins:
           name: 한국어
           build: true
           site_name: rex-ai-boot 문서
-          site_description: Codex CLI, Claude Code, Gemini CLI를 위한 로컬 우선 멀티 CLI 에이전트 워크플로 문서.
+          site_description: Codex CLI, Claude Code, Gemini CLI와 OpenCode skills 동기화를 위한 로컬 우선 멀티 CLI 에이전트 워크플로 문서.
           nav_translations:
             Overview: 개요
             Blog: 블로그

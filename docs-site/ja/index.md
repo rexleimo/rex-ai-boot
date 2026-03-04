@@ -10,6 +10,7 @@ description: rex-ai-boot の目的と主要機能。
 - Codex CLI
 - Claude Code
 - Gemini CLI
+- OpenCode
 
 追加する機能は 2 つです。
 

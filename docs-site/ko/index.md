@@ -10,6 +10,7 @@ description: rex-ai-boot 프로젝트 소개와 핵심 기능.
 - Codex CLI
 - Claude Code
 - Gemini CLI
+- OpenCode
 
 핵심 추가 기능:
 

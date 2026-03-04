@@ -1,15 +1,16 @@
 ---
 title: Overview
-description: What rex-ai-boot is, why it exists, and how to use it with Codex, Claude, and Gemini.
+description: What rex-ai-boot is, why it exists, and how to use it with Codex, Claude, Gemini, and OpenCode.
 ---
 
 # rex-ai-boot
 
-`rex-ai-boot` is a local-first workflow layer for three CLI agents:
+`rex-ai-boot` is a local-first workflow layer for four CLI agents:
 
 - Codex CLI
 - Claude Code
 - Gemini CLI
+- OpenCode
 
 It adds two practical capabilities without replacing native CLIs:
 

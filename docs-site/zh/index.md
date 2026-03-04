@@ -5,11 +5,12 @@ description: rex-ai-boot 项目定位、能力与使用入口。
 
 # rex-ai-boot 文档
 
-`rex-ai-boot` 是面向三类 CLI 智能体的本地工作流层：
+`rex-ai-boot` 是面向四类 CLI 智能体的本地工作流层：
 
 - Codex CLI
 - Claude Code
 - Gemini CLI
+- OpenCode
 
 它不替代原生 CLI，而是补充两项能力：
 
