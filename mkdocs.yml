@@ -56,6 +56,7 @@ plugins:
           site_name: rex-ai-boot 文档
           site_description: 面向 Codex CLI、Claude Code、Gemini CLI 及 OpenCode skills 同步的本地优先多 CLI 智能体工作流文档。
           nav_translations:
+            Home: 首页
             Blog: 博客
             Getting Started: 快速开始
             Quick Start: 快速开始
@@ -80,6 +81,7 @@ plugins:
           site_name: rex-ai-boot ドキュメント
           site_description: Codex CLI、Claude Code、Gemini CLI と OpenCode skills 同期向けのローカルファーストなマルチ CLI エージェント運用ドキュメント。
           nav_translations:
+            Home: ホーム
             Blog: ブログ
             Getting Started: クイックスタート
             Quick Start: クイックスタート
@@ -104,6 +106,7 @@ plugins:
           site_name: rex-ai-boot 문서
           site_description: Codex CLI, Claude Code, Gemini CLI와 OpenCode skills 동기화를 위한 로컬 우선 멀티 CLI 에이전트 워크플로 문서.
           nav_translations:
+            Home: 홈
             Blog: 블로그
             Getting Started: 시작하기
             Quick Start: 빠른 시작

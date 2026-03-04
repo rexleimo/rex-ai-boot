@@ -15,6 +15,7 @@ theme:
   logo: assets/logo.svg
   favicon: assets/favicon.svg
   features:
+    - navigation.tabs
     - navigation.sections
     - navigation.top
     - content.code.copy
