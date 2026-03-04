@@ -66,39 +66,69 @@ npm run build
 
 ### 3) Install transparent shell integration (one-time)
 
-> Safety first: prefer manual `~/.zshrc` editing and back it up before changes.
+Use installer scripts (recommended):
 
-Backup:
-
-```bash
-cp ~/.zshrc ~/.zshrc.bak.$(date +%Y%m%d-%H%M%S)
-```
-
-Add this block to `~/.zshrc`:
-
-```zsh
-# >>> contextdb-shell >>>
-export ROOTPATH="${ROOTPATH:-$HOME/cool.cnb/rex-ai-boot}"
-if [[ -f "$ROOTPATH/scripts/contextdb-shell.zsh" ]]; then
-  source "$ROOTPATH/scripts/contextdb-shell.zsh"
-fi
-# <<< contextdb-shell <<<
-```
-
-Reload:
+macOS / Linux:
 
 ```bash
+scripts/install-contextdb-shell.sh --mode opt-in
+scripts/doctor-contextdb-shell.sh
 source ~/.zshrc
 ```
 
-If your repo path is different, set `ROOTPATH` to your actual location.
+Windows PowerShell:
 
-Optional helper script: [`scripts/install-contextdb-shell.sh`](scripts/install-contextdb-shell.sh)
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-shell.ps1 -Mode opt-in
+powershell -ExecutionPolicy Bypass -File .\scripts\doctor-contextdb-shell.ps1
+. $PROFILE
+```
 
-Windows PowerShell helper script:
-`scripts/install-contextdb-shell.ps1`
+Lifecycle commands:
 
-### 3.1 Scope control (avoid cross-project reuse)
+```bash
+scripts/update-contextdb-shell.sh --mode opt-in
+scripts/uninstall-contextdb-shell.sh
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\update-contextdb-shell.ps1 -Mode opt-in
+powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-contextdb-shell.ps1
+```
+
+Manual block editing is still supported, but no longer the primary onboarding path.
+
+### 3.1 Optional: install project skills globally
+
+This is separate from wrapper install. Use it when you want this repo's skills available in other projects too.
+
+macOS / Linux:
+
+```bash
+scripts/install-contextdb-skills.sh --client all
+scripts/doctor-contextdb-skills.sh --client all
+```
+
+Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-skills.ps1 -Client all
+powershell -ExecutionPolicy Bypass -File .\scripts\doctor-contextdb-skills.ps1 -Client all
+```
+
+Skill lifecycle commands:
+
+```bash
+scripts/update-contextdb-skills.sh --client all
+scripts/uninstall-contextdb-skills.sh --client all
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\update-contextdb-skills.ps1 -Client all
+powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-contextdb-skills.ps1 -Client all
+```
+
+### 3.2 Scope control (avoid cross-project reuse)
 
 By default, wrappers run only in the `ROOTPATH` repository (`CTXDB_WRAP_MODE=repo-only`).
 If you want a different scope, set one of these in `~/.zshrc`:
@@ -117,13 +147,16 @@ For `opt-in`, create marker file in a project root:
 touch .contextdb-enable
 ```
 
-### 3.2 Skill scope (important)
+### 3.3 Skill scope (important)
 
 ContextDB wrapping and CLI skill loading are different layers:
 
 - Wrapping scope is controlled by `CTXDB_WRAP_MODE` above.
+- Use skill lifecycle scripts above for install/update/uninstall/doctor.
+- Skill installers skip existing same-name targets by default; use `--force` / `-Force` only when you intentionally replace them.
 - Skills installed in `~/.codex/skills` or `~/.claude/skills` are global.
 - Project-only skills should live in `<repo>/.codex/skills` or `<repo>/.claude/skills`.
+- Keep `CODEX_HOME` as an absolute home path (recommended: `~/.codex`). Do not set `CODEX_HOME=.codex`.
 
 If you don't want cross-project skill reuse, keep custom skills in repo-local folders instead of global home directories.
 
@@ -198,7 +231,7 @@ export CONTEXTDB_SEMANTIC_PROVIDER=token
 npm run contextdb -- search --query "issue auth" --project rex-ai-boot --semantic
 ```
 
-If semantic provider is unavailable, `search --semantic` falls back to lexical search automatically.
+Unknown or unavailable providers fall back to lexical search automatically.
 
 ## Versioning and Releases
 
@@ -237,16 +270,11 @@ npm run build
 
 ## Uninstall Shell Integration
 
-Open `~/.zshrc`, remove this block, then reload shell:
-
-```zsh
-# >>> contextdb-shell >>>
-...
-# <<< contextdb-shell <<<
-```
+Preferred:
 
 ```bash
+scripts/uninstall-contextdb-shell.sh
 source ~/.zshrc
 ```
 
-After removal, `codex/claude/gemini` return to native behavior.
+Manual fallback (only if needed): remove the managed `# >>> contextdb-shell >>>` block from `~/.zshrc`.

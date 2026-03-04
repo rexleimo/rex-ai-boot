@@ -1028,18 +1028,32 @@ export async function searchEvents(input: SearchEventsInput): Promise<SearchEven
 
   let selectedRows = rows.slice(0, limit);
   if (semanticRequested) {
-    const reranked = semanticRerank(
-      query,
-      rows.map((row) => ({
-        id: row.eventId,
-        text: `${row.kind} ${row.text}`,
-        value: row,
-      })),
-      limit
-    );
-    if (reranked && reranked.length > 0) {
-      selectedRows = reranked.map((item) => item.value);
-    } else {
+    try {
+      const reranked = await semanticRerank(
+        query,
+        rows.map((row) => ({
+          id: row.eventId,
+          text: `${row.kind} ${row.text}`,
+          value: row,
+        })),
+        limit
+      );
+      if (reranked && reranked.length > 0) {
+        selectedRows = reranked.map((item) => item.value);
+      } else {
+        selectedRows = await withSidecarReadFallback(input.workspaceRoot, () => {
+          return searchEventRows(getSqlitePath(input.workspaceRoot), {
+            project: input.project,
+            sessionId: input.sessionId,
+            role: input.role,
+            kinds: (input.kinds ?? []).map((kind) => kind.trim()).filter((kind) => kind.length > 0),
+            refs: normalizeRefs(input.refs ?? []),
+            query,
+            limit,
+          });
+        });
+      }
+    } catch {
       selectedRows = await withSidecarReadFallback(input.workspaceRoot, () => {
         return searchEventRows(getSqlitePath(input.workspaceRoot), {
           project: input.project,

@@ -37,34 +37,22 @@ npm install
 npm run build
 ```
 
-## 3) 명령 래퍼 활성화
+## 3) 명령 래퍼 설치 (권장)
 
 === "macOS / Linux (zsh)"
 
-    `~/.zshrc`에 아래 블록을 추가:
-
-    ```zsh
-    # >>> contextdb-shell >>>
-    export ROOTPATH="${ROOTPATH:-$HOME/cool.cnb/rex-ai-boot}"
-    export CTXDB_WRAP_MODE=opt-in
-    if [[ -f "$ROOTPATH/scripts/contextdb-shell.zsh" ]]; then
-      source "$ROOTPATH/scripts/contextdb-shell.zsh"
-    fi
-    # <<< contextdb-shell <<<
-    ```
-
-    반영:
-
     ```bash
+    scripts/install-contextdb-shell.sh --mode opt-in
+    scripts/doctor-contextdb-shell.sh
     source ~/.zshrc
     ```
 
 === "Windows (PowerShell)"
 
     ```powershell
-    powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-shell.ps1
+    powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-shell.ps1 -Mode opt-in
+    powershell -ExecutionPolicy Bypass -File .\scripts\doctor-contextdb-shell.ps1
     . $PROFILE
-    $env:CTXDB_WRAP_MODE = "opt-in"
     ```
 
 ## 4) 현재 프로젝트 활성화
@@ -107,3 +95,68 @@ gemini
     ```
 
 `sessions/`, `index/`, `exports/`가 보이면 정상입니다.
+
+## 7) 업데이트 / 제거
+
+=== "macOS / Linux (zsh)"
+
+    ```bash
+    scripts/update-contextdb-shell.sh --mode opt-in
+    scripts/uninstall-contextdb-shell.sh
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\scripts\update-contextdb-shell.ps1 -Mode opt-in
+    powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-contextdb-shell.ps1
+    ```
+
+## 8) 선택: 이 저장소 Skills를 전역 설치
+
+다른 프로젝트에서도 이 저장소의 skills를 바로 쓰고 싶을 때만 실행하세요.
+
+=== "macOS / Linux"
+
+    ```bash
+    scripts/install-contextdb-skills.sh --client all
+    scripts/doctor-contextdb-skills.sh --client all
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-skills.ps1 -Client all
+    powershell -ExecutionPolicy Bypass -File .\scripts\doctor-contextdb-skills.ps1 -Client all
+    ```
+
+Skills 라이프사이클:
+
+=== "macOS / Linux"
+
+    ```bash
+    scripts/update-contextdb-skills.sh --client all
+    scripts/uninstall-contextdb-skills.sh --client all
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\scripts\update-contextdb-skills.ps1 -Client all
+    powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-contextdb-skills.ps1 -Client all
+    ```
+
+## FAQ
+
+### `CODEX_HOME points to ".codex"` 오류
+
+`CODEX_HOME`가 상대 경로로 설정된 상태입니다. 절대 경로로 변경하세요:
+
+```bash
+export CODEX_HOME="$HOME/.codex"
+mkdir -p "$CODEX_HOME"
+```
+
+### 래퍼 설치 시 skills도 자동 설치되나요?
+
+아니요. 래퍼와 skills는 분리되어 있습니다. 전역 skills가 필요하면 8단계를 실행하세요.

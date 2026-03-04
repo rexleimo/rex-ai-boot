@@ -59,6 +59,29 @@ Check these conditions:
 - `ROOTPATH/scripts/contextdb-shell.zsh` exists and is sourced.
 - `CTXDB_WRAP_MODE` allows current repo (`opt-in` requires `.contextdb-enable`).
 
+Run wrapper doctor first:
+
+```bash
+scripts/doctor-contextdb-shell.sh
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-shell.ps1
+```
+
+## `CODEX_HOME points to ".codex"` error
+
+Cause: `CODEX_HOME` is set to a relative path.
+
+Fix:
+
+```bash
+export CODEX_HOME="$HOME/.codex"
+mkdir -p "$CODEX_HOME"
+```
+
+Latest wrapper scripts also auto-normalize relative `CODEX_HOME` during command execution.
+
 ## Wrapper loaded but should be disabled
 
 Set in shell config:
@@ -75,6 +98,20 @@ Skill loading scope is separate from ContextDB wrapping:
 - Project-only skills: `<repo>/.codex/skills`, `<repo>/.claude/skills`
 
 If you need isolation, keep custom skills in repo-local folders.
+
+## Repo skills are not available globally
+
+Wrappers and skills are separate by design. Install skills explicitly:
+
+```bash
+scripts/install-contextdb-skills.sh --client all
+scripts/doctor-contextdb-skills.sh --client all
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\install-contextdb-skills.ps1 -Client all
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-skills.ps1 -Client all
+```
 
 ## GitHub Pages `configure-pages` Not Found
 

@@ -60,6 +60,9 @@ export CONTEXTDB_SEMANTIC_PROVIDER=token
 npm run contextdb -- search --query "issue auth" --project demo --semantic
 ```
 
+- `CONTEXTDB_SEMANTIC_PROVIDER=token`: 로컬 token-overlap 재정렬
+- 알 수 없거나 비활성 provider는 lexical 검색으로 자동 폴백됩니다.
+
 ## 저장 레이아웃
 
 ```text

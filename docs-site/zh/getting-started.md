@@ -41,34 +41,22 @@ npm install
 npm run build
 ```
 
-## 3) 启用命令包装
+## 3) 安装命令包装（推荐）
 
 === "macOS / Linux (zsh)"
 
-    将以下内容加入 `~/.zshrc`：
-
-    ```zsh
-    # >>> contextdb-shell >>>
-    export ROOTPATH="${ROOTPATH:-$HOME/cool.cnb/rex-ai-boot}"
-    export CTXDB_WRAP_MODE=opt-in
-    if [[ -f "$ROOTPATH/scripts/contextdb-shell.zsh" ]]; then
-      source "$ROOTPATH/scripts/contextdb-shell.zsh"
-    fi
-    # <<< contextdb-shell <<<
-    ```
-
-    重新加载：
-
     ```bash
+    scripts/install-contextdb-shell.sh --mode opt-in
+    scripts/doctor-contextdb-shell.sh
     source ~/.zshrc
     ```
 
 === "Windows (PowerShell)"
 
     ```powershell
-    powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-shell.ps1
+    powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-shell.ps1 -Mode opt-in
+    powershell -ExecutionPolicy Bypass -File .\scripts\doctor-contextdb-shell.ps1
     . $PROFILE
-    $env:CTXDB_WRAP_MODE = "opt-in"
     ```
 
 ## 4) 启用当前项目
@@ -112,6 +100,56 @@ gemini
 
 你应该能看到 `sessions/`、`index/`、`exports/`。
 
+## 7) 更新 / 卸载包装
+
+=== "macOS / Linux"
+
+    ```bash
+    scripts/update-contextdb-shell.sh --mode opt-in
+    scripts/uninstall-contextdb-shell.sh
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\scripts\update-contextdb-shell.ps1 -Mode opt-in
+    powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-contextdb-shell.ps1
+    ```
+
+## 8) 可选：全局安装本项目 Skills
+
+仅当你希望在其他项目也能直接使用本仓库 skills 时再执行。
+
+=== "macOS / Linux"
+
+    ```bash
+    scripts/install-contextdb-skills.sh --client all
+    scripts/doctor-contextdb-skills.sh --client all
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-skills.ps1 -Client all
+    powershell -ExecutionPolicy Bypass -File .\scripts\doctor-contextdb-skills.ps1 -Client all
+    ```
+
+Skills 生命周期：
+
+=== "macOS / Linux"
+
+    ```bash
+    scripts/update-contextdb-skills.sh --client all
+    scripts/uninstall-contextdb-skills.sh --client all
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\scripts\update-contextdb-skills.ps1 -Client all
+    powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-contextdb-skills.ps1 -Client all
+    ```
+
 ## 常见问答
 
 ### 这会替代原生 CLI 吗？
@@ -121,6 +159,19 @@ gemini
 ### 如何避免跨项目上下文串扰？
 
 设置 `CTXDB_WRAP_MODE=opt-in`，并且只在需要的项目根目录创建 `.contextdb-enable`。
+
+### 安装包装器后会自动安装 skills 吗？
+
+不会。包装器与 skills 是两层能力，默认分离。需要全局 skills 时执行第 8 步。
+
+### 为什么会出现 `CODEX_HOME points to ".codex"`？
+
+说明 `CODEX_HOME` 被设置成了相对路径。改为绝对路径即可：
+
+```bash
+export CODEX_HOME="$HOME/.codex"
+mkdir -p "$CODEX_HOME"
+```
 
 ### 浏览器工具失效时先执行什么？
 

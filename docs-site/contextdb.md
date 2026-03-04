@@ -80,7 +80,8 @@ npm run contextdb -- search --query "issue auth" --project demo --semantic
 ```
 
 - `--semantic`: request semantic reranking.
-- If semantic provider is disabled/unavailable, lexical query path is used automatically.
+- `CONTEXTDB_SEMANTIC_PROVIDER=token`: local token-overlap rerank, no network call.
+- Unknown/disabled providers automatically fall back to lexical query path.
 
 ## Storage Layout
 

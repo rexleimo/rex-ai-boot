@@ -69,7 +69,8 @@ npm run contextdb -- search --query "issue auth" --project demo --semantic
 ```
 
 - `--semantic`：请求语义重排。
-- 如果 provider 未启用或不可用，系统自动走 lexical 路径。
+- `CONTEXTDB_SEMANTIC_PROVIDER=token`：本地 token overlap 重排，不走网络。
+- 未知或不可用 provider 会自动回退到 lexical 路径。
 
 ## 存储布局
 

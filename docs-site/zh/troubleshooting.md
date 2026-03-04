@@ -57,6 +57,43 @@ powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
 - `CTXDB_WRAP_MODE` 允许当前项目
 - `opt-in` 模式下已创建 `.contextdb-enable`
 
+先跑包装诊断：
+
+```bash
+scripts/doctor-contextdb-shell.sh
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-shell.ps1
+```
+
+## `CODEX_HOME points to ".codex"` 报错
+
+原因：`CODEX_HOME` 被设置为相对路径。
+
+修复：
+
+```bash
+export CODEX_HOME="$HOME/.codex"
+mkdir -p "$CODEX_HOME"
+```
+
+新版本包装脚本也会在运行时自动规范相对 `CODEX_HOME`。
+
+## 本仓库 skills 在其他项目不可见
+
+包装器与 skills 是分离设计，需要显式安装全局 skills：
+
+```bash
+scripts/install-contextdb-skills.sh --client all
+scripts/doctor-contextdb-skills.sh --client all
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\install-contextdb-skills.ps1 -Client all
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-skills.ps1 -Client all
+```
+
 ## 常见问答
 
 ### 浏览器工具不可用时第一步做什么？

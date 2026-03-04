@@ -9,6 +9,23 @@
 
 $script:CTXDB_LAST_WORKSPACE = ""
 
+function Normalize-CodexHome {
+  $codexHome = $env:CODEX_HOME
+  if (-not $codexHome) {
+    return
+  }
+
+  # Convert relative CODEX_HOME (e.g. ".codex") to absolute user-home path.
+  if (-not [System.IO.Path]::IsPathRooted($codexHome)) {
+    $codexHome = Join-Path $HOME ".codex"
+    $env:CODEX_HOME = $codexHome
+  }
+
+  if (-not (Test-Path $codexHome)) {
+    New-Item -Path $codexHome -ItemType Directory -Force | Out-Null
+  }
+}
+
 function Get-CtxRunner {
   if ($env:CTXDB_RUNNER -and (Test-Path $env:CTXDB_RUNNER)) {
     return $env:CTXDB_RUNNER
@@ -153,6 +170,8 @@ function Invoke-CtxOrPassthrough {
 
 function codex {
   param([Parameter(ValueFromRemainingArguments = $true)] [string[]]$Args)
+
+  Normalize-CodexHome
 
   $first = if ($Args.Count -gt 0) { $Args[0] } else { "" }
   if (-not (Should-Wrap-Codex -First $first)) {

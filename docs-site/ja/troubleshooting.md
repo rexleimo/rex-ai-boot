@@ -47,3 +47,40 @@ powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
 - git リポジトリ内か確認
 - `~/.zshrc` で wrapper が読み込まれているか確認
 - `CTXDB_WRAP_MODE` と `.contextdb-enable` を確認
+
+まず wrapper 診断を実行:
+
+```bash
+scripts/doctor-contextdb-shell.sh
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-shell.ps1
+```
+
+## `CODEX_HOME points to ".codex"` エラー
+
+原因: `CODEX_HOME` が相対パスです。
+
+修正:
+
+```bash
+export CODEX_HOME="$HOME/.codex"
+mkdir -p "$CODEX_HOME"
+```
+
+最新版 wrapper は実行時に相対 `CODEX_HOME` を自動正規化します。
+
+## このリポジトリの skills が他プロジェクトで見えない
+
+wrapper と skills は分離です。グローバル skills を明示的にインストールしてください:
+
+```bash
+scripts/install-contextdb-skills.sh --client all
+scripts/doctor-contextdb-skills.sh --client all
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\install-contextdb-skills.ps1 -Client all
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-skills.ps1 -Client all
+```

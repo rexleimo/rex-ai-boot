@@ -7,7 +7,7 @@ export interface SemanticCandidate<T> {
 export interface SemanticProvider {
   name: string;
   isAvailable(): boolean;
-  rank<T>(query: string, candidates: SemanticCandidate<T>[], limit: number): SemanticCandidate<T>[];
+  rank<T>(query: string, candidates: SemanticCandidate<T>[], limit: number): Promise<SemanticCandidate<T>[]>;
 }
 
 class TokenSemanticProvider implements SemanticProvider {
@@ -17,7 +17,7 @@ class TokenSemanticProvider implements SemanticProvider {
     return true;
   }
 
-  rank<T>(query: string, candidates: SemanticCandidate<T>[], limit: number): SemanticCandidate<T>[] {
+  async rank<T>(query: string, candidates: SemanticCandidate<T>[], limit: number): Promise<SemanticCandidate<T>[]> {
     const normalizedQuery = query.trim();
     if (normalizedQuery.length === 0) {
       return candidates.slice(0, limit);
@@ -88,14 +88,14 @@ export function semanticCapabilities(): { enabled: boolean; provider: string | n
   };
 }
 
-export function semanticRerank<T>(
+export async function semanticRerank<T>(
   query: string,
   candidates: SemanticCandidate<T>[],
   limit: number
-): SemanticCandidate<T>[] | null {
+): Promise<SemanticCandidate<T>[] | null> {
   const provider = createSemanticProvider();
   if (!provider || !provider.isAvailable()) {
     return null;
   }
-  return provider.rank(query, candidates, limit);
+  return await provider.rank(query, candidates, limit);
 }

@@ -47,3 +47,40 @@ powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
 - git 저장소 내부인지 확인
 - `~/.zshrc`에서 wrapper 로딩 확인
 - `CTXDB_WRAP_MODE` 및 `.contextdb-enable` 확인
+
+먼저 래퍼 진단 실행:
+
+```bash
+scripts/doctor-contextdb-shell.sh
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-shell.ps1
+```
+
+## `CODEX_HOME points to ".codex"` 오류
+
+원인: `CODEX_HOME`가 상대 경로로 설정됨.
+
+해결:
+
+```bash
+export CODEX_HOME="$HOME/.codex"
+mkdir -p "$CODEX_HOME"
+```
+
+최신 래퍼는 실행 시 상대 `CODEX_HOME`를 자동 정규화합니다.
+
+## 이 저장소 skills가 다른 프로젝트에서 보이지 않음
+
+래퍼와 skills는 분리되어 있습니다. 전역 skills를 별도로 설치하세요:
+
+```bash
+scripts/install-contextdb-skills.sh --client all
+scripts/doctor-contextdb-skills.sh --client all
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\install-contextdb-skills.ps1 -Client all
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-skills.ps1 -Client all
+```

@@ -66,39 +66,69 @@ npm run build
 
 ### 3) 安装透明接管（一次即可）
 
-> 安全建议：优先手动编辑 `~/.zshrc`，并先备份。不要盲目执行会改写 shell 配置的命令。
+推荐使用安装脚本（更低学习成本）：
 
-先备份：
-
-```bash
-cp ~/.zshrc ~/.zshrc.bak.$(date +%Y%m%d-%H%M%S)
-```
-
-再手动把下面这段加入 `~/.zshrc`：
-
-```zsh
-# >>> contextdb-shell >>>
-export ROOTPATH="${ROOTPATH:-$HOME/cool.cnb/rex-ai-boot}"
-if [[ -f "$ROOTPATH/scripts/contextdb-shell.zsh" ]]; then
-  source "$ROOTPATH/scripts/contextdb-shell.zsh"
-fi
-# <<< contextdb-shell <<<
-```
-
-加载配置：
+macOS / Linux：
 
 ```bash
+scripts/install-contextdb-shell.sh --mode opt-in
+scripts/doctor-contextdb-shell.sh
 source ~/.zshrc
 ```
 
-如果仓库不在 `$HOME/cool.cnb/rex-ai-boot`，把 `ROOTPATH` 改成你的真实路径。
+Windows（PowerShell）：
 
-可选：你也可以运行安装脚本 [`scripts/install-contextdb-shell.sh`](scripts/install-contextdb-shell.sh)，但仍建议先手动备份 `~/.zshrc`。
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-shell.ps1 -Mode opt-in
+powershell -ExecutionPolicy Bypass -File .\scripts\doctor-contextdb-shell.ps1
+. $PROFILE
+```
 
-Windows PowerShell 可使用：
-`scripts/install-contextdb-shell.ps1`
+安装后生命周期命令：
 
-### 3.1 作用域控制（避免跨项目复用）
+```bash
+scripts/update-contextdb-shell.sh --mode opt-in
+scripts/uninstall-contextdb-shell.sh
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\update-contextdb-shell.ps1 -Mode opt-in
+powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-contextdb-shell.ps1
+```
+
+仍支持手动编辑 `~/.zshrc`，但不再作为首选入门路径。
+
+### 3.1 可选：全局安装本项目 Skills
+
+这一步和包装器安装是两条线。只有你希望在其他项目也能直接用本仓库 skills 时再执行。
+
+macOS / Linux：
+
+```bash
+scripts/install-contextdb-skills.sh --client all
+scripts/doctor-contextdb-skills.sh --client all
+```
+
+Windows（PowerShell）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-skills.ps1 -Client all
+powershell -ExecutionPolicy Bypass -File .\scripts\doctor-contextdb-skills.ps1 -Client all
+```
+
+Skills 生命周期命令：
+
+```bash
+scripts/update-contextdb-skills.sh --client all
+scripts/uninstall-contextdb-skills.sh --client all
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\update-contextdb-skills.ps1 -Client all
+powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-contextdb-skills.ps1 -Client all
+```
+
+### 3.2 作用域控制（避免跨项目复用）
 
 默认行为是仅在 `ROOTPATH` 仓库启用包装（`CTXDB_WRAP_MODE=repo-only`）。
 如果你希望使用其他范围，可在 `~/.zshrc` 设置：
@@ -117,13 +147,16 @@ export CTXDB_WRAP_MODE=opt-in
 touch .contextdb-enable
 ```
 
-### 3.2 Skills 作用域（重要）
+### 3.3 Skills 作用域（重要）
 
 ContextDB 包装和 CLI 的 Skills 加载是两层机制：
 
 - 包装范围由上面的 `CTXDB_WRAP_MODE` 控制。
+- 使用上面的 skills 生命周期脚本完成安装/更新/卸载/诊断。
+- skills 安装脚本默认会跳过同名已有目录；只有你明确要替换时再使用 `--force` / `-Force`。
 - 安装在 `~/.codex/skills`、`~/.claude/skills` 的技能是全局可见。
 - 仅项目可见的技能应放在 `<repo>/.codex/skills`、`<repo>/.claude/skills`。
+- `CODEX_HOME` 建议保持为绝对路径（推荐 `~/.codex`），不要设置为相对路径 `.codex`。
 
 如果你不希望跨项目复用技能，请把自定义技能放在仓库本地目录，而不是 `~` 下的全局目录。
 
@@ -198,7 +231,7 @@ export CONTEXTDB_SEMANTIC_PROVIDER=token
 npm run contextdb -- search --query "issue auth" --project rex-ai-boot --semantic
 ```
 
-如果语义 provider 不可用，`search --semantic` 会自动回退到 lexical 检索。
+未知或不可用 provider 会自动回退到 lexical 检索。
 
 ## 版本与发布
 
@@ -237,18 +270,11 @@ npm run build
 
 ## 卸载透明接管
 
-手动打开 `~/.zshrc`，删除下面这个区块，再重新加载 shell：
-
-```zsh
-# >>> contextdb-shell >>>
-...
-# <<< contextdb-shell <<<
-```
-
-然后执行：
+推荐方式：
 
 ```bash
+scripts/uninstall-contextdb-shell.sh
 source ~/.zshrc
 ```
 
-删除后 `codex/claude/gemini` 会恢复原生行为。
+手动兜底（仅在需要时）：删除 `~/.zshrc` 中 `# >>> contextdb-shell >>>` 管理区块。

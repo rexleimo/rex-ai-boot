@@ -141,6 +141,8 @@ export CONTEXTDB_SEMANTIC_PROVIDER=token
 npm run contextdb -- search --query "issue auth" --project rex-ai-boot --semantic
 ```
 
+Unknown or unavailable providers fall back to lexical query automatically.
+
 ### Feed context to each CLI
 
 - Claude Code:

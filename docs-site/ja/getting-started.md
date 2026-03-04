@@ -37,34 +37,22 @@ npm install
 npm run build
 ```
 
-## 3) コマンドラッパーを有効化
+## 3) コマンドラッパーをインストール（推奨）
 
 === "macOS / Linux (zsh)"
 
-    `~/.zshrc` に以下を追加:
-
-    ```zsh
-    # >>> contextdb-shell >>>
-    export ROOTPATH="${ROOTPATH:-$HOME/cool.cnb/rex-ai-boot}"
-    export CTXDB_WRAP_MODE=opt-in
-    if [[ -f "$ROOTPATH/scripts/contextdb-shell.zsh" ]]; then
-      source "$ROOTPATH/scripts/contextdb-shell.zsh"
-    fi
-    # <<< contextdb-shell <<<
-    ```
-
-    反映:
-
     ```bash
+    scripts/install-contextdb-shell.sh --mode opt-in
+    scripts/doctor-contextdb-shell.sh
     source ~/.zshrc
     ```
 
 === "Windows (PowerShell)"
 
     ```powershell
-    powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-shell.ps1
+    powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-shell.ps1 -Mode opt-in
+    powershell -ExecutionPolicy Bypass -File .\scripts\doctor-contextdb-shell.ps1
     . $PROFILE
-    $env:CTXDB_WRAP_MODE = "opt-in"
     ```
 
 ## 4) 対象プロジェクトで有効化
@@ -107,3 +95,68 @@ gemini
     ```
 
 `sessions/`、`index/`、`exports/` が表示されれば成功です。
+
+## 7) 更新 / アンインストール
+
+=== "macOS / Linux (zsh)"
+
+    ```bash
+    scripts/update-contextdb-shell.sh --mode opt-in
+    scripts/uninstall-contextdb-shell.sh
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\scripts\update-contextdb-shell.ps1 -Mode opt-in
+    powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-contextdb-shell.ps1
+    ```
+
+## 8) 任意: このリポジトリの Skills をグローバル導入
+
+他プロジェクトでもこのリポジトリの skills を使いたい場合のみ実行してください。
+
+=== "macOS / Linux"
+
+    ```bash
+    scripts/install-contextdb-skills.sh --client all
+    scripts/doctor-contextdb-skills.sh --client all
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-skills.ps1 -Client all
+    powershell -ExecutionPolicy Bypass -File .\scripts\doctor-contextdb-skills.ps1 -Client all
+    ```
+
+Skills ライフサイクル:
+
+=== "macOS / Linux"
+
+    ```bash
+    scripts/update-contextdb-skills.sh --client all
+    scripts/uninstall-contextdb-skills.sh --client all
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\scripts\update-contextdb-skills.ps1 -Client all
+    powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-contextdb-skills.ps1 -Client all
+    ```
+
+## FAQ
+
+### `CODEX_HOME points to ".codex"` が出る
+
+`CODEX_HOME` が相対パスになっています。絶対パスにしてください:
+
+```bash
+export CODEX_HOME="$HOME/.codex"
+mkdir -p "$CODEX_HOME"
+```
+
+### ラッパー導入で skills も自動インストールされますか?
+
+いいえ。ラッパーと skills は分離されています。グローバル skills が必要な場合は手順 8 を実行してください。

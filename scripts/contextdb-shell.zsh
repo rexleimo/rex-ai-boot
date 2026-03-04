@@ -11,6 +11,25 @@
 
 typeset -g CTXDB_LAST_WORKSPACE=""
 
+_ctxdb_normalize_codex_home() {
+  local codex_home="${CODEX_HOME:-}"
+  if [[ -z "$codex_home" ]]; then
+    return 0
+  fi
+
+  # Avoid relative CODEX_HOME like ".codex" that breaks in other projects.
+  if [[ "$codex_home" != /* ]]; then
+    codex_home="$HOME/.codex"
+    mkdir -p "$codex_home" >/dev/null 2>&1 || true
+    export CODEX_HOME="$codex_home"
+    return 0
+  fi
+
+  if [[ ! -d "$codex_home" ]]; then
+    mkdir -p "$codex_home" >/dev/null 2>&1 || true
+  fi
+}
+
 _ctxdb_detect_runner() {
   if [[ -n "${CTXDB_RUNNER:-}" ]] && [[ -x "${CTXDB_RUNNER}" ]]; then
     printf '%s\n' "${CTXDB_RUNNER}"
@@ -146,6 +165,7 @@ _ctxdb_run_or_passthrough() {
 }
 
 codex() {
+  _ctxdb_normalize_codex_home
   if ! _ctxdb_should_wrap_codex "${1:-}"; then
     command codex "$@"
     return $?
