@@ -21,7 +21,9 @@ if (-not (Test-Path $ProfileFile)) {
 }
 
 $content = Get-Content -Path $ProfileFile -Raw
-$blockPattern = "(?ms)^\Q$BeginMark\E\r?\n.*?^\Q$EndMark\E\r?\n?"
+$escapedBeginMark = [regex]::Escape($BeginMark)
+$escapedEndMark = [regex]::Escape($EndMark)
+$blockPattern = "(?ms)^$escapedBeginMark\r?\n.*?^$escapedEndMark\r?\n?"
 
 if ($content -match [regex]::Escape($BeginMark)) {
   if ($Force) {
