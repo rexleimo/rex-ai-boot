@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ensureBootstrapTask, isBootstrapEnabled } from './ctx-bootstrap.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,6 +23,7 @@ Options:
   --prompt <text>     Run one-shot mode and auto log request/response/checkpoint
   --limit <n>         Number of recent events in context packet (default: 30)
   --status <state>    Checkpoint status on success: running|blocked|done (default: running)
+  --no-bootstrap      Disable automatic first-task bootstrap for this run
   --no-checkpoint     Disable automatic checkpoint write in one-shot mode
   --dry-run           Skip remote model call, write synthetic response for pipeline testing
   --max-log-chars <n> Max characters stored in event logs (default: 8000)
@@ -70,6 +72,7 @@ function parseArgs(argv) {
     prompt: '',
     eventLimit: '30',
     checkpointStatus: 'running',
+    autoBootstrap: true,
     autoCheckpoint: true,
     dryRun: false,
     maxLogChars: '8000',
@@ -102,6 +105,9 @@ function parseArgs(argv) {
         break;
       case '--status':
         opts.checkpointStatus = argv[++i] || 'running';
+        break;
+      case '--no-bootstrap':
+        opts.autoBootstrap = false;
         break;
       case '--no-checkpoint':
         opts.autoCheckpoint = false;
@@ -231,6 +237,21 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
 
   if (!opts.project) {
     opts.project = path.basename(opts.workspaceRoot);
+  }
+
+  if (opts.autoBootstrap && isBootstrapEnabled(process.env)) {
+    try {
+      const bootstrapResult = await ensureBootstrapTask(opts.workspaceRoot, {
+        project: opts.project,
+        agent: opts.agent,
+      });
+      if (bootstrapResult.created) {
+        console.log(`Bootstrap task created: tasks/${bootstrapResult.taskPath}`);
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn(`[warn] bootstrap task initialization failed: ${reason}`);
+    }
   }
 
   ctx(opts.workspaceRoot, 'init', []);

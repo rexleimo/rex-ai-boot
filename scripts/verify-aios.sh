@@ -125,6 +125,10 @@ if [[ -x "$SCRIPT_DIR/doctor-security-config.sh" ]]; then
   fi
 fi
 
+if [[ -x "$SCRIPT_DIR/doctor-bootstrap-task.sh" ]]; then
+  run_doctor "doctor-bootstrap-task" "$SCRIPT_DIR/doctor-bootstrap-task.sh" --workspace "$ROOT_DIR"
+fi
+
 if [[ -x "$SCRIPT_DIR/doctor-browser-mcp.sh" ]]; then
   echo ""
   echo "== doctor-browser-mcp =="

@@ -28,7 +28,12 @@ scripts/ctx-agent.sh --agent gemini-cli --project rex-ai-boot --prompt "基于�
 ## Session Control
 - Continue same session: `--session <session_id>`
 - Mark terminal step: `--status done`
+- Disable auto bootstrap for current run: `--no-bootstrap`
 - Disable checkpoint (rare): `--no-checkpoint`
+- Disable auto bootstrap globally: `export AIOS_BOOTSTRAP_AUTO=0`
+
+Bootstrap note:
+- On first run in a workspace, `ctx-agent` may auto-create `tasks/pending/task_<timestamp>_bootstrap_guidelines/*` and `tasks/.current-task` if both are empty.
 
 Example:
 ```bash

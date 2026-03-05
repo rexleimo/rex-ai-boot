@@ -100,6 +100,7 @@ if ($Strict) {
   $securityArgs += '-Strict'
 }
 $effectiveWarns += Invoke-Doctor -Label 'doctor-security-config' -Path (Join-Path $ScriptDir 'doctor-security-config.ps1') -Args $securityArgs
+$effectiveWarns += Invoke-Doctor -Label 'doctor-bootstrap-task' -Path (Join-Path $ScriptDir 'doctor-bootstrap-task.ps1') -Args @('--workspace', $RootDir)
 
 Write-Host ""
 Write-Host "== doctor-browser-mcp =="

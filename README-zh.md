@@ -48,6 +48,24 @@ codex
 
 所以你仍然输入原命令，体验上不需要改操作习惯。
 
+## 自动首任务 Bootstrap
+
+现在在某个工作区第一次运行 `codex` / `claude` / `gemini` 时，若满足以下条件，AIOS 会自动创建一个轻量引导任务：
+
+- `tasks/.current-task` 不存在或为空
+- `tasks/pending/` 没有非隐藏任务条目
+
+会生成：
+
+- `tasks/pending/task_<timestamp>_bootstrap_guidelines/task.json`
+- `tasks/pending/task_<timestamp>_bootstrap_guidelines/prd.md`
+- `tasks/.current-task`
+
+关闭方式：
+
+- 全局关闭：`export AIOS_BOOTSTRAP_AUTO=0`
+- 单次关闭：`scripts/ctx-agent.mjs ... --no-bootstrap`
+
 ## 系统架构
 
 ```text

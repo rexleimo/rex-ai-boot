@@ -48,6 +48,24 @@ The mechanism is **transparent zsh wrapping**:
 
 So you keep using the same command names and normal interactive flow.
 
+## Automatic First Task Bootstrap
+
+On the first `codex`/`claude`/`gemini` run in a workspace, AIOS now auto-creates a lightweight bootstrap task when:
+
+- `tasks/.current-task` is missing or empty
+- `tasks/pending/` has no non-hidden entries
+
+Generated files:
+
+- `tasks/pending/task_<timestamp>_bootstrap_guidelines/task.json`
+- `tasks/pending/task_<timestamp>_bootstrap_guidelines/prd.md`
+- `tasks/.current-task`
+
+Disable options:
+
+- Global: `export AIOS_BOOTSTRAP_AUTO=0`
+- Per invocation: `scripts/ctx-agent.mjs ... --no-bootstrap`
+
 ## Architecture
 
 ```text
