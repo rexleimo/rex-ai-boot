@@ -8,7 +8,7 @@ description: Upgrade your existing Codex/Claude/Gemini/OpenCode workflow with Op
 > Keep your current CLI workflow. Add OpenClaw-style capabilities on top of `codex`, `claude`, `gemini`, and `opencode`.
 
 [Quick Start](getting-started.md){ .md-button .md-button--primary }
-[Capability Cases](case-library.md){ .md-button }
+[Superpowers](superpowers.md){ .md-button }
 
 Project URL: <https://github.com/rexleimo/rex-cli>
 
@@ -20,7 +20,7 @@ Four things it adds:
 
 1. **Memory that survives restarts** - Your project context comes back automatically after you close and reopen the terminal.
 2. **Browser automation** - Control Chrome via MCP without manually clicking around.
-3. **Skills you can reuse** - Turn one-time conversations into repeatable workflows.
+3. **Superpowers** - Automation skills including brainstorming, parallel planning, verification, and debugging.
 4. **Privacy Guard** - Automatically redacts secrets before they leak into prompts or logs.
 
 ## Who is this for?
@@ -28,7 +28,7 @@ Four things it adds:
 - You already use `codex`, `claude`, `gemini`, or `opencode` regularly
 - You want your workflows to survive terminal restarts
 - You need browser automation without switching tools
-- You care about keeping API keys out of chat history
+- You want automation skills that enforce best practices
 
 ## Quick Start
 
@@ -46,11 +46,12 @@ codex
 |---|---|
 | ContextDB | Persistent memory across sessions |
 | Playwright MCP | Browser automation |
-| Skills | Reusable workflow snippets |
+| Superpowers | Automation skills (brainstorming, parallel planning, verification) |
 | Privacy Guard | Redact secrets automatically |
 
 ## Read More
 
+- [Superpowers](superpowers.md) - Automation skills that make your CLI smarter
 - [Quick Start](getting-started.md)
 - [Case Library](case-library.md)
 - [Architecture](architecture.md)
