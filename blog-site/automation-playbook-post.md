@@ -1,14 +1,14 @@
 # Automation Playbook for Community Operations
 
-Growth teams need repeatable operations, not one-off hacks.
+This playbook covers repeatable workflows for community team operations.
 
-## Playbook
+## Workflow
 
-1. Define funnel destination before content production.
-2. Reuse post templates and approval gates.
-3. Measure outbound click quality, not only impressions.
+1. Define the target page before creating content.
+2. Reuse post templates with approval checks.
+3. Track outbound click quality, not just impressions.
 
-## Tool Path
+## Tools
 
 Use the operations tooling stack:
 [https://tool.rexai.top](https://tool.rexai.top)

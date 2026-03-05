@@ -19,7 +19,7 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
 - `0.6.2` (2026-03-04): fix auto-create `.contextdb-enable` for opt-in wrapper mode
 - `0.6.1` (2026-03-04): harden browser doctor on Windows and clarify Node 20+ prerequisite
 - `0.6.0` (2026-03-04): add cross-CLI doctor + security scan skill pack
-- `0.5.3` (2026-03-04): docs-site nav/funnel visibility updates and blog-home footer simplification
+- `0.5.3` (2026-03-04): docs-site navigation updates and blog-home footer simplification
 - `0.5.2` (2026-03-03): docs-site footer moved to shared RexAI links
 - `0.5.1` (2026-03-03): docs and superpowers route alignment
 - `0.5.0` (2026-03-03): ContextDB SQLite sidecar index, `index:rebuild`, optional `--semantic` search path, unified `ctx-agent` runtime core

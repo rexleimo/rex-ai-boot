@@ -1,70 +1,36 @@
 ---
 title: 概要
-description: 既存の Codex/Claude/Gemini/OpenCode ワークフローを OpenClaw スタイル能力で強化する入口。
+description: 既存の Codex/Claude/Gemini/OpenCode CLI を OpenClaw スタイルにアップグレード。
 ---
 
-# RexCLI ドキュメント
+# RexCLI
 
-> 今の CLI 習慣はそのまま。`codex` / `claude` / `gemini` / `opencode` に OpenClaw スタイルの能力レイヤーを追加します。
+> 今のツールを続けながら、`codex` / `claude` / `gemini` / `opencode` に更强的能力を足す。
 
-[30秒で開始（Primary CTA）](getting-started.md){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="hero" data-rex-target="quick_start" }
-[能力ケースを見る](case-library.md){ .md-button data-rex-track="cta_click" data-rex-location="hero" data-rex-target="case_library" }
+[クイックスタート](getting-started.md){ .md-button .md-button--primary }
+[ケース集](case-library.md){ .md-button }
 
-プロジェクト URL: <https://github.com/rexleimo/rex-cli>
+プロジェクトURL: <https://github.com/rexleimo/rex-cli>
 
-`RexCLI` は次の CLI 向けローカルワークフローレイヤーです。
+## これは何か？
 
-- Codex CLI
-- Claude Code
-- Gemini CLI
-- OpenCode
+RexCLIは、すでにあるCLIエージェントの上に薄い能力レイヤーを載せるもの。`codex`や`claude`などを替换せず、もっと使いやすくする。
 
-ネイティブ CLI を置き換えず、次の 2 つを追加します。
+4つのできること：
 
-1. ファイルシステム ContextDB（セッション記憶）
-2. 統合ワークフロー層（`codex` / `claude` / `gemini` / `opencode` をそのまま利用）
+1. **記憶がセッション跨げる** - ターミナル閉じてまた開いても、前のプロジェクト状況がそのまま。
+2. **ブラウザ自動化** - MCP経由でChromeを操作できる。
+3. **スキルが再利用可能** - 一回限りの会話を、繰り返し使えるワークフローになる。
+4. **プライバシーガード** - 設定ファイル読み込む時、自動でシークレットをマスク。
 
-## RexCLI の提供価値（運用視点）
+## 谁のために？
 
-### 1. LP 転換導線の最適化（閲覧 -> クリック）
+- すでに`codex`、`claude`、`gemini`、`opencode」のどれかを使ってる
+- ターミナル再起動してもワークフローを続けたい
+- ブラウザ自動化が必要だけどツールを変えたくない
+- APIキーがチャット履歴に残るのがイヤ
 
-- 典型入力: 現在の LP URL、対象ユーザー、主目的 1 つ（例: クイックスタート）。
-- 中核動作: メッセージ断点の特定、CTA の集約、Hero/課題/証拠/行動ブロックの再設計。
-- 標準成果物: 差し替え可能なコピー、CTA 配置案、計測イベント命名表。
-- 検収指標: 主 CTA クリック率とケースページ流入率を継続改善できる状態を作る。
-
-### 2. 能力説明の再設計（10 秒で理解可能）
-
-- 典型入力: 提供サービス、代表実績、非対応範囲。
-- 中核動作: 抽象的な訴求を「課題 -> 実行 -> 結果」形式へ変換。
-- 標準成果物: 能力マトリクス、対象ユーザー定義、skills 優先リスト。
-- 検収指標: 訪問者が 10 秒以内に適合性を判断し、次の導線へ進める。
-
-### 3. ContextDB による複数 CLI 連携の安定化
-
-- 典型入力: Codex/Claude/Gemini/OpenCode の運用フローと引き継ぎ課題。
-- 中核動作: checkpoint 粒度、記憶引き継ぎルール、one-shot/interactive 導線の定義。
-- 標準成果物: 標準引き継ぎコマンド、再開テンプレート、跨セッション運用基準。
-- 検収指標: ツール切替時の背景再説明コストを削減。
-
-### 4. 反復運用の skills 化（経験を標準へ）
-
-- 典型入力: 週次で繰り返すタスク、現行の手作業フロー、品質リスク。
-- 中核動作: 手順分解、ガードレール設計、検証ポイント追加、skills 化。
-- 標準成果物: skill ドキュメント、実行チェックリスト、完了前検証ゲート。
-- 検収指標: オンボーディング短縮とチーム品質の安定化。
-
-## 高頻度で再利用される Skills
-
-- `seo-geo-page-optimization`: LP 構成・文案・SEO/Geo 転換最適化向け。
-- `xhs-ops-methods`: 小紅書運用フローの一気通貫実行向け。
-- `brainstorming`: 実装前の意図整理と設計方向の収束向け。
-- `writing-plans`: 複数ステップ要件の実行計画化向け。
-- `dispatching-parallel-agents`: 独立ドメインの安全な並列実行向け。
-- `systematic-debugging`: 証拠ベースの障害対応向け。
-- `verification-before-completion`: 完了宣言前の必須検証向け。
-
-## 30 秒で開始（先に使う）
+## クイックスタート
 
 ```bash
 git clone https://github.com/rexleimo/rex-cli.git
@@ -74,23 +40,19 @@ source ~/.zshrc
 codex
 ```
 
-## すぐに試す
+## 入っているもの
 
-```bash
-codex
-claude
-gemini
-opencode
-```
+| 機能 | 役割 |
+|---|---|
+| ContextDB | セッション跨ぎの永続化記憶 |
+| Playwright MCP | ブラウザ自動化 |
+| Skills | 再利用可能ワークフロー |
+| Privacy Guard | 敏感情報を自動マスク |
 
-## 次に読む
+## 続きを読む
 
 - [クイックスタート](getting-started.md)
-- [公式ケースライブラリ](case-library.md)
-- [ブログサイト](https://cli.rexai.top/blog/ja/)
-- [リンク集](friends.md)
-- [プロジェクト（GitHub）](https://github.com/rexleimo/rex-cli)
-- [変更履歴](changelog.md)
-- [CLI ワークフロー](use-cases.md)
+- [ケース集](case-library.md)
 - [アーキテクチャ](architecture.md)
 - [ContextDB](contextdb.md)
+- [変更履歴](changelog.md)

@@ -70,9 +70,6 @@ plugins:
             Case Library: 官方案例库
             Changelog: 更新日志
             Friends: 友情链接
-            Community: 社区
-            Post Templates: 发布模板
-            Posting Policy: 发布规范
             External: 外部链接
             Project: 项目地址
         - locale: ja
@@ -95,9 +92,6 @@ plugins:
             Case Library: 公式ケースライブラリ
             Changelog: 変更履歴
             Friends: リンク集
-            Community: コミュニティ
-            Post Templates: 投稿テンプレート
-            Posting Policy: 投稿ポリシー
             External: 外部リンク
             Project: プロジェクト
         - locale: ko
@@ -120,9 +114,6 @@ plugins:
             Case Library: 공식 사례 라이브러리
             Changelog: 변경 로그
             Friends: 추천 링크
-            Community: 커뮤니티
-            Post Templates: 게시물 템플릿
-            Posting Policy: 게시 정책
             External: 외부 링크
             Project: 프로젝트
 
@@ -163,8 +154,5 @@ nav:
       - Case Library: case-library.md
       - Changelog: changelog.md
       - Friends: friends.md
-  - Community:
-      - Post Templates: community/post-templates.md
-      - Posting Policy: community/posting-policy.md
   - External:
       - Project: https://github.com/rexleimo/rex-cli

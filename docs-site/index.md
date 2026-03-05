@@ -7,97 +7,30 @@ description: Upgrade your existing Codex/Claude/Gemini/OpenCode workflow with Op
 
 > Keep your current CLI workflow. Add OpenClaw-style capabilities on top of `codex`, `claude`, `gemini`, and `opencode`.
 
-[Start in 30 seconds (Primary CTA)](getting-started.md){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="hero" data-rex-target="quick_start" }
-[See Capability Cases](case-library.md){ .md-button data-rex-track="cta_click" data-rex-location="hero" data-rex-target="case_library" }
+[Quick Start](getting-started.md){ .md-button .md-button--primary }
+[Capability Cases](case-library.md){ .md-button }
 
 Project URL: <https://github.com/rexleimo/rex-cli>
 
-`RexCLI` is a local-first workflow layer for four CLI agents:
+## What is this?
 
-- Codex CLI
-- Claude Code
-- Gemini CLI
-- OpenCode
+RexCLI is a thin layer on top of your existing CLI agents. It doesn't replace them—it makes them work better together.
 
-It adds three practical capabilities without replacing native CLIs:
+Four things it adds:
 
-1. **Filesystem ContextDB** for resumable memory across sessions.
-2. **Unified workflow layer** so you still run `codex`, `claude`, `gemini`, and `opencode` directly.
-3. **Privacy Guard** to redact config/secret-like files before they are read by skills/automation.
+1. **Memory that survives restarts** - Your project context comes back automatically after you close and reopen the terminal.
+2. **Browser automation** - Control Chrome via MCP without manually clicking around.
+3. **Skills you can reuse** - Turn one-time conversations into repeatable workflows.
+4. **Privacy Guard** - Automatically redacts secrets before they leak into prompts or logs.
 
-## Major Upgrade: Privacy Guard (`~/.rexcil`)
+## Who is this for?
 
-Privacy Guard is the key upgrade in this release.
+- You already use `codex`, `claude`, `gemini`, or `opencode` regularly
+- You want your workflows to survive terminal restarts
+- You need browser automation without switching tools
+- You care about keeping API keys out of chat history
 
-- Config path: `~/.rexcil/privacy-guard.json`
-- Default state: initialized and enabled during shell setup (strict for sensitive files)
-- Purpose: avoid leaking raw secrets into logs, prompts, and cross-session memory
-
-Use the required strict read entry for config-like files:
-
-```bash
-aios privacy read --file <path>
-```
-
-Optional local model route:
-
-```bash
-aios privacy ollama-on
-# hybrid mode + ollama model qwen3.5:4b
-```
-
-## What RexCLI Delivers for Ops Funnels
-
-### 1. Landing conversion path optimization (from visits to clicks)
-
-- Typical input: current landing URL, target audience, one primary action.
-- Core actions: identify message drop-off, consolidate CTA focus, rewrite hero/problem/proof/action blocks.
-- Standard deliverables: production-ready copy blocks, CTA placement map, event naming sheet.
-- Success metrics: primary CTA CTR and case-library entry rate become trackable and continuously improvable.
-
-### 2. Capability narrative redesign (understandable in 10 seconds)
-
-- Typical input: current services, strongest cases, explicit boundaries.
-- Core actions: convert generic claims into clear "problem -> action -> output" statements.
-- Standard deliverables: capability matrix, audience-fit section, prioritized skill list.
-- Success metrics: lower confusion and higher qualified clicks from hero to next step.
-
-### 3. Multi-CLI handoff stabilization with ContextDB
-
-- Typical input: existing Codex/Claude/Gemini/OpenCode flow and common handoff failures.
-- Core actions: define checkpoint granularity, memory handoff rules, one-shot and interactive flows.
-- Standard deliverables: handoff command set, restart templates, cross-session workflow baseline.
-- Success metrics: less repeated background explanation after tool switching or session restart.
-
-### 4. Reusable skills packaging for team operations
-
-- Typical input: weekly recurring tasks and current manual process.
-- Core actions: decompose workflows, add guardrails and verification gates, encode reusable skills.
-- Standard deliverables: skill documentation, execution checklists, pre-delivery verification criteria.
-- Success metrics: faster onboarding and more consistent team output quality.
-
-## High-Use Reusable Skills
-
-- `seo-geo-page-optimization`: for landing structure, copy, and SEO/Geo conversion optimization.
-- `xhs-ops-methods`: for end-to-end Xiaohongshu growth operations.
-- `brainstorming`: for locking intent and design direction before implementation.
-- `writing-plans`: for turning multi-step requirements into executable plans.
-- `dispatching-parallel-agents`: for safe parallel execution across independent domains.
-- `systematic-debugging`: for evidence-based debugging instead of guesswork.
-- `verification-before-completion`: for mandatory verification before completion claims.
-
-## Why this is an OpenClaw-style upgrade
-
-You get the same category of outcomes:
-
-- resumable cross-session memory (ContextDB)
-- browser automation (Playwright MCP)
-- multi-CLI handoff across Codex/Claude/Gemini/OpenCode
-- reusable operational skills
-
-This is not a new chat shell. It is an upgrade layer for tools you already use.
-
-## Start in 30 seconds (use first, read later)
+## Quick Start
 
 ```bash
 git clone https://github.com/rexleimo/rex-cli.git
@@ -107,36 +40,19 @@ source ~/.zshrc
 codex
 ```
 
-## Immediate before/after
+## What's Included
 
-| Scenario | Typical CLI | With RexCLI |
-|---|---|---|
-| Session resume | manual recall | automatic project context |
-| Multi-CLI collaboration | state loss between tools | shared ContextDB handoff |
-| Browser operations | manual clicking | `browser_*` automation |
-| Process reuse | ad-hoc chat history | reusable skills |
+| Feature | What it does |
+|---|---|
+| ContextDB | Persistent memory across sessions |
+| Playwright MCP | Browser automation |
+| Skills | Reusable workflow snippets |
+| Privacy Guard | Redact secrets automatically |
 
-## Quick Command Preview
-
-```bash
-# interactive mode (same commands, context injected automatically)
-codex
-claude
-gemini
-opencode
-
-# one-shot mode (full 5-step pipeline)
-scripts/ctx-agent.sh --agent codex-cli --prompt "Continue from latest checkpoint"
-```
-
-## Read Next
+## Read More
 
 - [Quick Start](getting-started.md)
 - [Case Library](case-library.md)
-- [Blog Site](https://cli.rexai.top/blog/)
-- [Friends](friends.md)
-- [Project (GitHub)](https://github.com/rexleimo/rex-cli)
-- [Changelog](changelog.md)
-- [CLI Workflows](use-cases.md)
 - [Architecture](architecture.md)
-- [ContextDB runtime details](contextdb.md)
+- [ContextDB](contextdb.md)
+- [Changelog](changelog.md)

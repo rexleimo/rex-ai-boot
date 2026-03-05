@@ -19,7 +19,7 @@ description: 版本历史、升级说明与文档变更入口。
 - `0.6.2`（2026-03-04）：修复 opt-in wrapper 模式下未自动创建 `.contextdb-enable` 的问题
 - `0.6.1`（2026-03-04）：加固 Windows `browser doctor`，并明确 Node 20+ 前置要求
 - `0.6.0`（2026-03-04）：新增跨 CLI `doctor` 与安全扫描 skills 套件
-- `0.5.3`（2026-03-04）：docs 站点导航/转化可见性优化与博客首页页脚简化
+- `0.5.3`（2026-03-04）：docs 站点导航更新与博客首页页脚简化
 - `0.5.2`（2026-03-03）：docs 站点页脚统一为 RexAI 全局链接
 - `0.5.1`（2026-03-03）：文档与 superpowers 默认流程对齐
 - `0.5.0`（2026-03-03）：ContextDB 新增 SQLite sidecar 索引、`index:rebuild`、可选 `--semantic` 检索路径，以及统一 `ctx-agent` 运行核心

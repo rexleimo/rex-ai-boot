@@ -19,7 +19,7 @@ description: 릴리스 이력, 업그레이드 안내, 관련 문서 링크.
 - `0.6.2` (2026-03-04): opt-in wrapper 모드에서 `.contextdb-enable` 자동 생성 누락 문제 수정
 - `0.6.1` (2026-03-04): Windows browser doctor 안정화 및 Node 20+ 요구사항 명확화
 - `0.6.0` (2026-03-04): 멀티 CLI doctor + security scan skills 패키지 추가
-- `0.5.3` (2026-03-04): docs 사이트 전환/가시성 개선 및 블로그 홈 푸터 단순화
+- `0.5.3` (2026-03-04): docs 사이트 네비게이션 업데이트 및 블로그 홈 푸터 단순화
 - `0.5.2` (2026-03-03): docs 사이트 푸터를 RexAI 공통 링크로 통합
 - `0.5.1` (2026-03-03): 문서와 superpowers 기본 워크플로 정렬
 - `0.5.0` (2026-03-03): ContextDB SQLite 사이드카 인덱스, `index:rebuild`, 선택적 `--semantic` 검색 경로, `ctx-agent` 실행 코어 통합
