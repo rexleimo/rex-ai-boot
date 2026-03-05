@@ -20,7 +20,7 @@ Four things it adds:
 
 1. **Memory that survives restarts** - Your project context comes back automatically after you close and reopen the terminal.
 2. **Browser automation** - Control Chrome via MCP without manually clicking around.
-3. **Superpowers** - Automation skills including brainstorming, parallel planning, verification, and debugging.
+3. **Superpowers** - Smart planning: auto-decompose requirements, parallel task distribution, automatic verification.
 4. **Privacy Guard** - Automatically redacts secrets before they leak into prompts or logs.
 
 ## Who is this for?
@@ -46,7 +46,7 @@ codex
 |---|---|
 | ContextDB | Persistent memory across sessions |
 | Playwright MCP | Browser automation |
-| Superpowers | Automation skills (brainstorming, parallel planning, verification) |
+| Superpowers | Smart planning (auto-decompose, parallel dispatch, auto-verify) |
 | Privacy Guard | Redact secrets automatically |
 
 ## Read More

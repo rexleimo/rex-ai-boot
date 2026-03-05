@@ -25,7 +25,8 @@
       "mcp__puppeteer-stealth__browser_list_tabs",
       "Bash(ls:*)",
       "Bash(mkdocs build:*)",
-      "Bash(pip3 install:*)"
+      "Bash(pip3 install:*)",
+      "Bash(gh run:*)"
     ]
   },
   "approvalMode": "auto",

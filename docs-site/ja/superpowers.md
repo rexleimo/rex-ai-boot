@@ -5,14 +5,13 @@ description: CLIをより賢くする再利用可能な自動化スキル。
 
 # Superpowers
 
-Superpowersは再利用可能な自動化スキル。Claude Code、Codex、Gemini CLI、OpenCodeにフックして、反復タスクを自動処理する。
+Superpowersは再利用可能な自動化スキル。Claude Code、Codex、Gemini CLI、OpenCodeにフックして，反復タスクを自動処理する。
 
-## Superpowersとは？
+## コア特徴
 
-同じコマンドやプロンプトを繰り返す代わりに、スキルを起動すれば：
-- AIを実証済みのフローに導く
-- ベストプラクティスを自動強制
-- 完了前に結果を検証
+- **自動計画** - 要件を実行可能なステップに自動分解
+- **並列分发** - 独立タスクを識別し、複数のサブタスクを並行実行
+- **スマート検証** - 完了前に結果を自動検証、推測に頼らない
 
 ## あるスキル
 
@@ -38,6 +37,17 @@ Superpowersは再利用可能な自動化スキル。Claude Code、Codex、Gemin
 
 **使うとき**：仕様や複数ステップタスクがあり、ロードマップが必要なとき。
 
+### dispatching-parallel-agents
+
+複数の独立タスクを並行実行。
+
+- 独立したワークフローを見極め
+- 並列agentsを起動
+- 結果を統合
+- 失敗を適切に処理
+
+**使うとき**：2つ以上の共有状態を持たないタスクを同時実行したい時。
+
 ### verification-before-completion
 
 検証なしで完了と言わない。
@@ -59,17 +69,6 @@ Superpowersは再利用可能な自動化スキル。Claude Code、Codex、Gemin
 
 **使うとき**：テスト失敗、クラッシュ、予期しない動作に出くわした時。
 
-### dispatching-parallel-agents
-
-複数の独立タスクを並行実行。
-
-- 独立したワークフローを見極め
-- 並列agentsを起動
-- 結果を統合
-- 失敗を適切に処理
-
-**使うとき**：2つ以上の共有状態を持たないタスクを同時実行したい時。
-
 ### security-scan
 
 自動化前に設定のセキュリティ問題をチェック。
@@ -82,7 +81,7 @@ Superpowersは再利用可能な自動化スキル。Claude Code、Codex、Gemin
 
 ## 使い方
 
-1. Superpowersが必要なら、自然に言う
+1. Superpowersが必要なら，自然に言う
 2. AIがスキルを起動してナビゲート
 3. 結果はプロジェクトメモリに保存
 
@@ -91,6 +90,7 @@ Superpowersは再利用可能な自動化スキル。Claude Code、Codex、Gemin
 ```
 brainstormingでこの機能怎么做/
 writing-plansでこの要件を步骤に分ける
+dispatching-parallel-agentsで这些任务并发执行
 verification-before-completionで完成前に検証
 ```
 

@@ -7,12 +7,11 @@ description: CLI를 더 똑똑하게 만드는 재사용 가능한 자동화 스
 
 Superpowers는 재사용 가능한 자동화 스킬입니다. Claude Code, Codex, Gemini CLI, OpenCode에 후킹해서 반복 작업을 자동 처리합니다.
 
-## Superpowers가 뭐야?
+## 핵심 특징
 
-같은 명령어나 프롬프트를 반복하는 대신, 스킬을 호출하면:
-- AI를 입증된 플로우로 안내
-- 베스트 프랙티스를 자동 강제
-- 완료 전에 결과 검증
+- **자동 계획** - 요구사항을 실행 가능한 스텝으로 자동 분해
+- **병렬分发** - 독립 태스크 식별, 여러 서브태스크 병렬 실행
+- **스마트 검증** - 완료 전에 결과 자동 검증, 추측に頼:X
 
 ## 있는 스킬들
 
@@ -38,6 +37,17 @@ Superpowers는 재사용 가능한 자동화 스킬입니다. Claude Code, Codex
 
 **쓰는 때**: 명세나 다단계 태스크가 있고 로드맵 필요할 때.
 
+### dispatching-parallel-agents
+
+여러 독립 태스크를 병렬로 실행.
+
+- 독립 워크플로 식별
+- 병렬 agents 기동
+- 결과 취합
+- 실패 적절히 처리
+
+**쓰는 때**: 2개 이상 공유 상태 없는 태스크를 동시에 돌리고 싶을 때.
+
 ### verification-before-completion
 
 검증 없이 완료라고 말하지 마.
@@ -59,17 +69,6 @@ Superpowers는 재사용 가능한 자동화 스킬입니다. Claude Code, Codex
 
 **쓰는 때**: 테스트 실패, 크래시, 예상치 못한 동작 마주했을 때.
 
-### dispatching-parallel-agents
-
-여러 독립 태스크를 병렬로 실행.
-
-- 독립 워크플로 식별
-- 병렬 agents 기동
-- 결과 취합
-- 실패 적절히 처리
-
-**쓰는 때**: 2개 이상 공유 상태 없는 태스크를 동시에 돌리고 싶을 때.
-
 ### security-scan
 
 자동화 전에 설정 보안 문제 체크.
@@ -89,8 +88,9 @@ Superpowers는 재사용 가능한 자동화 스킬입니다. Claude Code, Codex
 ## 예
 
 ```
-brainstorming으로 이 功能怎么做/
+brainstorming으로 이 기능怎么做/
 writing-plans으로 이 요구사항을 단계로 나누기
+dispatching-parallel-agents로 这些任务并发执行
 verification-before-completion으로 완료 전에 검증
 ```
 

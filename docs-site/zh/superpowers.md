@@ -7,12 +7,11 @@ description: 可复用的自动化技能，让你的 CLI 更聪明。
 
 Superpowers 是可复用的自动化技能。它们挂载到 Claude Code、Codex、Gemini CLI 和 OpenCode 上，自动处理重复任务。
 
-## 什么是 Superpowers？
+## 核心特点
 
-不用重复相同的命令或提示词，直接调用一个技能，它会：
-- 引导 AI 走通一个成熟的流程
-- 自动强制最佳实践
-- 完成任务前验证结果
+- **自动化规划** - 把需求自动拆解成可执行的步骤
+- **并发分发** - 识别独立任务，同时分发多个子任务并行执行
+- **智能验证** - 完成任务前自动验证结果，不靠猜
 
 ## 现有 Superpowers
 
@@ -38,6 +37,17 @@ Superpowers 是可复用的自动化技能。它们挂载到 Claude Code、Codex
 
 **适用场景**：有需求文档或多步骤任务，需要路线图。
 
+### dispatching-parallel-agents
+
+同时跑多个独立任务。
+
+- 识别独立的工作流
+- 启动并行 agents
+- 汇总结果
+- 优雅处理失败
+
+**适用场景**：2+ 个不共享状态的任务，可以同时跑。
+
 ### verification-before-completion
 
 不要没验证就說完成了。
@@ -58,17 +68,6 @@ Superpowers 是可复用的自动化技能。它们挂载到 Claude Code、Codex
 - 验证修复有效
 
 **适用场景**：遇到测试失败、崩溃、或意外行为。
-
-### dispatching-parallel-agents
-
-同时跑多个独立任务。
-
-- 识别独立的工作流
-- 启动并行 agents
-- 汇总结果
-- 优雅处理失败
-
-**适用场景**：2+ 个不共享状态的任务，可以同时跑。
 
 ### security-scan
 
@@ -91,6 +90,7 @@ Superpowers 是可复用的自动化技能。它们挂载到 Claude Code、Codex
 ```
 帮我用 brainstorming 想想这个功能怎么做
 用 writing-plans 把这个需求拆成步骤
+用 dispatching-parallel-agents 并发执行这些任务
 完成前用 verification-before-completion 验证一下
 ```
 
