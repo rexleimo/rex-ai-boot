@@ -20,7 +20,7 @@ RexCLI is a thin layer on top of your existing CLI agents. It doesn't replace th
 
 Four things it adds:
 
-1. **Memory that survives restarts** - Your project context comes back automatically after you close and reopen the terminal.
+1. **Memory that survives restarts** - Your project context comes back automatically after you close and reopen the terminal, and syncs across devices for the same project.
 2. **Browser automation** - Control Chrome via MCP without manually clicking around.
 3. **Superpowers** - Smart planning: auto-decompose requirements, parallel task distribution, automatic verification.
 4. **Privacy Guard** - Automatically redacts secrets before they leak into prompts or logs.
