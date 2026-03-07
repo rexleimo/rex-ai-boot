@@ -63,9 +63,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 // 工具处理器映射
 const toolHandlers: Record<string, (args: any) => Promise<any>> = {
   browser_launch: async (args) => {
-    const { profile = 'default', url, headless } = args ?? {};
-    await browserLauncher.launch(profile, url, headless);
-    return { success: true, profile };
+    const { profile = 'default', url, headless, visible } = args ?? {};
+    const state = await browserLauncher.launch(profile, url, headless, visible);
+    return {
+      success: true,
+      profile,
+      effectiveProfile: state.effectiveProfile ?? profile,
+      headless: state.headless ?? false,
+      visible: state.visible ?? true,
+      launchMode: state.launchMode ?? 'ephemeral-local',
+      connectedOverCdp: state.connectedOverCdp ?? false,
+    };
   },
   browser_navigate: async (args) => {
     const { url, profile, newTab } = args ?? {};
@@ -84,7 +92,10 @@ const toolHandlers: Record<string, (args: any) => Promise<any>> = {
     return await type(selector, text, profile);
   },
   browser_snapshot: async (args) => {
-    return await snapshot(args?.profile);
+    return await snapshot(args?.profile, {
+      includeHtml: args?.includeHtml,
+      htmlMaxChars: args?.htmlMaxChars,
+    });
   },
   browser_auth_check: async (args) => {
     return await authCheck(args?.profile);
@@ -93,8 +104,8 @@ const toolHandlers: Record<string, (args: any) => Promise<any>> = {
     return await challengeCheck(args?.profile);
   },
   browser_screenshot: async (args) => {
-    const { fullPage, profile, filePath } = args ?? {};
-    return await screenshot(fullPage, profile, filePath);
+    const { fullPage, profile, filePath, selector } = args ?? {};
+    return await screenshot(fullPage, profile, filePath, selector);
   },
   browser_close: async (args) => {
     const profile = args?.profile || 'default';

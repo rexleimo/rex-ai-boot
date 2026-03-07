@@ -17,6 +17,11 @@ export interface ProfileState {
   pages: Map<number, Page>;
   activePageId: number | null;
   connectedOverCdp?: boolean;
+  headless?: boolean;
+  visible?: boolean;
+  launchMode?: 'cdp' | 'persistent-local' | 'persistent-local-fallback' | 'ephemeral-local';
+  requestedProfile?: string;
+  effectiveProfile?: string;
 }
 
 export interface BrowserState {
@@ -26,6 +31,7 @@ export interface BrowserState {
 
 export interface LaunchOptions {
   headless?: boolean;
+  visible?: boolean;
   profile?: string;
   url?: string;
 }

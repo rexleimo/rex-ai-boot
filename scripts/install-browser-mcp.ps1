@@ -69,7 +69,9 @@ Write-Host "Next:"
 Write-Host "1) Restart your CLI client."
 Write-Host "2) Run: scripts/doctor-browser-mcp.ps1"
 Write-Host "3) In chat, smoke test:"
-Write-Host '   - browser_launch {"profile":"default"}'
+Write-Host '   - browser_launch {"profile":"default","visible":true}'
 Write-Host '   - browser_navigate {"url":"https://example.com"}'
-Write-Host '   - browser_snapshot {}'
+Write-Host '   - browser_snapshot {"profile":"default"}'
+Write-Host '   - Read pageSummary/regions/elements first'
+Write-Host '   - Only if visualHints.needsVisualFallback=true: browser_screenshot {"profile":"default","selector":"<target>"}'
 Write-Host '   - browser_close {}'

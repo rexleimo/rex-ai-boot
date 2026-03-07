@@ -4,9 +4,10 @@
   "description": "技能操作时的约束和规范，确保安全、高效、可追溯",
   "rules": {
     "浏览器操作": {
-      "优先使用文本快照": "使用 browser_snapshot 获取页面文本，比截图更高效",
+      "优先使用布局快照": "使用 browser_snapshot 获取 pageSummary、regions、elements、textBlocks、visualHints，比整页截图更高效",
       "截图保存位置": "必须保存到 aios/temp/ 目录",
-      "截图命名规范": "{操作类型}_{时间戳}.png，如 login_20240301_120000.png"
+      "截图命名规范": "{操作类型}_{时间戳}.png，如 login_20240301_120000.png",
+      "视觉降级条件": "仅当 visualHints.needsVisualFallback=true 或 DOM/布局信息不足时，才使用 browser_screenshot，且优先传 selector 截局部"
     },
     "操作规范": {
       "最小间隔": 5,
@@ -36,17 +37,18 @@
       "操作前执行反检测脚本",
       "截图必须保存到 temp/",
       "使用 grep 从快照中搜索内容",
+      "先读 layout/pageSummary/regions/elements，再决定动作",
       "关键操作记录到历史"
     ]
   },
   "example": {
     "good": {
-      "action": "browser_snapshot 获取页面快照",
-      "reason": "文本格式便于搜索，不占 token"
+      "action": "browser_snapshot 获取布局快照并先阅读 pageSummary/regions/elements",
+      "reason": "结构化布局更省 token，同时保留页面结构感"
     },
     "bad": {
-      "action": "每次都截图查看",
-      "reason": "截图信息密度低，占用大量 token"
+      "action": "每次都做整页截图给模型识别",
+      "reason": "整页截图 token 开销高，且不适合作为默认主输入"
     }
   }
 }

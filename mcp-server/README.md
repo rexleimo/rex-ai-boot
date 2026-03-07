@@ -33,10 +33,12 @@ Configure your client MCP config (use the absolute path printed by installer):
 
 Then restart your client and smoke test:
 
-1. `browser_launch` `{"profile":"default"}`
+1. `browser_launch` `{"profile":"default","visible":true}`
 2. `browser_navigate` `{"url":"https://example.com"}`
-3. `browser_snapshot` `{}`
-4. `browser_close` `{}`
+3. `browser_snapshot` `{"profile":"default"}`
+4. Read `pageSummary`, `regions`, `elements`, `textBlocks`, and `visualHints` first
+5. Only if `visualHints.needsVisualFallback=true`, call `browser_screenshot` with `selector`
+6. `browser_close` `{}`
 
 ## Installer and Doctor Scripts
 
@@ -55,14 +57,14 @@ Then restart your client and smoke test:
 
 ## Available Tools
 
-- `browser_launch` `{ profile?, url?, headless? }`
+- `browser_launch` `{ profile?, url?, visible?, headless? }`
 - `browser_navigate` `{ url, profile?, newTab? }`
 - `browser_click` `{ selector, profile?, double? }`
 - `browser_type` `{ selector, text, profile? }`
-- `browser_snapshot` `{ profile? }`
+- `browser_snapshot` `{ profile?, includeHtml?, htmlMaxChars? }`
 - `browser_auth_check` `{ profile? }`
 - `browser_challenge_check` `{ profile? }`
-- `browser_screenshot` `{ fullPage?, profile?, filePath? }`
+- `browser_screenshot` `{ fullPage?, profile?, filePath?, selector? }`
 - `browser_list_tabs` `{ profile? }`
 - `browser_close` `{ profile? }`
 
@@ -95,14 +97,17 @@ Priority for launch mode:
 If you see `Google Chrome for Testing 意外退出`:
 
 1. Start fingerprint browser with remote debugging on `9222` and keep it running.
-2. Use `browser_launch` with `{ "profile": "default" }` (the server will auto-fallback to `local` if CDP is unavailable).
+2. Use `browser_launch` with `{ "profile": "default", "visible": true }` (the server will auto-fallback to `local` if CDP is unavailable).
 3. For explicit local Playwright launch, use `{ "profile": "local" }`.
 4. Optionally set `BROWSER_HEADLESS=true` for non-GUI environments.
 
 ## Notes
 
 - The server auto-detects workspace root by locating `config/browser-profiles.json`.
-- `browser_screenshot` returns base64 and can also save to disk via `filePath`.
+- `browser_snapshot` now returns a layout-first payload: `pageSummary`, `regions`, `elements`, `textBlocks`, and `visualHints`.
+- Recommended reasoning order: `challenge/auth` -> `pageSummary` -> `regions` -> `elements` -> `textBlocks` -> optional `htmlPreview`.
+- For interactive agent work, prefer `browser_launch` with `visible:true`; use `headless:true` only for non-GUI environments or background smoke tests.
+- `browser_screenshot` returns base64 and can also save to disk via `filePath`; prefer `selector` for local visual fallback instead of full-page screenshots.
 - `browser_navigate` / `browser_snapshot` / `browser_auth_check` include `requiresHumanAction`, `auth`, and `challenge` fields.
 - Use `browser_challenge_check` for explicit anti-bot gate checks (Cloudflare / Google risk / captcha).
 - If `requiresHumanAction=true`, complete login/challenge manually and then continue automation.

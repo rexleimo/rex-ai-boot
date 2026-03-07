@@ -47,6 +47,51 @@ function parseHeadlessEnv(value: string | undefined): boolean | undefined {
   return undefined;
 }
 
+export function resolveLaunchHeadless(
+  options: { headless?: boolean; visible?: boolean },
+  profile: BrowserProfile,
+  envValue: string | undefined
+): { headless: boolean; visible: boolean; source: 'arg-visible' | 'arg-headless' | 'profile-headless' | 'env-headless' | 'default-visible' } {
+  if (typeof options.visible === 'boolean') {
+    return {
+      headless: !options.visible,
+      visible: options.visible,
+      source: 'arg-visible',
+    };
+  }
+
+  if (typeof options.headless === 'boolean') {
+    return {
+      headless: options.headless,
+      visible: !options.headless,
+      source: 'arg-headless',
+    };
+  }
+
+  if (typeof profile.headless === 'boolean') {
+    return {
+      headless: profile.headless,
+      visible: !profile.headless,
+      source: 'profile-headless',
+    };
+  }
+
+  const envHeadless = parseHeadlessEnv(envValue);
+  if (typeof envHeadless === 'boolean') {
+    return {
+      headless: envHeadless,
+      visible: !envHeadless,
+      source: 'env-headless',
+    };
+  }
+
+  return {
+    headless: false,
+    visible: true,
+    source: 'default-visible',
+  };
+}
+
 function resolveExecutablePath(profile: BrowserProfile): string | undefined {
   if (profile.executablePath) return profile.executablePath;
   if (process.env.BROWSER_EXECUTABLE_PATH) return process.env.BROWSER_EXECUTABLE_PATH;
@@ -85,7 +130,7 @@ export class BrowserLauncher {
     this._pageIdCounter = value;
   }
 
-  async launch(profileName: string = 'default', url?: string, headless?: boolean): Promise<ProfileState> {
+  async launch(profileName: string = 'default', url?: string, headless?: boolean, visible?: boolean): Promise<ProfileState> {
     await this.ensureProfilesLoaded();
 
     if (this.state.has(profileName)) {
@@ -108,14 +153,16 @@ export class BrowserLauncher {
       ? profileManager.resolveWorkspacePath(profile.userDataDir)
       : profileDir;
 
-    const envHeadless = parseHeadlessEnv(process.env.BROWSER_HEADLESS);
-    const resolvedHeadless = headless ?? profile.headless ?? envHeadless ?? false;
+    const launchPreference = resolveLaunchHeadless({ headless, visible }, profile, process.env.BROWSER_HEADLESS);
+    const resolvedHeadless = launchPreference.headless;
     const executablePath = resolveExecutablePath(profile);
     const cdpEndpoint = profile.cdpUrl || (profile.cdpPort ? `http://127.0.0.1:${profile.cdpPort}` : undefined);
 
     let browser: Browser;
     let context: BrowserContext;
     let connectedOverCdp = false;
+    let launchMode: ProfileState['launchMode'] = 'ephemeral-local';
+    let effectiveProfile = profileName;
 
     try {
       // 优先支持指纹浏览器/CDP 接入，避免本地启动 Chrome for Testing 崩溃。
@@ -123,6 +170,7 @@ export class BrowserLauncher {
         try {
           browser = await chromium.connectOverCDP(cdpEndpoint);
           connectedOverCdp = true;
+          launchMode = 'cdp';
           const contexts = browser.contexts();
           context = contexts.length > 0
             ? contexts[0]
@@ -148,6 +196,8 @@ export class BrowserLauncher {
             viewport: { width: 1280, height: 720 },
           });
           browser = context.browser()!;
+          launchMode = 'persistent-local-fallback';
+          effectiveProfile = 'local';
 
           const reason = cdpError instanceof Error ? cdpError.message : String(cdpError);
           console.error(
@@ -164,6 +214,7 @@ export class BrowserLauncher {
           viewport: { width: 1280, height: 720 },
         });
         browser = context.browser()!;
+        launchMode = 'persistent-local';
       } else {
         browser = await chromium.launch({
           headless: resolvedHeadless,
@@ -174,6 +225,7 @@ export class BrowserLauncher {
         context = await browser.newContext({
           viewport: { width: 1280, height: 720 },
         });
+        launchMode = 'ephemeral-local';
       }
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
@@ -199,6 +251,11 @@ export class BrowserLauncher {
       pages: new Map(),
       activePageId: null,
       connectedOverCdp,
+      headless: resolvedHeadless,
+      visible: launchPreference.visible,
+      launchMode,
+      requestedProfile: profileName,
+      effectiveProfile,
     };
 
     this.state.set(profileName, state);

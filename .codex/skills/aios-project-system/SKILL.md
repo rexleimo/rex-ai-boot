@@ -18,6 +18,8 @@ Use this skill as the repository map for `aios`. It explains where state lives, 
 
 ## Runtime Truths (Do Not Skip)
 - MCP server label may say `puppeteer-stealth`, but current implementation exposes Playwright-style `browser_*` tools from `mcp-server/src/index.ts`.
+- If both `puppeteer-stealth` and `chrome-devtools` are available, use `puppeteer-stealth` for normal browser automation and reserve `chrome-devtools` for debugging only.
+- For interactive runs, explicitly prefer `browser_launch { profile: 'default', visible: true }`.
 - `memory/skills/*.json` can drift from site UI; treat them as runbooks that require live verification.
 - Prefer `browser_snapshot`/DOM evidence before using screenshots.
 - Keep safety constraints aligned with `memory/specs` and `memory/skills/技能使用约束.json`.

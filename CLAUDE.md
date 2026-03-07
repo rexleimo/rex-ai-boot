@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **Xiaohongshu (小红书) Operations Assistant** - an AI agent framework that uses Claude Code with Chrome DevTools MCP to automate operations on Xiaohongshu (xiaohongshu.com), a Chinese social media platform.
+This is a **Xiaohongshu (小红书) Operations Assistant** - an AI agent framework that uses Claude Code with the repo-local browser MCP (`puppeteer-stealth` server alias, `browser_*` tools from `mcp-server/`) to automate operations on Xiaohongshu (xiaohongshu.com), a Chinese social media platform.
 
 ## Core Architecture
 
 ```
-User Task → Claude Code → Chrome DevTools MCP → Xiaohongshu Web
+User Task → Claude Code → repo-local browser MCP (`browser_*`) → Xiaohongshu Web
                      ↓
               Memory System (JSON files)
               - skills/      # Learned skills
@@ -45,7 +45,7 @@ This is not a traditional code project with build/test commands. Instead:
 
 1. **Task Execution**: User gives natural language tasks (e.g., "帮我发布一篇笔记", "关注10个博主")
 2. **Skill Retrieval**: Claude Code looks up relevant skills in `memory/skills/`
-3. **Browser Control**: Uses Chrome DevTools MCP to execute operations
+3. **Browser Control**: Uses the repo-local `browser_*` MCP tools to execute operations
 4. **Learning**: Results are recorded to `memory/history/` for future improvement
 
 ## Images Directory
@@ -152,7 +152,9 @@ Multi-profile support for isolated browser instances:
 
 ## Important Notes
 
-- All operations use Chrome DevTools MCP for browser automation
+- All normal browser automation should use the repo-local `puppeteer-stealth` MCP alias and its `browser_*` tools
+- If multiple browser MCPs are installed, reserve `chrome-devtools` for low-level debugging only
+- For interactive work, prefer `browser_launch {"profile":"default","visible":true}`
 - The system maintains a file-based memory system in JSON format
 - Before executing any plan, use `superpowers:brainstorming` skill
 - When implementing features, use `superpowers:test-driven-development`

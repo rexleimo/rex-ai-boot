@@ -12,6 +12,8 @@ Use this runbook for stable image generation on Jimeng. It includes selectors, c
 - Browser profile has valid Jimeng login session.
 - `default` profile should connect to fingerprint browser via CDP (port `9222` by default).
 - MCP tools available: `browser_launch`, `browser_navigate`, `browser_auth_check`, `browser_challenge_check`, `browser_type`, `browser_click`, `browser_snapshot`, `browser_screenshot`.
+- For page understanding, prefer `browser_snapshot` fields in this order: `pageSummary` -> `regions` -> `elements` -> `textBlocks` -> `visualHints`.
+- Use `browser_screenshot` only when `visualHints.needsVisualFallback=true`, and prefer `selector`-scoped capture over full-page screenshots.
 - Prompt is policy-safe (avoid risky terms, political/person-identifiable/sensitive wording).
 
 ## Execution Flow
@@ -28,6 +30,7 @@ Use this runbook for stable image generation on Jimeng. It includes selectors, c
    - Success markers: latest task has image tiles + `重新编辑` and `再次生成`
    - Policy failure marker: `你输入的文字不符合平台规则，请修改后重试`
    - Timeout marker: still `生成中` after budget
+   - Read snapshot layout fields first; only take a local screenshot if the result area is visually ambiguous.
 
 ## Error Handling
 - Policy failure: rewrite prompt to neutral scene/style terms and retry once.

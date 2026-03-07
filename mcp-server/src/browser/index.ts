@@ -25,13 +25,14 @@ export {
 export const tools = [
   {
     name: 'browser_launch',
-    description: 'Launch browser with optional profile',
+    description: 'Launch browser. Defaults to a visible (headful) browser window unless headless mode is explicitly requested.',
     inputSchema: {
       type: 'object',
       properties: {
         profile: { type: 'string', default: 'default' },
         url: { type: 'string' },
         headless: { type: 'boolean' },
+        visible: { type: 'boolean', default: true },
       },
     },
   },
@@ -78,6 +79,8 @@ export const tools = [
       type: 'object',
       properties: {
         profile: { type: 'string', default: 'default' },
+        includeHtml: { type: 'boolean', default: false },
+        htmlMaxChars: { type: 'number', default: 1500 },
       },
     },
   },
@@ -110,6 +113,7 @@ export const tools = [
         fullPage: { type: 'boolean', default: false },
         profile: { type: 'string', default: 'default' },
         filePath: { type: 'string' },
+        selector: { type: 'string' },
       },
     },
   },

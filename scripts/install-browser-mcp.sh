@@ -107,8 +107,10 @@ Next:
 1) Restart your CLI client.
 2) Run: scripts/doctor-browser-mcp.sh
 3) In chat, smoke test:
-   - browser_launch {"profile":"default"}
+   - browser_launch {"profile":"default","visible":true}
    - browser_navigate {"url":"https://example.com"}
-   - browser_snapshot {}
+   - browser_snapshot {"profile":"default"}
+   - Read pageSummary/regions/elements first
+   - Only if visualHints.needsVisualFallback=true: browser_screenshot {"profile":"default","selector":"<target>"}
    - browser_close {}
 SNIPPET

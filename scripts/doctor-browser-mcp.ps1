@@ -168,7 +168,9 @@ Write-Host ""
 Write-Host "[6/6] quick next steps"
 Write-Host "- If ERR exists: run install script first"
 Write-Host "  scripts/install-browser-mcp.ps1"
-Write-Host "- Then smoke test in client chat: browser_launch -> browser_navigate -> browser_snapshot -> browser_close"
+Write-Host "- Then smoke test in client chat: browser_launch -> browser_navigate -> browser_snapshot"
+Write-Host "  Read pageSummary/regions/elements first; use browser_screenshot(selector) only for visual fallback"
+Write-Host "  Finally browser_close"
 
 Write-Host ""
 if ($ErrCount -gt 0) {

@@ -1,12 +1,13 @@
-// mcp-server/src/browser/actions/screenshot.ts
 import { promises as fs } from 'fs';
 import * as path from 'path';
+
 import { browserLauncher } from '../launcher.js';
 
 export async function screenshot(
   fullPage: boolean = false,
   profile: string = 'default',
-  filePath?: string
+  filePath?: string,
+  selector?: string
 ) {
   const state = browserLauncher.getState(profile);
   if (!state || state.activePageId === null) {
@@ -18,7 +19,10 @@ export async function screenshot(
     throw new Error('Page not found');
   }
 
-  const buffer = await page.screenshot({ fullPage });
+  const buffer = selector
+    ? await page.locator(selector).screenshot()
+    : await page.screenshot({ fullPage });
+
   let savedTo: string | undefined;
   if (filePath) {
     const absolute = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
@@ -33,5 +37,6 @@ export async function screenshot(
     savedTo,
     fullPage,
     profile,
+    selector,
   };
 }

@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-03-07
+
+- feat: add hybrid browser snapshot and visible-first launch defaults
+
 ## [0.8.1] - 2026-03-05
 
 - docs: add contextdb Node ABI mismatch troubleshooting

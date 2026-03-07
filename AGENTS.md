@@ -62,6 +62,12 @@ PRs should include:
 - Prefer CDP-based profile config in `config/browser-profiles.json` for stable login reuse.
 - Preserve human-in-the-loop checks for auth walls and sensitive outbound actions.
 
+## Browser MCP Selection
+- In this repo, prefer the `puppeteer-stealth` MCP server alias that exposes `browser_*` tools from `mcp-server/`.
+- For interactive browser work, use `browser_launch {"profile":"default","visible":true}` unless the task explicitly needs headless mode.
+- If multiple browser MCPs are available, do **not** use `chrome-devtools` for normal business flows; reserve it for low-level inspection/debugging only.
+- Default reasoning order for page understanding: `browser_auth_check` / `browser_challenge_check` -> `browser_snapshot` layout fields -> `browser_screenshot(selector)` only if visual fallback is needed.
+
 ## Default Superpowers Route
 For substantial user requests, use this route by default:
 

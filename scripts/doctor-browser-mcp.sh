@@ -185,7 +185,9 @@ echo
 echo "[6/6] quick next steps"
 echo "- If ERR exists: run install script first"
 echo "  scripts/install-browser-mcp.sh"
-echo "- Then smoke test in client chat: browser_launch -> browser_navigate -> browser_snapshot -> browser_close"
+echo "- Then smoke test in client chat: browser_launch -> browser_navigate -> browser_snapshot"
+echo "  Read pageSummary/regions/elements first; use browser_screenshot(selector) only for visual fallback"
+echo "  Finally browser_close"
 
 echo
 if [[ $ERR_COUNT -gt 0 ]]; then
