@@ -2,7 +2,7 @@ import path from 'node:path';
 
 import fs from 'node:fs';
 
-import { collectSkillEntries, ensureManagedLink, isManagedLink, removeManagedLink } from '../platform/fs.mjs';
+import { collectSkillEntries, collectUnexpectedSkillRootFindings, ensureManagedLink, isManagedLink, removeManagedLink } from '../platform/fs.mjs';
 import { getClientHomes } from '../platform/paths.mjs';
 
 const ALL_CLIENTS = ['codex', 'claude', 'gemini', 'opencode'];
@@ -127,6 +127,17 @@ export async function doctorContextDbSkills({
 
   io.log('ContextDB Skills Doctor');
   io.log('-----------------------');
+
+  const unexpectedRoots = collectUnexpectedSkillRootFindings(rootDir);
+  for (const finding of unexpectedRoots) {
+    io.log(`[warn] repo: non-discoverable skill root ${finding.root} contains SKILL.md files`);
+    for (const file of finding.files) {
+      io.log(`       move or convert: ${file}`);
+    }
+    io.log('       repo-local discoverable skills must live under .codex/skills or .claude/skills');
+    warnings += 1;
+  }
+
 
   for (const clientName of enabledClients(client)) {
     const targetRoot = path.join(homes[clientName], 'skills');

@@ -35,6 +35,7 @@ npm run typecheck && npm run build
 - File names: kebab-case for action modules (for example `auth-check.ts`), `index.ts` for module entry points.
 - Tool names exposed to MCP should follow `browser_*` naming.
 - Keep configuration JSON keys stable; prefer additive changes over renaming.
+- Repo-local discoverable skills must live under `.codex/skills/` or `.claude/skills/` (optionally `.agents/skills/` only when the target client actually supports it). Do not invent parallel skill roots such as `.baoyu-skills/*/SKILL.md`; those are non-discoverable and should be plain docs or extension config only.
 
 ## Testing Guidelines
 There is no dedicated automated test suite yet. Minimum verification for each change:

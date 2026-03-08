@@ -22,6 +22,7 @@ Use this skill as the repository map for `aios`. It explains where state lives, 
 - For interactive runs, explicitly prefer `browser_launch { profile: 'default', visible: true }`.
 - `memory/skills/*.json` can drift from site UI; treat them as runbooks that require live verification.
 - Prefer `browser_snapshot`/DOM evidence before using screenshots.
+- Repo-local discoverable skills must live in `.codex/skills/` or `.claude/skills/`; do not create ad-hoc skill roots such as `.baoyu-skills/*/SKILL.md`. `.baoyu-skills/` is extension-config territory, not a Codex/Claude skill root.
 - Keep safety constraints aligned with `memory/specs` and `memory/skills/技能使用约束.json`.
 
 ## Superpowers Route Bridge

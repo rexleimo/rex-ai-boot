@@ -288,6 +288,7 @@ ContextDB wrapping and CLI skill loading are different layers:
 - Skill installers skip existing same-name targets by default; use `--force` / `-Force` only when you intentionally replace them.
 - Skills installed in `~/.codex/skills`, `~/.claude/skills`, `~/.gemini/skills`, or `~/.config/opencode/skills` are global.
 - Project-only skills should live in `<repo>/.codex/skills` or `<repo>/.claude/skills`.
+- Do not place discoverable `SKILL.md` files inside parallel folders such as `.baoyu-skills/`; Codex/Claude will not treat them as repo-local skills. Use `.baoyu-skills/` only for extension config such as `EXTEND.md`.
 - `CODEX_HOME` can be relative (wrappers resolve it against current working directory at runtime), but absolute paths are more predictable for global setups.
 
 If you don't want cross-project skill reuse, keep custom skills in repo-local folders instead of global home directories.

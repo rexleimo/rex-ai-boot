@@ -104,3 +104,17 @@ powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-skills.ps1
 ### 为什么输入 `codex` 没有注入上下文？
 
 通常是 wrapper 未加载、`CTXDB_WRAP_MODE` 未覆盖当前工作区，或者当前命令属于透传的管理子命令。
+
+
+## 把技能放进了错误目录
+
+仓库内可发现的 repo-local skills 只应放在：
+
+- `<repo>/.codex/skills`
+- `<repo>/.claude/skills`
+
+如果你把 `SKILL.md` 放进 `.baoyu-skills/` 之类的平行目录，Codex / Claude 不会把它当作可发现技能。
+
+- `.baoyu-skills/` 只适合放 `EXTEND.md` 一类扩展配置
+- 真正的技能请移动到 `.codex/skills/<name>/SKILL.md` 或 `.claude/skills/<name>/SKILL.md`
+- 运行 `scripts/doctor-contextdb-skills.sh --client all` 检查是否存在错误的技能根目录

@@ -9,6 +9,7 @@ import {
   uninstallContextDbShell,
 } from '../lib/components/shell.mjs';
 import {
+  doctorContextDbSkills,
   installContextDbSkills,
   uninstallContextDbSkills,
 } from '../lib/components/skills.mjs';
@@ -178,4 +179,25 @@ test('windows claude and gemini also use shell execution', () => {
 
   assert.equal(claudeSpec.shell, true);
   assert.equal(geminiSpec.shell, true);
+});
+
+
+test('skills doctor warns on non-discoverable repo skill roots', async () => {
+  const rootDir = await makeTemp('aios-skills-doctor-root-');
+  const badSkillDir = path.join(rootDir, '.baoyu-skills', 'wrong-skill');
+  await mkdir(badSkillDir, { recursive: true });
+  await writeFile(path.join(badSkillDir, 'SKILL.md'), '# wrong\n', 'utf8');
+
+  const logs = [];
+  const io = { log: (line) => logs.push(String(line)) };
+  const result = await doctorContextDbSkills({
+    rootDir,
+    client: 'codex',
+    homeMap: { codex: await makeTemp('aios-skills-home-') },
+    io,
+  });
+
+  assert.equal(result.warnings >= 1, true);
+  assert.equal(logs.some((line) => line.includes('non-discoverable skill root .baoyu-skills')), true);
+  assert.equal(logs.some((line) => line.includes('.baoyu-skills/wrong-skill/SKILL.md')), true);
 });

@@ -138,3 +138,67 @@ export function collectSkillEntries(sourceRoots) {
 
   return entries;
 }
+
+
+const REPO_DISCOVERABLE_SKILL_ROOTS = new Set([
+  '.codex/skills',
+  '.claude/skills',
+  '.agents/skills',
+  '.gemini/skills',
+  '.opencode/skills',
+]);
+
+const SKILL_SCAN_EXCLUDED_TOP_LEVEL = new Set([
+  '.git',
+  '.worktrees',
+  'node_modules',
+  'dist',
+  'site',
+  'docs-site',
+  'temp',
+]);
+
+function collectSkillMarkdownFiles(baseDir, maxDepth = 4, currentDepth = 0) {
+  if (currentDepth > maxDepth || !fs.existsSync(baseDir)) {
+    return [];
+  }
+
+  const output = [];
+  for (const entry of fs.readdirSync(baseDir, { withFileTypes: true })) {
+    const entryPath = path.join(baseDir, entry.name);
+    if (entry.isFile() && entry.name === 'SKILL.md') {
+      output.push(entryPath);
+      continue;
+    }
+    if (!entry.isDirectory()) continue;
+    if (entry.name === 'node_modules' || entry.name === '.git') continue;
+    output.push(...collectSkillMarkdownFiles(entryPath, maxDepth, currentDepth + 1));
+  }
+  return output;
+}
+
+export function collectUnexpectedSkillRootFindings(rootDir) {
+  const findings = [];
+  for (const entry of fs.readdirSync(rootDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (SKILL_SCAN_EXCLUDED_TOP_LEVEL.has(entry.name)) continue;
+
+    const relName = entry.name;
+    const normalizedAllowed = Array.from(REPO_DISCOVERABLE_SKILL_ROOTS);
+    if (normalizedAllowed.includes(relName) || normalizedAllowed.some((allowed) => allowed.startsWith(`${relName}/`))) {
+      continue;
+    }
+
+    const looksSkillLike = /skill/i.test(relName) || relName === '.baoyu-skills';
+    if (!looksSkillLike) continue;
+
+    const skillFiles = collectSkillMarkdownFiles(path.join(rootDir, relName));
+    if (skillFiles.length === 0) continue;
+
+    findings.push({
+      root: relName,
+      files: skillFiles.map((filePath) => path.relative(rootDir, filePath)),
+    });
+  }
+  return findings;
+}

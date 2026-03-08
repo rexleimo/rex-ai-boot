@@ -288,6 +288,7 @@ ContextDB 包装和 CLI 的 Skills 加载是两层机制：
 - skills 安装脚本默认会跳过同名已有目录；只有你明确要替换时再使用 `--force` / `-Force`。
 - 安装在 `~/.codex/skills`、`~/.claude/skills`、`~/.gemini/skills`、`~/.config/opencode/skills` 的技能是全局可见。
 - 仅项目可见的技能应放在 `<repo>/.codex/skills`、`<repo>/.claude/skills`。
+- 不要把带 `SKILL.md` 的可发现技能放进 `.baoyu-skills/` 之类的平行目录；这类目录不会被 Codex/Claude 当作 repo-local skills 发现。`.baoyu-skills/` 只适合放 `EXTEND.md` 这类扩展配置。
 - `CODEX_HOME` 可以使用相对路径（包装器会在运行时按当前工作目录解析），但全局场景仍推荐绝对路径以减少歧义。
 
 如果你不希望跨项目复用技能，请把自定义技能放在仓库本地目录，而不是 `~` 下的全局目录。

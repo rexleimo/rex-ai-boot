@@ -132,3 +132,17 @@ Run `scripts/doctor-browser-mcp.sh` (or PowerShell variant) before reinstalling.
 ### Why is context not injected after I type `codex`?
 
 Usually because the wrapper is not loaded, wrapper scope (`CTXDB_WRAP_MODE`) excludes the current workspace, or the command is a passthrough management subcommand.
+
+
+## Skills were saved into the wrong repo directory
+
+Repo-local discoverable skills should only live in:
+
+- `<repo>/.codex/skills`
+- `<repo>/.claude/skills`
+
+If you save a `SKILL.md` under a parallel directory such as `.baoyu-skills/`, Codex / Claude will not discover it as a repo-local skill.
+
+- Use `.baoyu-skills/` only for extension config such as `EXTEND.md`
+- Move real skills to `.codex/skills/<name>/SKILL.md` or `.claude/skills/<name>/SKILL.md`
+- Run `scripts/doctor-contextdb-skills.sh --client all` to detect unsupported repo skill roots
