@@ -77,3 +77,9 @@ test('install-contextdb-shell.ps1 is a thin wrapper', async () => {
   const content = await readFile(path.join(repoRoot, 'scripts', 'install-contextdb-shell.ps1'), 'utf8');
   assert.match(content, /internal shell install/);
 });
+
+test('doctor-contextdb-skills.ps1 is a thin wrapper', async () => {
+  const content = await readFile(path.join(repoRoot, 'scripts', 'doctor-contextdb-skills.ps1'), 'utf8');
+  assert.match(content, /internal skills doctor/);
+  assert.doesNotMatch(content, /\$ClientName:/);
+});
