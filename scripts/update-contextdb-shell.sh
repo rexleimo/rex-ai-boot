@@ -2,4 +2,4 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "$SCRIPT_DIR/install-contextdb-shell.sh" --force "$@"
+exec "$SCRIPT_DIR/aios.sh" internal shell update "$@"

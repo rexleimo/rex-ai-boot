@@ -35,6 +35,11 @@ aios
 
 Alternative: git clone (dev-friendly):
 
+Lifecycle note:
+
+- `node scripts/aios.mjs` is now the canonical implementation path.
+- `scripts/aios.sh` / `scripts/aios.ps1` and `setup-all/update-all/verify-aios` remain supported as thin compatibility wrappers.
+
 macOS / Linux:
 
 ```bash

@@ -1,0 +1,115 @@
+function renderCheckbox(label, checked, active) {
+  const prefix = active ? '▸' : ' ';
+  const mark = checked ? '[x]' : '[ ]';
+  return `${prefix} ${mark} ${label}`;
+}
+
+function renderItem(label, active) {
+  return `${active ? '▸' : ' '} ${label}`;
+}
+
+function renderValue(label, value, active) {
+  return `${active ? '▸' : ' '} ${label}: ${value}`;
+}
+
+function joinSelected(components) {
+  return Object.entries(components)
+    .filter(([, selected]) => selected)
+    .map(([name]) => name)
+    .join(',') || '<none>';
+}
+
+export function renderState(state, rootDir) {
+  const lines = [
+    'AIOS — Unified Entry (Node TUI)',
+    `Repo: ${rootDir}`,
+    'Use ↑/↓ to move, SPACE to toggle, ENTER to confirm, B to back, Q to quit',
+    '',
+  ];
+
+  if (state.screen === 'main') {
+    const items = ['Setup', 'Update', 'Uninstall', 'Doctor', 'Exit'];
+    items.forEach((item, index) => lines.push(renderItem(item, state.cursor === index)));
+    return `${lines.join('\n')}\n`;
+  }
+
+  if (state.screen === 'setup') {
+    const opts = state.options.setup;
+    lines.push('Setup configuration', '');
+    lines.push(renderCheckbox('Browser MCP', opts.components.browser, state.cursor === 0));
+    lines.push(renderCheckbox('Shell wrappers', opts.components.shell, state.cursor === 1));
+    lines.push(renderCheckbox('Skills', opts.components.skills, state.cursor === 2));
+    lines.push(renderCheckbox('Superpowers', opts.components.superpowers, state.cursor === 3));
+    lines.push(renderValue('Mode', opts.wrapMode, state.cursor === 4));
+    lines.push(renderValue('Client', opts.client, state.cursor === 5));
+    lines.push(renderCheckbox('Skip Playwright install', opts.skipPlaywrightInstall, state.cursor === 6));
+    lines.push(renderCheckbox('Skip doctor', opts.skipDoctor, state.cursor === 7));
+    lines.push(renderItem('Run setup', state.cursor === 8));
+    lines.push(renderItem('Back', state.cursor === 9));
+    return `${lines.join('\n')}\n`;
+  }
+
+  if (state.screen === 'update') {
+    const opts = state.options.update;
+    lines.push('Update configuration', '');
+    lines.push(renderCheckbox('Browser MCP', opts.components.browser, state.cursor === 0));
+    lines.push(renderCheckbox('Shell wrappers', opts.components.shell, state.cursor === 1));
+    lines.push(renderCheckbox('Skills', opts.components.skills, state.cursor === 2));
+    lines.push(renderCheckbox('Superpowers', opts.components.superpowers, state.cursor === 3));
+    lines.push(renderValue('Mode', opts.wrapMode, state.cursor === 4));
+    lines.push(renderValue('Client', opts.client, state.cursor === 5));
+    lines.push(renderCheckbox('With Playwright install', opts.withPlaywrightInstall, state.cursor === 6));
+    lines.push(renderCheckbox('Skip doctor', opts.skipDoctor, state.cursor === 7));
+    lines.push(renderItem('Run update', state.cursor === 8));
+    lines.push(renderItem('Back', state.cursor === 9));
+    return `${lines.join('\n')}\n`;
+  }
+
+  if (state.screen === 'uninstall') {
+    const opts = state.options.uninstall;
+    lines.push('Uninstall configuration', '');
+    lines.push(renderCheckbox('Browser MCP', opts.components.browser, state.cursor === 0));
+    lines.push(renderCheckbox('Shell wrappers', opts.components.shell, state.cursor === 1));
+    lines.push(renderCheckbox('Skills', opts.components.skills, state.cursor === 2));
+    lines.push(renderCheckbox('Superpowers', opts.components.superpowers, state.cursor === 3));
+    lines.push(renderValue('Client', opts.client, state.cursor === 4));
+    lines.push(renderItem('Run uninstall', state.cursor === 5));
+    lines.push(renderItem('Back', state.cursor === 6));
+    return `${lines.join('\n')}\n`;
+  }
+
+  if (state.screen === 'doctor') {
+    const opts = state.options.doctor;
+    lines.push('Doctor configuration', '');
+    lines.push(renderCheckbox('Strict', opts.strict, state.cursor === 0));
+    lines.push(renderCheckbox('Global security scan', opts.globalSecurity, state.cursor === 1));
+    lines.push(renderItem('Run doctor', state.cursor === 2));
+    lines.push(renderItem('Back', state.cursor === 3));
+    return `${lines.join('\n')}\n`;
+  }
+
+  if (state.screen === 'confirm') {
+    const action = state.confirmAction;
+    const options = action ? state.options[action] : {};
+    lines.push(`Confirm ${action}`, '');
+    if (options.components) {
+      lines.push(`Selected components: ${joinSelected(options.components)}`);
+    }
+    if (options.wrapMode) {
+      lines.push(`Mode: ${options.wrapMode}`);
+    }
+    if (options.client) {
+      lines.push(`Client: ${options.client}`);
+    }
+    if (action === 'doctor') {
+      lines.push(`Strict: ${options.strict ? 'true' : 'false'}`);
+      lines.push(`Global security: ${options.globalSecurity ? 'true' : 'false'}`);
+    }
+    lines.push('');
+    lines.push(renderItem(`Run ${action}`, state.cursor === 0));
+    lines.push(renderItem('Back', state.cursor === 1));
+    return `${lines.join('\n')}\n`;
+  }
+
+  return `${lines.join('\n')}\n`;
+}

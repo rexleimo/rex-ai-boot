@@ -35,6 +35,11 @@ aios
 
 备选：git clone（适合开发/可控）：
 
+生命周期说明：
+
+- `node scripts/aios.mjs` 现在是统一实现入口。
+- `scripts/aios.sh` / `scripts/aios.ps1` 以及 `setup-all/update-all/verify-aios` 继续保留，但只作为兼容包装层。
+
 macOS / Linux：
 
 ```bash

@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-03-08
+
+- feat(onboarding): consolidate lifecycle flow into node
+
 ## [0.9.0] - 2026-03-07
 
 - feat: add hybrid browser snapshot and visible-first launch defaults

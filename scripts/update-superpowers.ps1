@@ -1,5 +1,10 @@
+param(
+  [Parameter(ValueFromRemainingArguments = $true)]
+  [string[]]$Args
+)
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-
-$installer = Join-Path $PSScriptRoot "install-superpowers.ps1"
-& powershell -ExecutionPolicy Bypass -File $installer -Update -Force @args
+$wrapper = Join-Path $PSScriptRoot 'aios.ps1'
+& $wrapper internal superpowers update @Args
+exit $LASTEXITCODE

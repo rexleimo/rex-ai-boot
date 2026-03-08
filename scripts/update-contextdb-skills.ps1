@@ -1,10 +1,10 @@
 param(
-  [ValidateSet("all", "codex", "claude", "gemini", "opencode")]
-  [string]$Client = "all"
+  [Parameter(ValueFromRemainingArguments = $true)]
+  [string[]]$Args
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-
-$installer = Join-Path $PSScriptRoot "install-contextdb-skills.ps1"
-& powershell -ExecutionPolicy Bypass -File $installer -Client $Client -Force
+$wrapper = Join-Path $PSScriptRoot 'aios.ps1'
+& $wrapper internal skills update @Args
+exit $LASTEXITCODE

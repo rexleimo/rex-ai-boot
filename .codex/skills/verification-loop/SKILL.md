@@ -18,7 +18,8 @@ Use this skill when:
 ## Baseline Checks (AIOS)
 1. Run the verifier:
    - `aios doctor`
-   - Or: `scripts/verify-aios.sh` / `scripts/verify-aios.ps1`
+   - Or: `node scripts/aios.mjs doctor`
+   - Compatibility wrappers: `scripts/verify-aios.sh` / `scripts/verify-aios.ps1`
 
 2. MCP server changes (minimum):
    - `cd mcp-server && npm run typecheck`

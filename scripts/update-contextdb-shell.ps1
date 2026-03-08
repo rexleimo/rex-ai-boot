@@ -1,10 +1,10 @@
 param(
-  [ValidateSet("all", "repo-only", "opt-in", "off")]
-  [string]$Mode = "opt-in"
+  [Parameter(ValueFromRemainingArguments = $true)]
+  [string[]]$Args
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-
-$installer = Join-Path $PSScriptRoot "install-contextdb-shell.ps1"
-& powershell -ExecutionPolicy Bypass -File $installer -Mode $Mode -Force
+$wrapper = Join-Path $PSScriptRoot 'aios.ps1'
+& $wrapper internal shell update @Args
+exit $LASTEXITCODE
