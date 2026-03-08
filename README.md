@@ -33,6 +33,16 @@ irm https://github.com/rexleimo/rex-cli/releases/latest/download/aios-install.ps
 aios
 ```
 
+Recommended TUI walkthrough (best first run):
+
+1. Launch `aios`
+2. Choose `Setup` in the full-screen menu
+3. Pick the component set that matches your goal:
+   - `all` for the full stack
+   - `shell,skills,superpowers` for memory + skills first
+   - `browser` for Browser MCP only
+4. Run `Doctor` before leaving the TUI
+
 Alternative: git clone (dev-friendly):
 
 Lifecycle note:
@@ -62,8 +72,8 @@ The mechanism is **transparent zsh wrapping**:
 
 - [`scripts/contextdb-shell.zsh`](scripts/contextdb-shell.zsh) defines shell functions for `codex()`, `claude()`, and `gemini()`
 - Those functions delegate to [`scripts/contextdb-shell-bridge.mjs`](scripts/contextdb-shell-bridge.mjs), which decides wrap vs passthrough
-- When wrapping is enabled, the bridge calls [`scripts/ctx-agent.mjs`](scripts/ctx-agent.mjs) with current git root as `--workspace`
-- Outside git projects, or for management subcommands (for example `codex mcp`, `gemini hooks`), commands pass through unchanged
+- When wrapping is enabled, the bridge calls [`scripts/ctx-agent.mjs`](scripts/ctx-agent.mjs) with the current git root as `--workspace`, or the current directory when Git root detection is unavailable
+- Outside git projects, the bridge can fall back to the current directory as workspace; management subcommands (for example `codex mcp`, `gemini hooks`) still pass through unchanged
 
 So you keep using the same command names and normal interactive flow.
 
@@ -130,23 +140,28 @@ If you want concrete, reproducible examples of what this repo can do, start here
 - Docs site: `https://cli.rexai.top/case-library/`
 - Repo doc: [`docs-site/case-library.md`](docs-site/case-library.md)
 
-### 1) One command setup (recommended)
+### 1) Recommended setup in the TUI
 
 macOS / Linux:
 
 ```bash
-scripts/setup-all.sh --components all --mode opt-in
-source ~/.zshrc
+scripts/aios.sh
 ```
 
 Windows (PowerShell):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\setup-all.ps1 -Components all -Mode opt-in
-. $PROFILE
+powershell -ExecutionPolicy Bypass -File .\scripts\aios.ps1
 ```
 
-This installs Browser MCP, shell wrappers, optional global skills, and superpowers in one flow.
+Inside the TUI:
+
+1. Choose `Setup`
+2. Pick `all`, `shell,skills,superpowers`, or `browser`
+3. Let the install finish, then run `Doctor`
+4. Reload your shell if wrappers were installed
+
+This is the clearest path for first-time setup in this iteration. Direct script commands remain available below for automation and non-interactive use.
 
 Privacy Guard is now initialized automatically during shell setup, with config stored at `~/.rexcil/privacy-guard.json`.
 It is enabled by default and enforces redaction for sensitive config files:
@@ -162,7 +177,7 @@ aios privacy read --file <path>
 aios privacy ollama-on
 ```
 
-Component selection examples:
+Need direct script control instead? Use these non-interactive examples:
 
 ```bash
 # only shell + skills + superpowers

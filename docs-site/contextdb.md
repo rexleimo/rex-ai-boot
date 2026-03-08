@@ -112,7 +112,7 @@ No. It uses local filesystem storage under the workspace.
 
 ### Do Codex, Claude, and Gemini share the same context?
 
-Yes. If they run inside the same git root, they use the same `memory/context-db/`.
+Yes. If they run inside the same wrapped workspace (same git root when available, otherwise the same current directory), they use the same `memory/context-db/`.
 
 ### How do I hand off tasks across CLIs?
 

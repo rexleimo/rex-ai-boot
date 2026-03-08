@@ -91,7 +91,7 @@ memory/context-db/
 
 ### Codex、Claude、Gemini 会共享上下文吗？
 
-会。只要它们在同一个 git 根目录运行，就会使用同一份 `memory/context-db/`。
+会。只要它们运行在同一个已包裹工作区（优先使用同一个 git 根目录；没有 git 根目录时则使用同一个当前目录），就会共享同一份 `memory/context-db/`。
 
 ### 怎么做跨 CLI 接力？
 

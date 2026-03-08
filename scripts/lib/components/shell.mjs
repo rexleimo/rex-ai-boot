@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -9,7 +10,7 @@ import {
   stripMatchingLines,
   writeText,
 } from '../platform/fs.mjs';
-import { resolvePowerShellProfilePath, resolveShellRcFile } from '../platform/paths.mjs';
+import { resolvePowerShellProfilePaths, resolveShellRcFile } from '../platform/paths.mjs';
 
 const BEGIN_MARK = '# >>> contextdb-shell >>>';
 const END_MARK = '# <<< contextdb-shell <<<';
@@ -20,6 +21,44 @@ function buildPosixBlock(rootDir, mode) {
 
 function buildPowerShellBlock(rootDir, mode) {
   return `${BEGIN_MARK}\n# ContextDB transparent CLI wrappers (codex/claude/gemini, PowerShell)\nif (-not $env:ROOTPATH) { $env:ROOTPATH = "${rootDir}" }\nif (-not $env:CTXDB_WRAP_MODE) { $env:CTXDB_WRAP_MODE = "${mode}" }\n$ctxShell = Join-Path $env:ROOTPATH "scripts/contextdb-shell.ps1"\nif (Test-Path $ctxShell) {\n  . $ctxShell\n}\n${END_MARK}\n`;
+}
+
+function getShellPatterns(platform) {
+  return platform === 'win32'
+    ? [/^\.\s+.*scripts\/contextdb-shell\.ps1\s*$/u, /^# ContextDB transparent CLI wrappers \(codex\/claude\/gemini, PowerShell\)$/u]
+    : [/^source ".*\/scripts\/contextdb-shell\.zsh"$/u, /^# ContextDB transparent CLI wrappers \(codex\/claude\/gemini\)$/u];
+}
+
+function resolveTargetFiles({ platform = process.platform, rcFile, env = process.env, homeDir = os.homedir() } = {}) {
+  if (rcFile) {
+    return [rcFile];
+  }
+
+  if (platform === 'win32') {
+    return resolvePowerShellProfilePaths(env, homeDir);
+  }
+
+  return [resolveShellRcFile(env, homeDir)];
+}
+
+function ensureContextDbRuntime({ rootDir, platform = process.platform, env = process.env, io = console, commandRunner = runCommand } = {}) {
+  const mcpDir = path.join(rootDir, 'mcp-server');
+  const packageJson = path.join(mcpDir, 'package.json');
+  const tsxBin = platform === 'win32' ? 'tsx.cmd' : 'tsx';
+  const tsxPath = path.join(mcpDir, 'node_modules', '.bin', tsxBin);
+
+  if (!fs.existsSync(packageJson)) {
+    throw new Error(`mcp-server package.json not found: ${packageJson}`);
+  }
+
+  if (fs.existsSync(tsxPath)) {
+    io.log(`[ok] ContextDB runtime ready: ${mcpDir}`);
+    return { status: 'reused', mcpDir };
+  }
+
+  io.log(`+ (cd ${mcpDir} && npm install)`);
+  commandRunner('npm', ['install'], { cwd: mcpDir, env, platform });
+  return { status: 'installed', mcpDir };
 }
 
 export async function installPrivacyGuard({ rootDir, enable = true, disable = false, mode = '', io = console } = {}) {
@@ -45,64 +84,80 @@ export async function installContextDbShell({
   platform = process.platform,
   rcFile,
   env = process.env,
+  homeDir = os.homedir(),
   io = console,
+  commandRunner = runCommand,
 } = {}) {
-  const targetFile = rcFile || (platform === 'win32' ? resolvePowerShellProfilePath(env, os.homedir()) : resolveShellRcFile(env, os.homedir()));
-  ensureFile(targetFile);
+  ensureContextDbRuntime({ rootDir, platform, env, io, commandRunner });
 
-  let content = readTextIfExists(targetFile);
-  if (content.includes(BEGIN_MARK) && !force) {
-    io.log(`Already installed (${BEGIN_MARK}). Use --force to update.`);
-    return { status: 'reused', targetFile };
-  }
-
-  if (content.includes(BEGIN_MARK)) {
-    content = stripManagedBlock(content, BEGIN_MARK, END_MARK);
-  }
-
-  const patterns = platform === 'win32'
-    ? [/^\.\s+.*scripts\/contextdb-shell\.ps1\s*$/u, /^# ContextDB transparent CLI wrappers \(codex\/claude\/gemini, PowerShell\)$/u]
-    : [/^source ".*\/scripts\/contextdb-shell\.zsh"$/u, /^# ContextDB transparent CLI wrappers \(codex\/claude\/gemini\)$/u];
-
-  content = stripMatchingLines(content, patterns).trimEnd();
+  const targetFiles = resolveTargetFiles({ platform, rcFile, env, homeDir });
+  const patterns = getShellPatterns(platform);
   const block = platform === 'win32' ? buildPowerShellBlock(rootDir, mode) : buildPosixBlock(rootDir, mode);
-  const nextContent = `${content}${content ? '\n\n' : ''}${block}`;
-  writeText(targetFile, nextContent);
+  const statuses = [];
 
-  io.log(`Installed into ${targetFile}`);
+  for (const targetFile of targetFiles) {
+    ensureFile(targetFile);
+
+    let content = readTextIfExists(targetFile);
+    if (content.includes(BEGIN_MARK) && !force) {
+      io.log(`Already installed (${BEGIN_MARK}) in ${targetFile}. Use --force to update.`);
+      statuses.push('reused');
+      continue;
+    }
+
+    if (content.includes(BEGIN_MARK)) {
+      content = stripManagedBlock(content, BEGIN_MARK, END_MARK);
+    }
+
+    content = stripMatchingLines(content, patterns).trimEnd();
+    const nextContent = `${content}${content ? '\n\n' : ''}${block}`;
+    writeText(targetFile, nextContent);
+
+    io.log(`Installed into ${targetFile}`);
+    statuses.push('installed');
+  }
+
   io.log(`Default wrap mode: ${mode}`);
-  return { status: 'installed', targetFile };
+  const status = statuses.some((item) => item === 'installed') ? 'installed' : 'reused';
+  return { status, targetFiles };
 }
 
 export async function uninstallContextDbShell({
   platform = process.platform,
   rcFile,
   env = process.env,
+  homeDir = os.homedir(),
   io = console,
 } = {}) {
-  const targetFile = rcFile || (platform === 'win32' ? resolvePowerShellProfilePath(env, os.homedir()) : resolveShellRcFile(env, os.homedir()));
-  const content = readTextIfExists(targetFile);
-  if (!content) {
-    io.log(`No shell config found at ${targetFile}`);
-    return { status: 'missing', targetFile };
+  const targetFiles = resolveTargetFiles({ platform, rcFile, env, homeDir });
+  const patterns = getShellPatterns(platform);
+  let removed = 0;
+
+  for (const targetFile of targetFiles) {
+    const content = readTextIfExists(targetFile);
+    if (!content) {
+      io.log(`No shell config found at ${targetFile}`);
+      continue;
+    }
+
+    const stripped = stripMatchingLines(stripManagedBlock(content, BEGIN_MARK, END_MARK), patterns).trimEnd();
+    writeText(targetFile, stripped ? `${stripped}\n` : '');
+    io.log(`Removed managed shell block from ${targetFile}`);
+    removed += 1;
   }
 
-  const patterns = platform === 'win32'
-    ? [/^\.\s+.*scripts\/contextdb-shell\.ps1\s*$/u, /^# ContextDB transparent CLI wrappers \(codex\/claude\/gemini, PowerShell\)$/u]
-    : [/^source ".*\/scripts\/contextdb-shell\.zsh"$/u, /^# ContextDB transparent CLI wrappers \(codex\/claude\/gemini\)$/u];
-  const stripped = stripMatchingLines(stripManagedBlock(content, BEGIN_MARK, END_MARK), patterns).trimEnd();
-  writeText(targetFile, stripped ? `${stripped}\n` : '');
-  io.log(`Removed managed shell block from ${targetFile}`);
-  return { status: 'removed', targetFile };
+  return { status: removed > 0 ? 'removed' : 'missing', targetFiles };
 }
 
 export async function doctorContextDbShell({
+  rootDir,
   platform = process.platform,
   rcFile,
   env = process.env,
+  homeDir = os.homedir(),
   io = console,
 } = {}) {
-  const targetFile = rcFile || (platform === 'win32' ? resolvePowerShellProfilePath(env, os.homedir()) : resolveShellRcFile(env, os.homedir()));
+  const targetFiles = resolveTargetFiles({ platform, rcFile, env, homeDir });
   let warnings = 0;
   let effectiveWarnings = 0;
 
@@ -114,15 +169,17 @@ export async function doctorContextDbShell({
 
   io.log('ContextDB Shell Doctor');
   io.log('----------------------');
-  io.log(`RC file: ${targetFile}`);
 
-  const content = readTextIfExists(targetFile);
-  if (!content) {
-    warn(`rc file not found: ${targetFile}`);
-  } else if (content.includes(BEGIN_MARK)) {
-    io.log(`[ok] contextdb managed block found in ${targetFile}`);
-  } else {
-    warn(`contextdb managed block not found in ${targetFile}`);
+  for (const targetFile of targetFiles) {
+    io.log(`RC file: ${targetFile}`);
+    const content = readTextIfExists(targetFile);
+    if (!content) {
+      warn(`rc file not found: ${targetFile}`);
+    } else if (content.includes(BEGIN_MARK)) {
+      io.log(`[ok] contextdb managed block found in ${targetFile}`);
+    } else {
+      warn(`contextdb managed block not found in ${targetFile}`);
+    }
   }
 
   io.log(`ROOTPATH: ${env.ROOTPATH || '<unset>'}`);
@@ -137,8 +194,19 @@ export async function doctorContextDbShell({
     }
   }
 
+  if (rootDir) {
+    const mcpDir = path.join(rootDir, 'mcp-server');
+    const tsxBin = platform === 'win32' ? 'tsx.cmd' : 'tsx';
+    const tsxPath = path.join(mcpDir, 'node_modules', '.bin', tsxBin);
+    if (fs.existsSync(tsxPath)) {
+      io.log(`[ok] ContextDB runtime ready: ${mcpDir}`);
+    } else {
+      warn(`ContextDB runtime missing at ${mcpDir}. Run shell setup again or: cd ${mcpDir}; npm install`);
+    }
+  }
+
   for (const command of ['codex', 'claude', 'gemini']) {
-    if (commandExists(command)) {
+    if (commandExists(command, { platform, env })) {
       io.log(`[ok] ${command} found in PATH`);
     } else {
       warn(`${command} not found in PATH`, { effective: false });

@@ -35,12 +35,13 @@ Four things it adds:
 ## Quick Start
 
 ```bash
-git clone https://github.com/rexleimo/rex-cli.git
-cd rex-cli
-scripts/setup-all.sh --components all --mode opt-in
+curl -fsSL https://github.com/rexleimo/rex-cli/releases/latest/download/aios-install.sh | bash
 source ~/.zshrc
-codex
+aios
 ```
+
+Launch `aios` to open the full-screen setup TUI, choose **Setup**, and run **Doctor** before you leave.
+Windows PowerShell commands are listed on the [Quick Start](getting-started.md) page.
 
 ## What's Included
 

@@ -15,7 +15,7 @@ This page combines macOS, Linux, and Windows setup into one flow. Use the OS tab
 
 - Node.js **20+** (recommended: **22 LTS**) and `npm`
 - At least one CLI installed: `codex`, `claude`, or `gemini`
-- A git repository where you want project-scoped ContextDB memory
+- A project/workspace directory where you want project-scoped ContextDB memory
 
 ## 0) Install (recommended)
 
@@ -64,6 +64,21 @@ This repo installs to `~/.rexcil/rex-cli`. The unified entry is `aios`:
 
 Download `rex-cli.tar.gz` (macOS/Linux) or `rex-cli.zip` (Windows) from Releases and extract to `~/.rexcil/`.
 Then run `scripts/aios.sh` / `scripts/aios.ps1`.
+
+### Recommended: finish setup in the TUI
+
+After install, use the TUI as the main onboarding path for this release:
+
+1. Run `aios`
+2. Select **Setup**
+3. Choose your component set:
+   - `all` for the full stack
+   - `shell,skills,superpowers` for shared memory + skills first
+   - `browser` for Browser MCP only
+4. When setup finishes, run **Doctor** in the same TUI
+5. Reload your shell if you installed shell wrappers:
+   - macOS / Linux: `source ~/.zshrc`
+   - Windows PowerShell: `. $PROFILE`
 
 ### 0.1 Privacy Guard Strict Read (enabled by default)
 

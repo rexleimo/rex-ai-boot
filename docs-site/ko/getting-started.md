@@ -11,7 +11,7 @@ description: macOS, Linux, Windows를 하나의 절차로 통합하고 OS 탭으
 
 - Node.js **20+** (권장: **22 LTS**) 및 `npm`
 - `codex` / `claude` / `gemini` 중 하나
-- 프로젝트 단위 ContextDB를 사용할 대상 git 저장소
+- 프로젝트 단위 ContextDB를 사용할 대상 워크스페이스/디렉터리
 
 ## 0) 설치 (권장)
 
@@ -60,6 +60,21 @@ description: macOS, Linux, Windows를 하나의 절차로 통합하고 OS 탭으
 
 Releases에서 `rex-cli.tar.gz`(macOS/Linux) 또는 `rex-cli.zip`(Windows)을 내려받아 `~/.rexcil/`에 압축 해제한 뒤,
 `scripts/aios.sh` / `scripts/aios.ps1`를 실행하세요.
+
+### 권장: TUI에서 설치를 끝내기
+
+설치 후에는 이번 릴리스의 핵심 경로인 TUI 흐름을 그대로 따라가세요:
+
+1. `aios` 실행
+2. **Setup** 선택
+3. 목적에 맞는 구성요소 선택
+   - `all`: 전체 설치
+   - `shell,skills,superpowers`: 공유 메모리 + skills 우선
+   - `browser`: Browser MCP만 설치
+4. 설치가 끝나면 같은 TUI에서 **Doctor** 실행
+5. shell wrapper를 설치했다면 다시 불러오기
+   - macOS / Linux: `source ~/.zshrc`
+   - Windows PowerShell: `. $PROFILE`
 
 구성요소 선택 예시:
 

@@ -33,6 +33,16 @@ irm https://github.com/rexleimo/rex-cli/releases/latest/download/aios-install.ps
 aios
 ```
 
+推荐的 TUI 安装路径（第一次运行最好这么做）：
+
+1. 运行 `aios`
+2. 在全屏菜单中选择 `Setup`
+3. 按目标选择组件组合：
+   - `all`：完整安装
+   - `shell,skills,superpowers`：先把记忆/技能链路装好
+   - `browser`：只安装 Browser MCP
+4. 安装完成后再跑一次 `Doctor`
+
 备选：git clone（适合开发/可控）：
 
 生命周期说明：
@@ -62,8 +72,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\aios.ps1
 
 - [`scripts/contextdb-shell.zsh`](scripts/contextdb-shell.zsh) 通过 shell function 接管 `codex()`、`claude()`、`gemini()`
 - 这些函数会委托给 [`scripts/contextdb-shell-bridge.mjs`](scripts/contextdb-shell-bridge.mjs)，由 bridge 统一判断包裹或透传
-- 当满足包裹条件时，bridge 会调用 [`scripts/ctx-agent.mjs`](scripts/ctx-agent.mjs)，并把当前 git 根目录作为 `--workspace`
-- 在非 git 目录，或管理子命令（如 `codex mcp`、`gemini hooks`）场景下，会直接透传到原命令
+- 当满足包裹条件时，bridge 会调用 [`scripts/ctx-agent.mjs`](scripts/ctx-agent.mjs)，优先把当前 git 根目录作为 `--workspace`，若无法识别 git 根目录则回退到当前目录
+- 在非 git 目录下，bridge 现在会回退到当前目录作为工作区；管理子命令（如 `codex mcp`、`gemini hooks`）仍会直接透传到原命令
 
 所以你仍然输入原命令，体验上不需要改操作习惯。
 
@@ -130,23 +140,28 @@ cd rex-cli
 - 文档站：`https://cli.rexai.top/case-library/`
 - 仓库文档：[`docs-site/case-library.md`](docs-site/case-library.md)
 
-### 1) 一条命令完成安装（推荐）
+### 1) 推荐在 TUI 里完成安装
 
 macOS / Linux：
 
 ```bash
-scripts/setup-all.sh --components all --mode opt-in
-source ~/.zshrc
+scripts/aios.sh
 ```
 
 Windows（PowerShell）：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\setup-all.ps1 -Components all -Mode opt-in
-. $PROFILE
+powershell -ExecutionPolicy Bypass -File .\scripts\aios.ps1
 ```
 
-这会在一次流程里安装 Browser MCP、shell 包装层、全局 skills（可选）和 superpowers。
+进入 TUI 后按下面走：
+
+1. 选择 `Setup`
+2. 选择 `all`、`shell,skills,superpowers` 或 `browser`
+3. 等安装跑完后，再执行一次 `Doctor`
+4. 如果装了 shell 包装层，记得重新加载终端配置
+
+这是本次迭代最清晰的首次安装路径。下面仍保留脚本命令，方便自动化或非交互场景。
 
 Shell 安装时会自动初始化 Privacy Guard，配置文件默认在 `~/.rexcil/privacy-guard.json`。
 现已默认启用严格策略：命中敏感配置文件时必须先脱敏读取：
@@ -162,7 +177,7 @@ aios privacy read --file <path>
 aios privacy ollama-on
 ```
 
-按需选择组件示例：
+如果你更需要直接脚本控制，可用下面这些非交互示例：
 
 ```bash
 # 只安装 shell 包装 + skills + superpowers

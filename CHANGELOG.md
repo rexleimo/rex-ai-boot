@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-03-08
+
+- fix wrapper fallback for non-git workspaces and sync docs
+
 ## [0.10.3] - 2026-03-08
 
 - fix(windows): support cmd-backed cli launch

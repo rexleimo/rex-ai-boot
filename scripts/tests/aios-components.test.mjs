@@ -40,19 +40,78 @@ async function makeFakeWindowsNodeInstall({ withNpxCli = true } = {}) {
   return { execPath, npmCli, npxCli };
 }
 
+async function makeFakeMcpServer(rootDir) {
+  const mcpDir = path.join(rootDir, 'mcp-server');
+  await mkdir(mcpDir, { recursive: true });
+  await writeFile(path.join(mcpDir, 'package.json'), '{"name":"fake-mcp"}\n', 'utf8');
+  return mcpDir;
+}
+
 test('shell install writes managed block and uninstall removes it', async () => {
   const rootDir = await makeTemp('aios-shell-root-');
   const rcFile = path.join(rootDir, '.zshrc');
   await writeFile(rcFile, '# existing\n', 'utf8');
+  await makeFakeMcpServer(rootDir);
 
-  await installContextDbShell({ rootDir, rcFile, mode: 'repo-only', platform: 'darwin' });
+  const calls = [];
+  const commandRunner = (command, args, options) => {
+    calls.push({ command, args, options });
+  };
+
+  await installContextDbShell({ rootDir, rcFile, mode: 'repo-only', platform: 'darwin', commandRunner });
   const installed = await readFile(rcFile, 'utf8');
   assert.match(installed, /# >>> contextdb-shell >>>/);
   assert.match(installed, /CTXDB_WRAP_MODE:-repo-only/);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, 'npm');
+  assert.deepEqual(calls[0].args, ['install']);
 
   await uninstallContextDbShell({ rcFile, platform: 'darwin' });
   const removed = await readFile(rcFile, 'utf8');
   assert.doesNotMatch(removed, /# >>> contextdb-shell >>>/);
+});
+
+test('windows shell install writes managed block to both PowerShell profiles', async () => {
+  const rootDir = await makeTemp('aios-shell-win-root-');
+  const homeDir = await makeTemp('aios-shell-win-home-');
+  await makeFakeMcpServer(rootDir);
+
+  const calls = [];
+  const commandRunner = (command, args, options) => {
+    calls.push({ command, args, options });
+  };
+
+  await installContextDbShell({ rootDir, platform: 'win32', homeDir, commandRunner });
+
+  const pwshProfile = path.join(homeDir, 'Documents', 'PowerShell', 'Microsoft.PowerShell_profile.ps1');
+  const winPsProfile = path.join(homeDir, 'Documents', 'WindowsPowerShell', 'Microsoft.PowerShell_profile.ps1');
+  const pwshContent = await readFile(pwshProfile, 'utf8');
+  const winPsContent = await readFile(winPsProfile, 'utf8');
+
+  assert.match(pwshContent, /# >>> contextdb-shell >>>/);
+  assert.match(winPsContent, /# >>> contextdb-shell >>>/);
+  assert.equal(calls.length, 1);
+
+  await uninstallContextDbShell({ platform: 'win32', homeDir });
+  assert.doesNotMatch(await readFile(pwshProfile, 'utf8'), /# >>> contextdb-shell >>>/);
+  assert.doesNotMatch(await readFile(winPsProfile, 'utf8'), /# >>> contextdb-shell >>>/);
+});
+
+test('shell install reuses existing ContextDB runtime without reinstall', async () => {
+  const rootDir = await makeTemp('aios-shell-runtime-root-');
+  const rcFile = path.join(rootDir, '.zshrc');
+  const mcpDir = await makeFakeMcpServer(rootDir);
+  const tsxPath = path.join(mcpDir, 'node_modules', '.bin', 'tsx');
+  await mkdir(path.dirname(tsxPath), { recursive: true });
+  await writeFile(tsxPath, '', 'utf8');
+
+  let called = false;
+  const commandRunner = () => {
+    called = true;
+  };
+
+  await installContextDbShell({ rootDir, rcFile, platform: 'darwin', commandRunner });
+  assert.equal(called, false);
 });
 
 test('skills install links repo-managed skills and uninstall removes them', async () => {

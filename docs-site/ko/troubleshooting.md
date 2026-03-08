@@ -44,7 +44,7 @@ powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
 
 ## 래퍼가 동작하지 않음
 
-- git 저장소 내부인지 확인
+- ContextDB를 켜려는 워크스페이스/디렉터리 안인지 확인 (non-git 디렉터리도 가능)
 - `~/.zshrc`에서 wrapper 로딩 확인
 - `CTXDB_WRAP_MODE` 및 `.contextdb-enable` 확인
 

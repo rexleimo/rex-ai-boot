@@ -38,20 +38,24 @@ export function resolveShellRcFile(env = process.env, homeDir = os.homedir()) {
   return path.join(zdotdir, '.zshrc');
 }
 
-export function resolvePowerShellProfilePath(env = process.env, homeDir = os.homedir()) {
+export function resolvePowerShellProfilePaths(env = process.env, homeDir = os.homedir()) {
   if (env.AIOS_POWERSHELL_PROFILE && path.isAbsolute(env.AIOS_POWERSHELL_PROFILE)) {
-    return env.AIOS_POWERSHELL_PROFILE;
+    return [env.AIOS_POWERSHELL_PROFILE];
   }
 
   const documentsDir = path.join(homeDir, 'Documents');
-  const pwshProfile = path.join(documentsDir, 'PowerShell', 'Microsoft.PowerShell_profile.ps1');
-  const winPsProfile = path.join(documentsDir, 'WindowsPowerShell', 'Microsoft.PowerShell_profile.ps1');
+  const candidates = [
+    path.join(documentsDir, 'PowerShell', 'Microsoft.PowerShell_profile.ps1'),
+    path.join(documentsDir, 'WindowsPowerShell', 'Microsoft.PowerShell_profile.ps1'),
+  ];
 
-  if (fs.existsSync(pwshProfile) || !fs.existsSync(winPsProfile)) {
-    return pwshProfile;
-  }
+  return [...new Set(candidates.map((candidate) => path.resolve(candidate)))];
+}
 
-  return winPsProfile;
+export function resolvePowerShellProfilePath(env = process.env, homeDir = os.homedir()) {
+  const profiles = resolvePowerShellProfilePaths(env, homeDir);
+  const existing = profiles.find((candidate) => fs.existsSync(candidate));
+  return existing || profiles[0];
 }
 
 export function getAgentsHome(env = process.env, homeDir = os.homedir()) {

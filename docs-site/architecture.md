@@ -8,7 +8,8 @@ description: Runtime architecture for wrappers, runner, and filesystem ContextDB
 ## Components
 
 - `scripts/contextdb-shell.zsh`: shell wrappers for `codex/claude/gemini`
-- `scripts/ctx-agent.sh`: unified runtime runner
+- `scripts/contextdb-shell-bridge.mjs`: wrap/passthrough decision bridge
+- `scripts/ctx-agent.mjs`: unified runtime runner
 - `mcp-server/src/contextdb/*`: ContextDB core and CLI commands
 
 ## Runtime Flow
@@ -16,14 +17,15 @@ description: Runtime architecture for wrappers, runner, and filesystem ContextDB
 ```text
 User command (codex/claude/gemini)
   -> zsh wrapper
-  -> ctx-agent.sh
+  -> contextdb-shell-bridge.mjs
+  -> ctx-agent.mjs
   -> contextdb CLI (init/session/pack/...)
   -> native CLI launch with packed context
 ```
 
 ## Storage Model
 
-Each git project has its own local store:
+Each wrapped workspace has its own local store (git root if available, otherwise current directory):
 
 ```text
 memory/context-db/
@@ -37,8 +39,8 @@ memory/context-db/
 
 Set wrapper scope with `CTXDB_WRAP_MODE`:
 
-- `all`: wrap in all git repos
-- `repo-only`: only wrap in `ROOTPATH` repo
+- `all`: wrap in all workspaces, including non-git directories
+- `repo-only`: only wrap in the `ROOTPATH` workspace
 - `opt-in`: wrap only when marker exists (default marker: `.contextdb-enable`)
 - `off`: disable wrapping
 

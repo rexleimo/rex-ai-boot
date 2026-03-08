@@ -33,12 +33,13 @@ RexCLI는 지금 쓰고 있는 CLI 에이전트 위에 얇은能力 레이어를
 ## 빠르게 시작
 
 ```bash
-git clone https://github.com/rexleimo/rex-cli.git
-cd rex-cli
-scripts/setup-all.sh --components all --mode opt-in
+curl -fsSL https://github.com/rexleimo/rex-cli/releases/latest/download/aios-install.sh | bash
 source ~/.zshrc
-codex
+aios
 ```
+
+먼저 `aios`를 실행해 전체 화면 TUI를 열고 **Setup**을 선택한 뒤, 마지막에 **Doctor**를 실행하세요.
+Windows PowerShell 절차는 [빠른 시작](getting-started.md)에 있습니다.
 
 ## 들어있는 거
 

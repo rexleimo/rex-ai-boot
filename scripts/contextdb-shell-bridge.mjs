@@ -108,8 +108,11 @@ function runGit(cwd, args) {
 
 function detectWorkspaceRoot(cwd) {
   const result = runGit(cwd, ['rev-parse', '--show-toplevel']);
-  if (result.status !== 0) return '';
-  return (result.stdout || '').trim();
+  if (result.status === 0) {
+    const workspace = (result.stdout || '').trim();
+    if (workspace) return workspace;
+  }
+  return path.resolve(cwd);
 }
 
 function normalizeForCompare(inputPath) {

@@ -131,4 +131,4 @@ Run `scripts/doctor-browser-mcp.sh` (or PowerShell variant) before reinstalling.
 
 ### Why is context not injected after I type `codex`?
 
-Usually because current directory is not a git root context, or wrapper scope (`CTXDB_WRAP_MODE`) excludes the repo.
+Usually because the wrapper is not loaded, wrapper scope (`CTXDB_WRAP_MODE`) excludes the current workspace, or the command is a passthrough management subcommand.

@@ -52,9 +52,9 @@ powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
 
 检查：
 
-- 当前目录是 git 项目
+- 当前目录是你希望启用 ContextDB 的工作区目录（可以是 git 项目，也可以是普通目录）
 - `~/.zshrc` 已 source `contextdb-shell.zsh`
-- `CTXDB_WRAP_MODE` 允许当前项目
+- `CTXDB_WRAP_MODE` 允许当前工作区
 - `opt-in` 模式下已创建 `.contextdb-enable`
 
 先跑包装诊断：
@@ -103,4 +103,4 @@ powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-skills.ps1
 
 ### 为什么输入 `codex` 没有注入上下文？
 
-通常是当前目录不在 git 项目内，或 `CTXDB_WRAP_MODE` 未覆盖当前项目。
+通常是 wrapper 未加载、`CTXDB_WRAP_MODE` 未覆盖当前工作区，或者当前命令属于透传的管理子命令。
