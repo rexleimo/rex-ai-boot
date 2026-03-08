@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-03-08
+
+- fix(windows): route contextdb npm calls through node cli
+
 ## [0.10.1] - 2026-03-08
 
 - fix(windows): resolve npm cli launch in node lifecycle

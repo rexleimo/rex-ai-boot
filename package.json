@@ -7,6 +7,6 @@
   },
   "scripts": {
     "aios": "node scripts/aios.mjs",
-    "test:scripts": "node --test scripts/tests/aios-cli.test.mjs scripts/tests/aios-components.test.mjs scripts/tests/aios-doctor.test.mjs scripts/tests/aios-lifecycle-plan.test.mjs scripts/tests/aios-tui-state.test.mjs scripts/tests/aios-wrappers.test.mjs"
+    "test:scripts": "node --test scripts/tests/aios-cli.test.mjs scripts/tests/ctx-agent-core.test.mjs scripts/tests/aios-components.test.mjs scripts/tests/aios-doctor.test.mjs scripts/tests/aios-lifecycle-plan.test.mjs scripts/tests/aios-tui-state.test.mjs scripts/tests/aios-wrappers.test.mjs"
   }
 }

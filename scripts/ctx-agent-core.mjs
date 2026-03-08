@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { getCommandSpawnSpec } from './lib/platform/process.mjs';
 import { promises as fs } from 'node:fs';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -34,7 +35,8 @@ Environment:
 }
 
 function runCommand(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+  const spec = getCommandSpawnSpec(command, args, options);
+  const result = spawnSync(spec.command, spec.args, {
     cwd: options.cwd,
     encoding: 'utf8',
     stdio: options.stdio ?? ['pipe', 'pipe', 'pipe'],
