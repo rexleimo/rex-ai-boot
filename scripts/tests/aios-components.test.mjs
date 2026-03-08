@@ -12,9 +12,32 @@ import {
   installContextDbSkills,
   uninstallContextDbSkills,
 } from '../lib/components/skills.mjs';
+import {
+  commandExists,
+  getCommandSpawnSpec,
+} from '../lib/platform/process.mjs';
 
 async function makeTemp(prefix) {
   return mkdtemp(path.join(os.tmpdir(), prefix));
+}
+
+async function makeFakeWindowsNodeInstall({ withNpxCli = true } = {}) {
+  const rootDir = await makeTemp('aios-node-install-');
+  const binDir = path.join(rootDir, 'bin');
+  const npmBinDir = path.join(rootDir, 'lib', 'node_modules', 'npm', 'bin');
+  const execPath = path.join(binDir, 'node.exe');
+  const npmCli = path.join(npmBinDir, 'npm-cli.js');
+  const npxCli = path.join(npmBinDir, 'npx-cli.js');
+
+  await mkdir(npmBinDir, { recursive: true });
+  await mkdir(binDir, { recursive: true });
+  await writeFile(execPath, '', 'utf8');
+  await writeFile(npmCli, '', 'utf8');
+  if (withNpxCli) {
+    await writeFile(npxCli, '', 'utf8');
+  }
+
+  return { execPath, npmCli, npxCli };
 }
 
 test('shell install writes managed block and uninstall removes it', async () => {
@@ -62,4 +85,22 @@ test('skills install links repo-managed skills and uninstall removes them', asyn
     missing = true;
   }
   assert.equal(missing, true);
+});
+
+test('windows npm resolves to the bundled npm cli script', async () => {
+  const { execPath, npmCli } = await makeFakeWindowsNodeInstall();
+  const spec = getCommandSpawnSpec('npm', ['install'], { platform: 'win32', execPath });
+
+  assert.equal(commandExists('npm', { platform: 'win32', execPath }), true);
+  assert.equal(spec.command, execPath);
+  assert.deepEqual(spec.args, [npmCli, 'install']);
+});
+
+test('windows npx falls back to npm exec when npx cli is absent', async () => {
+  const { execPath, npmCli } = await makeFakeWindowsNodeInstall({ withNpxCli: false });
+  const spec = getCommandSpawnSpec('npx', ['playwright', 'install', 'chromium'], { platform: 'win32', execPath });
+
+  assert.equal(commandExists('npx', { platform: 'win32', execPath }), true);
+  assert.equal(spec.command, execPath);
+  assert.deepEqual(spec.args, [npmCli, 'exec', '--', 'playwright', 'install', 'chromium']);
 });
