@@ -5,6 +5,7 @@ import {
   normalizeComponents,
   normalizeWrapMode,
 } from './options.mjs';
+import { installOrchestratorAgents } from '../components/agents.mjs';
 import { installBrowserMcp } from '../components/browser.mjs';
 import { doctorBrowserMcp } from '../components/browser.mjs';
 import { doctorContextDbShell, installContextDbShell, installPrivacyGuard } from '../components/shell.mjs';
@@ -63,6 +64,10 @@ export async function runSetup(rawOptions = {}, { rootDir, io = console } = {}) 
     if (!options.skipDoctor) {
       await doctorContextDbSkills({ rootDir, client: options.client, io });
     }
+  }
+
+  if (hasComponent(options.components, 'agents')) {
+    await installOrchestratorAgents({ rootDir, client: options.client, io });
   }
 
   if (hasComponent(options.components, 'superpowers')) {

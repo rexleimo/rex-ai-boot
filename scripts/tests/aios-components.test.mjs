@@ -14,6 +14,10 @@ import {
   uninstallContextDbSkills,
 } from '../lib/components/skills.mjs';
 import {
+  installOrchestratorAgents,
+  uninstallOrchestratorAgents,
+} from '../lib/components/agents.mjs';
+import {
   commandExists,
   getCommandSpawnSpec,
 } from '../lib/platform/process.mjs';
@@ -200,4 +204,35 @@ test('skills doctor warns on non-discoverable repo skill roots', async () => {
   assert.equal(result.warnings >= 1, true);
   assert.equal(logs.some((line) => line.includes('non-discoverable skill root .baoyu-skills')), true);
   assert.equal(logs.some((line) => line.includes('.baoyu-skills/wrong-skill/SKILL.md')), true);
+});
+
+test('agents install writes generated catalogs and uninstall removes managed files only', async () => {
+  const rootDir = await makeTemp('aios-agents-root-');
+  const claudeDir = path.join(rootDir, '.claude', 'agents');
+  const codexDir = path.join(rootDir, '.codex', 'agents');
+  await mkdir(claudeDir, { recursive: true });
+  await mkdir(codexDir, { recursive: true });
+
+  // A manual file (no marker) must never be overwritten or removed.
+  await writeFile(path.join(claudeDir, 'rex-planner.md'), 'manual\n', 'utf8');
+
+  const logs = [];
+  const io = { log: (line) => logs.push(String(line)) };
+
+  await installOrchestratorAgents({ rootDir, client: 'all', io });
+  assert.equal(await readFile(path.join(claudeDir, 'rex-planner.md'), 'utf8'), 'manual\n');
+
+  const generated = await readFile(path.join(codexDir, 'rex-planner.md'), 'utf8');
+  assert.match(generated, /AIOS-GENERATED/);
+
+  await uninstallOrchestratorAgents({ rootDir, client: 'all', io });
+  assert.equal(await readFile(path.join(claudeDir, 'rex-planner.md'), 'utf8'), 'manual\n');
+
+  let missing = false;
+  try {
+    await readFile(path.join(codexDir, 'rex-planner.md'), 'utf8');
+  } catch {
+    missing = true;
+  }
+  assert.equal(missing, true);
 });

@@ -61,7 +61,7 @@ Full-screen menu interaction:
 
 Wraps `scripts/setup-all.sh|ps1` and reuses its default values:
 
-- components: `browser,shell,skills,superpowers` (checkboxes)
+- components: `browser,shell,skills,agents,superpowers` (checkboxes)
 - mode: `opt-in` (cycle: `all|repo-only|opt-in|off`)
 - client: `all` (cycle: `all|codex|claude|gemini|opencode`)
 - skip-playwright-install: `false` (toggle)
@@ -71,7 +71,7 @@ Wraps `scripts/setup-all.sh|ps1` and reuses its default values:
 
 Wraps `scripts/update-all.sh|ps1` and reuses its default values:
 
-- components: `browser,shell,skills,superpowers` (checkboxes)
+- components: `browser,shell,skills,agents,superpowers` (checkboxes)
 - mode: `opt-in`
 - client: `all`
 - with-playwright-install: `false` (toggle)
@@ -115,4 +115,3 @@ Add a short README note (EN + ZH) pointing to:
 
 - `scripts/aios.sh`
 - `scripts/aios.ps1`
-

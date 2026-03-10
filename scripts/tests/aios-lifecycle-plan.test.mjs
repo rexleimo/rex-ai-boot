@@ -8,10 +8,10 @@ import { planUninstall } from '../lib/lifecycle/uninstall.mjs';
 test('planSetup uses the current lifecycle defaults', () => {
   const plan = planSetup();
   assert.equal(plan.command, 'setup');
-  assert.deepEqual(plan.options.components, ['browser', 'shell', 'skills', 'superpowers']);
+  assert.deepEqual(plan.options.components, ['browser', 'shell', 'skills', 'agents', 'superpowers']);
   assert.equal(plan.options.wrapMode, 'opt-in');
   assert.equal(plan.options.client, 'all');
-  assert.match(plan.preview, /setup --components browser,shell,skills,superpowers/);
+  assert.match(plan.preview, /setup --components browser,shell,skills,agents,superpowers/);
 });
 
 test('planUninstall defaults to shell and skills only', () => {

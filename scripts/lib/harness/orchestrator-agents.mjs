@@ -220,12 +220,15 @@ function syncOneTarget({ rootDir, targetRel, spec, io }) {
   };
 }
 
-export async function syncGeneratedAgents({ rootDir, spec = agentSpec, io = console } = {}) {
-  const targets = ['.claude/agents', '.codex/agents'];
-  const results = targets.map((targetRel) => syncOneTarget({ rootDir, targetRel, spec, io }));
+export async function syncGeneratedAgents({ rootDir, spec = agentSpec, io = console, targets = null } = {}) {
+  const fallbackTargets = ['.claude/agents', '.codex/agents'];
+  const selectedTargets = Array.isArray(targets) && targets.length > 0
+    ? [...new Set(targets.map((value) => String(value || '').trim()).filter(Boolean))]
+    : fallbackTargets;
+  const results = selectedTargets.map((targetRel) => syncOneTarget({ rootDir, targetRel, spec, io }));
   return {
     ok: true,
-    targets,
+    targets: selectedTargets,
     results,
   };
 }

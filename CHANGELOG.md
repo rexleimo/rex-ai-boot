@@ -6,6 +6,8 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+- feat(aios): wire orchestrator agents into lifecycle components
+
 ## [0.16.0] - 2026-03-10
 
 - feat(aios): add orchestrator agent catalog and generators

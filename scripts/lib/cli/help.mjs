@@ -33,7 +33,7 @@ export function getCommandHelpText(command) {
   node scripts/aios.mjs setup [options]
 
 Options:
-  --components <list>            Comma list: browser,shell,skills,superpowers (default: browser,shell,skills,superpowers)
+  --components <list>            Comma list: browser,shell,skills,agents,superpowers (default: browser,shell,skills,agents,superpowers)
   --mode <all|repo-only|opt-in|off>
   --client <all|codex|claude|gemini|opencode>
   --skip-playwright-install
@@ -45,7 +45,7 @@ Options:
   node scripts/aios.mjs update [options]
 
 Options:
-  --components <list>            Comma list: browser,shell,skills,superpowers (default: browser,shell,skills,superpowers)
+  --components <list>            Comma list: browser,shell,skills,agents,superpowers (default: browser,shell,skills,agents,superpowers)
   --mode <all|repo-only|opt-in|off>
   --client <all|codex|claude|gemini|opencode>
   --with-playwright-install
@@ -57,7 +57,7 @@ Options:
   node scripts/aios.mjs uninstall [options]
 
 Options:
-  --components <list>            Comma list: shell,skills,browser,superpowers (default: shell,skills)
+  --components <list>            Comma list: shell,skills,agents,browser,superpowers (default: shell,skills)
   --client <all|codex|claude|gemini|opencode>
   -h, --help
 `;

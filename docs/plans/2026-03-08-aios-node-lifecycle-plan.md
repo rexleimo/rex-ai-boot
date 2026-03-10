@@ -142,7 +142,7 @@ Expected:
 **Step 1: Write failing tests for execution-plan generation**
 
 Cover:
-- default setup selects `browser,shell,skills,superpowers`
+- default setup selects `browser,shell,skills,agents,superpowers`
 - uninstall defaults match current behavior
 - doctor strict/global-security flags map correctly
 - preview command strings are stable across TUI and CLI flows

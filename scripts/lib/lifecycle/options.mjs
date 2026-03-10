@@ -1,6 +1,6 @@
 import { HARNESS_PROFILE_NAMES, normalizeHarnessProfile } from '../harness/profile.mjs';
 
-export const COMPONENT_NAMES = ['browser', 'shell', 'skills', 'superpowers'];
+export const COMPONENT_NAMES = ['browser', 'shell', 'skills', 'agents', 'superpowers'];
 export const WRAP_MODES = ['all', 'repo-only', 'opt-in', 'off'];
 export const CLIENT_NAMES = ['all', 'codex', 'claude', 'gemini', 'opencode'];
 export const QUALITY_GATE_MODES = ['quick', 'full', 'pre-pr'];

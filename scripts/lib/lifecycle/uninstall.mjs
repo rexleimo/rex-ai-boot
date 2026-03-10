@@ -4,6 +4,7 @@ import {
   normalizeClient,
   normalizeComponents,
 } from './options.mjs';
+import { uninstallOrchestratorAgents } from '../components/agents.mjs';
 import { uninstallContextDbShell } from '../components/shell.mjs';
 import { uninstallContextDbSkills } from '../components/skills.mjs';
 
@@ -39,6 +40,10 @@ export async function runUninstall(rawOptions = {}, { io = console, rootDir } = 
 
   if (hasComponent(options.components, 'skills')) {
     await uninstallContextDbSkills({ rootDir, client: options.client, io });
+  }
+
+  if (hasComponent(options.components, 'agents')) {
+    await uninstallOrchestratorAgents({ rootDir, client: options.client, io });
   }
 
   if (hasComponent(options.components, 'browser')) {
