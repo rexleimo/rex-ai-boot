@@ -65,6 +65,10 @@ When `orchestrate` is called with `--dispatch local --execute dry-run`:
 
 This gives AIOS a concrete execution contract before any real subagent runtime is attached.
 
+## Runtime Adapter Boundary
+
+Dry-run execution now flows through a plan-level runtime adapter boundary before reaching local job executors. The current runtime catalog contains exactly one runtime, `local-dry-run`, which wraps the local executor path without exposing client- or provider-specific details inside `dispatchPlan`. This keeps the DAG runtime-agnostic while making future runtime integration additive.
+
 ## Dispatch Preflight Integration
 
 When `orchestrate` is called with `--preflight auto`, AIOS may execute supported local runbooks before final DAG selection. The current slice can preflight `quality-gate`, `doctor`, and `orchestrate --dispatch local --execute dry-run` actions. Blueprint-planning `orchestrate` commands remain hints only and are recorded as skipped. Nested dry-run replays force `preflight=none` so the preflight stage does not recurse into itself.

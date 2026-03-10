@@ -163,6 +163,19 @@ function normalizeDispatchPlan(rawPlan) {
   };
 }
 
+function normalizeDispatchRuntime(rawRuntime) {
+  if (!rawRuntime || typeof rawRuntime !== 'object') {
+    return null;
+  }
+
+  return {
+    id: String(rawRuntime.id || '').trim(),
+    label: String(rawRuntime.label || '').trim(),
+    requiresModel: rawRuntime.requiresModel === true,
+    executionMode: rawRuntime.executionMode ? String(rawRuntime.executionMode) : null,
+  };
+}
+
 function normalizeDispatchRun(rawRun) {
   if (!rawRun || typeof rawRun !== 'object') {
     return null;
@@ -170,6 +183,7 @@ function normalizeDispatchRun(rawRun) {
 
   return {
     ...rawRun,
+    runtime: normalizeDispatchRuntime(rawRun.runtime),
     executorRegistry: Array.isArray(rawRun.executorRegistry) ? [...rawRun.executorRegistry] : [],
     executorDetails: Array.isArray(rawRun.executorDetails)
       ? rawRun.executorDetails.map((item) => ({
@@ -561,6 +575,15 @@ function executeMergeGateJob(plan, job, dependencyRuns = []) {
   };
 }
 
+function createLocalDryRunRuntimeInfo() {
+  return {
+    id: 'local-dry-run',
+    label: 'Local Dry Run Runtime',
+    requiresModel: false,
+    executionMode: 'dry-run',
+  };
+}
+
 export function executeLocalDispatchPlan(input = {}, rawDispatchPlan = null) {
   const plan = Array.isArray(input.phases) ? input : buildOrchestrationPlan(input);
   const dispatchPlan = normalizeDispatchPlan(rawDispatchPlan || plan.dispatchPlan || buildLocalDispatchPlan(plan));
@@ -607,6 +630,7 @@ export function executeLocalDispatchPlan(input = {}, rawDispatchPlan = null) {
 
   return {
     mode: 'dry-run',
+    runtime: createLocalDryRunRuntimeInfo(),
     ok: jobRuns.every((jobRun) => jobRun.status !== 'blocked'),
     executorRegistry: executorDetails.map((executor) => executor.id),
     executorDetails,
@@ -917,6 +941,10 @@ function formatDispatchRun(dispatchRun) {
     'Local Dispatch Run:',
     `- mode=${dispatchRun.mode} ok=${dispatchRun.ok ? 'true' : 'false'} jobs=${dispatchRun.jobRuns.length}`,
   ];
+
+  if (dispatchRun.runtime?.id) {
+    lines.push(`- runtime=${dispatchRun.runtime.id} executionMode=${dispatchRun.runtime.executionMode || dispatchRun.mode}`);
+  }
 
   if (Array.isArray(dispatchRun.executorRegistry) && dispatchRun.executorRegistry.length > 0) {
     lines.push(`- executors=${dispatchRun.executorRegistry.join(', ')}`);

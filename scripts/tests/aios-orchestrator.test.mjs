@@ -21,6 +21,14 @@ import {
 } from '../lib/harness/orchestrator.mjs';
 import { planOrchestrate, runOrchestrate } from '../lib/lifecycle/orchestrate.mjs';
 
+async function importDispatchRuntimes() {
+  try {
+    return await import('../lib/harness/orchestrator-runtimes.mjs');
+  } catch {
+    return null;
+  }
+}
+
 async function makeRootDir() {
   return await fs.mkdtemp(path.join(os.tmpdir(), 'aios-orchestrator-'));
 }
@@ -192,6 +200,73 @@ test('selectLocalDispatchExecutor resolves supported local job types', () => {
   assert.equal(selectLocalDispatchExecutor({ jobType: 'merge-gate' }), 'local-merge-gate');
 });
 
+test('dispatch runtime registry lists the local dry-run runtime', async () => {
+  const runtimes = await importDispatchRuntimes();
+  assert.ok(runtimes, 'expected runtime registry module');
+
+  const all = runtimes.listDispatchRuntimes();
+  const runtime = runtimes.getDispatchRuntime('local-dry-run');
+
+  assert.equal(all.some((item) => item.id === 'local-dry-run'), true);
+  assert.equal(runtime.id, 'local-dry-run');
+  assert.equal(runtime.requiresModel, false);
+  assert.deepEqual(runtime.executionModes, ['dry-run']);
+});
+
+test('dispatch runtime registry selects local dry-run for dry-run execution', async () => {
+  const runtimes = await importDispatchRuntimes();
+  assert.ok(runtimes, 'expected runtime registry module');
+
+  assert.equal(runtimes.selectDispatchRuntime({ executionMode: 'dry-run' }), 'local-dry-run');
+});
+
+test('dispatch runtime registry rejects unknown runtime ids and unsupported modes', async () => {
+  const runtimes = await importDispatchRuntimes();
+  assert.ok(runtimes, 'expected runtime registry module');
+
+  assert.throws(() => runtimes.getDispatchRuntime('missing-runtime'), /Unknown dispatch runtime/i);
+  assert.throws(() => runtimes.selectDispatchRuntime({ executionMode: 'none' }), /No dispatch runtime available/i);
+});
+
+test('dispatch runtime registry keeps blocked workflow results as structured runtime output', async () => {
+  const runtimes = await importDispatchRuntimes();
+  assert.ok(runtimes, 'expected runtime registry module');
+
+  const registry = runtimes.createDispatchRuntimeRegistry({
+    executeDryRunPlan: () => ({
+      mode: 'dry-run',
+      ok: false,
+      executorRegistry: [],
+      executorDetails: [],
+      jobRuns: [
+        { jobId: 'merge.final-checks', status: 'blocked', output: { outputType: 'merged-handoff' } },
+      ],
+      finalOutputs: [],
+    }),
+  });
+  const runtime = runtimes.resolveDispatchRuntime({ executionMode: 'dry-run' }, registry);
+  const result = runtime.execute({ plan: { phases: [] }, dispatchPlan: { jobs: [] }, dispatchPolicy: null });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.runtime.id, 'local-dry-run');
+  assert.equal(result.jobRuns[0].status, 'blocked');
+});
+
+test('dispatch runtime registry rejects invalid runtime output', async () => {
+  const runtimes = await importDispatchRuntimes();
+  assert.ok(runtimes, 'expected runtime registry module');
+
+  const registry = runtimes.createDispatchRuntimeRegistry({
+    executeDryRunPlan: () => ({ mode: 'dry-run', ok: true, jobRuns: null }),
+  });
+  const runtime = runtimes.resolveDispatchRuntime({ executionMode: 'dry-run' }, registry);
+
+  assert.throws(
+    () => runtime.execute({ plan: { phases: [] }, dispatchPlan: { jobs: [] }, dispatchPolicy: null }),
+    /invalid jobRuns/i
+  );
+});
+
 test('createLocalDispatchExecutorRegistry exposes executor metadata and resolution', () => {
   const registry = createLocalDispatchExecutorRegistry({
     executePhaseJob: () => ({ status: 'simulated', output: { outputType: 'handoff', payload: {} } }),
@@ -291,6 +366,8 @@ test('executeLocalDispatchPlan simulates phase jobs and merge-gate outputs', () 
   const run = executeLocalDispatchPlan(orchestration, dispatch);
 
   assert.equal(run.mode, 'dry-run');
+  assert.equal(run.runtime?.id, 'local-dry-run');
+  assert.equal(run.runtime?.executionMode, 'dry-run');
   assert.equal(run.ok, true);
   assert.equal(run.jobRuns.length, 5);
   assert.equal(run.jobRuns.every((jobRun) => jobRun.status === 'simulated'), true);
@@ -498,6 +575,33 @@ test('runOrchestrate adds a local dispatch skeleton without invoking models', as
   assert.deepEqual(report.dispatchPlan.executorRegistry, ['local-phase']);
 });
 
+test('runOrchestrate throws when the selected dispatch runtime returns invalid output', async () => {
+  const rootDir = await makeRootDir();
+  const logs = [];
+
+  await assert.rejects(
+    () => runOrchestrate(
+      { blueprint: 'feature', taskTitle: 'Invalid runtime output', dispatchMode: 'local', executionMode: 'dry-run', format: 'json' },
+      {
+        rootDir,
+        io: { log: (line) => logs.push(line) },
+        dispatchRuntimeRegistry: {
+          'local-dry-run': {
+            id: 'local-dry-run',
+            label: 'Local Dry Run Runtime',
+            requiresModel: false,
+            executionModes: ['dry-run'],
+            execute() {
+              return { mode: 'dry-run', ok: true, jobRuns: null };
+            },
+          },
+        },
+      }
+    ),
+    /jobRuns/
+  );
+});
+
 test('runOrchestrate adds a dry-run dispatch run without invoking models', async () => {
   const rootDir = await makeRootDir();
   await writeSession(
@@ -555,6 +659,8 @@ test('runOrchestrate adds a dry-run dispatch run without invoking models', async
   const report = JSON.parse(logs.join('\n'));
 
   assert.equal(report.dispatchRun.mode, 'dry-run');
+  assert.equal(report.dispatchRun.runtime?.id, 'local-dry-run');
+  assert.equal(report.dispatchRun.runtime?.executionMode, 'dry-run');
   assert.equal(report.dispatchRun.ok, true);
   assert.equal(report.dispatchRun.jobRuns.every((jobRun) => jobRun.status === 'simulated'), true);
   assert.equal(report.dispatchRun.jobRuns.every((jobRun) => typeof jobRun.output.outputType === 'string'), true);
@@ -627,6 +733,7 @@ test('runOrchestrate persists dry-run evidence into ContextDB JSONL and SQLite s
   const artifactPath = path.join(rootDir, report.dispatchEvidence.artifactPath);
   const artifact = JSON.parse(await fs.readFile(artifactPath, 'utf8'));
   assert.equal(artifact.dispatchRun.mode, 'dry-run');
+  assert.equal(artifact.dispatchRun.runtime?.id, 'local-dry-run');
   assert.equal(artifact.dispatchRun.executorRegistry.includes('local-phase'), true);
 
   const eventsRaw = await fs.readFile(path.join(rootDir, 'memory', 'context-db', 'sessions', 'security-stable', 'l2-events.jsonl'), 'utf8');

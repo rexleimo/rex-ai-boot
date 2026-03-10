@@ -3,11 +3,15 @@ import {
   buildEffectiveDispatchPolicy,
   buildLocalDispatchPlan,
   buildOrchestrationPlan,
-  executeLocalDispatchPlan,
   normalizeOrchestratorBlueprint,
   normalizeOrchestratorFormat,
   renderOrchestrationReport,
 } from '../harness/orchestrator.mjs';
+import {
+  createDispatchRuntimeRegistry,
+  normalizeDispatchRuntimeResult,
+  resolveDispatchRuntime,
+} from '../harness/orchestrator-runtimes.mjs';
 import { persistDispatchEvidence } from '../harness/orchestrator-evidence.mjs';
 import { buildLearnEvalReport } from '../harness/learn-eval.mjs';
 import { parseArgs } from '../cli/parse-args.mjs';
@@ -338,7 +342,13 @@ export function planOrchestrate(rawOptions = {}) {
 
 export async function runOrchestrate(
   rawOptions = {},
-  { rootDir, io = console, env = process.env, preflightAdapters = DEFAULT_PREFLIGHT_ADAPTERS } = {}
+  {
+    rootDir,
+    io = console,
+    env = process.env,
+    preflightAdapters = DEFAULT_PREFLIGHT_ADAPTERS,
+    dispatchRuntimeRegistry = createDispatchRuntimeRegistry(),
+  } = {}
 ) {
   const { options } = planOrchestrate(rawOptions);
 
@@ -419,8 +429,21 @@ export async function runOrchestrate(
     ? buildLocalDispatchPlan(dagPlan)
     : null;
   const dispatchRunStartedAt = Date.now();
-  const dispatchRun = options.executionMode === 'dry-run'
-    ? executeLocalDispatchPlan(dagPlan, dispatchPlan)
+  const dispatchRuntime = options.executionMode !== 'none'
+    ? resolveDispatchRuntime({ executionMode: options.executionMode }, dispatchRuntimeRegistry)
+    : null;
+  const dispatchRun = dispatchRuntime
+    ? normalizeDispatchRuntimeResult(
+      dispatchRuntime.execute({
+        plan: dagPlan,
+        dispatchPlan,
+        dispatchPolicy: effectiveDispatchPolicy,
+        io,
+        env,
+      }),
+      dispatchRuntime,
+      options.executionMode
+    )
     : null;
 
   const postDispatchPolicy = buildDispatchPolicy({
