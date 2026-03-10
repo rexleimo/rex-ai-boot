@@ -7,80 +7,146 @@ import {
   listLocalDispatchExecutors,
   resolveLocalDispatchExecutor,
 } from './orchestrator-executors.mjs';
+import blueprintSpec from '../../../memory/specs/orchestrator-blueprints.json' with { type: 'json' };
 
 export const ORCHESTRATOR_ROLE_IDS = ['planner', 'implementer', 'reviewer', 'security-reviewer'];
 export const ORCHESTRATOR_BLUEPRINT_NAMES = ['feature', 'bugfix', 'refactor', 'security'];
 export const ORCHESTRATOR_FORMATS = ['text', 'json'];
 export { LOCAL_PHASE_EXECUTOR, LOCAL_MERGE_GATE_EXECUTOR } from './orchestrator-executors.mjs';
-export const MERGE_GATE_BLOCK_STATUSES = ['blocked', 'needs-input'];
-export const MERGE_GATE_CONFLICT_RULE = 'overlapping file ownership blocks parallel merge';
+export const MERGE_GATE_BLOCK_STATUSES = normalizeMergeGateBlockStatuses(blueprintSpec?.mergeGate?.blockStatuses);
+export const MERGE_GATE_CONFLICT_RULE = normalizeText(blueprintSpec?.mergeGate?.conflictRule)
+  || 'overlapping file ownership blocks parallel merge';
 
-export const ROLE_CARDS = {
-  planner: {
-    id: 'planner',
-    label: 'Planner',
-    responsibility: 'Clarify scope, risks, dependencies, and execution order before code changes.',
-    ownership: 'Plans, scope boundaries, and work breakdown.',
-  },
-  implementer: {
-    id: 'implementer',
-    label: 'Implementer',
-    responsibility: 'Own code changes inside the agreed file scope and report concrete results.',
-    ownership: 'Production code, tests, and local verification for owned files.',
-  },
-  reviewer: {
-    id: 'reviewer',
-    label: 'Reviewer',
-    responsibility: 'Review correctness, regressions, maintainability, and test coverage.',
-    ownership: 'Findings only; does not own source edits in the orchestration contract.',
-  },
-  'security-reviewer': {
-    id: 'security-reviewer',
-    label: 'Security Reviewer',
-    responsibility: 'Review auth, data handling, secrets, injection risks, and unsafe automation.',
-    ownership: 'Security findings only; does not own source edits in the orchestration contract.',
-  },
-};
+function normalizeText(value) {
+  return String(value ?? '').trim();
+}
+
+function normalizeMergeGateBlockStatuses(raw) {
+  const fallback = ['blocked', 'needs-input'];
+  if (!Array.isArray(raw)) {
+    return fallback;
+  }
+  const values = raw.map((item) => normalizeText(item)).filter(Boolean);
+  return values.length > 0 ? values : fallback;
+}
+
+function titleCase(value = '') {
+  return String(value)
+    .split(/[\s_-]+/)
+    .map((part) => part ? part[0].toUpperCase() + part.slice(1) : '')
+    .filter(Boolean)
+    .join(' ');
+}
+
+function normalizeRoleLabel(roleId) {
+  return titleCase(String(roleId || '').trim());
+}
+
+function normalizeRoleCards(rawRoles = {}) {
+  if (!rawRoles || typeof rawRoles !== 'object') {
+    throw new Error('Invalid orchestrator-blueprints spec: roles missing');
+  }
+
+  const roleCards = {};
+  for (const roleId of ORCHESTRATOR_ROLE_IDS) {
+    const entry = rawRoles[roleId];
+    const responsibility = normalizeText(entry?.responsibility);
+    const ownership = normalizeText(entry?.ownership);
+    if (!responsibility) {
+      throw new Error(`Invalid orchestrator-blueprints spec: roles.${roleId}.responsibility missing`);
+    }
+    if (!ownership) {
+      throw new Error(`Invalid orchestrator-blueprints spec: roles.${roleId}.ownership missing`);
+    }
+
+    roleCards[roleId] = {
+      id: roleId,
+      label: normalizeRoleLabel(roleId),
+      responsibility,
+      ownership,
+    };
+  }
+
+  return roleCards;
+}
+
+function normalizePhaseMode(rawMode) {
+  const value = normalizeText(rawMode).toLowerCase();
+  return value === 'parallel' ? 'parallel' : 'sequential';
+}
+
+function normalizeBlueprintPhase(rawPhase, index, blueprintName) {
+  if (!rawPhase || typeof rawPhase !== 'object') {
+    throw new Error(`Invalid orchestrator-blueprints spec: blueprints.${blueprintName}.phases[${index}] missing`);
+  }
+
+  const id = normalizeText(rawPhase.id) || `phase-${index + 1}`;
+  const role = normalizeText(rawPhase.role);
+  const mode = normalizePhaseMode(rawPhase.mode);
+  const group = normalizeText(rawPhase.group);
+
+  if (!role) {
+    throw new Error(`Invalid orchestrator-blueprints spec: blueprints.${blueprintName}.phases[${index}].role missing`);
+  }
+  if (!ORCHESTRATOR_ROLE_IDS.includes(role)) {
+    throw new Error(`Invalid orchestrator-blueprints spec: blueprints.${blueprintName}.phases[${index}].role unknown (${role})`);
+  }
+  if (mode === 'parallel' && !group) {
+    throw new Error(`Invalid orchestrator-blueprints spec: blueprints.${blueprintName}.phases[${index}].group required for parallel phases`);
+  }
+
+  return {
+    id,
+    role,
+    mode,
+    ...(group ? { group } : {}),
+  };
+}
+
+function normalizeOrchestratorBlueprints(rawBlueprints = {}) {
+  if (!rawBlueprints || typeof rawBlueprints !== 'object') {
+    throw new Error('Invalid orchestrator-blueprints spec: blueprints missing');
+  }
+
+  const blueprints = {};
+  for (const blueprintName of ORCHESTRATOR_BLUEPRINT_NAMES) {
+    const rawBlueprint = rawBlueprints[blueprintName];
+    if (!rawBlueprint || typeof rawBlueprint !== 'object') {
+      throw new Error(`Invalid orchestrator-blueprints spec: blueprints.${blueprintName} missing`);
+    }
+
+    const description = normalizeText(rawBlueprint.description);
+    const phasesRaw = Array.isArray(rawBlueprint.phases) ? rawBlueprint.phases : null;
+    if (!description) {
+      throw new Error(`Invalid orchestrator-blueprints spec: blueprints.${blueprintName}.description missing`);
+    }
+    if (!phasesRaw || phasesRaw.length === 0) {
+      throw new Error(`Invalid orchestrator-blueprints spec: blueprints.${blueprintName}.phases missing`);
+    }
+
+    const phases = phasesRaw.map((phase, index) => normalizeBlueprintPhase(phase, index, blueprintName));
+    const ids = new Set();
+    for (const phase of phases) {
+      if (ids.has(phase.id)) {
+        throw new Error(`Invalid orchestrator-blueprints spec: blueprints.${blueprintName} has duplicate phase id (${phase.id})`);
+      }
+      ids.add(phase.id);
+    }
+
+    blueprints[blueprintName] = {
+      name: blueprintName,
+      description,
+      phases,
+    };
+  }
+
+  return blueprints;
+}
+
+export const ROLE_CARDS = normalizeRoleCards(blueprintSpec?.roles);
 
 export const ORCHESTRATOR_BLUEPRINTS = {
-  feature: {
-    name: 'feature',
-    description: 'Plan implementation first, then execute, then review quality and security in parallel.',
-    phases: [
-      { id: 'plan', role: 'planner', mode: 'sequential' },
-      { id: 'implement', role: 'implementer', mode: 'sequential' },
-      { id: 'review', role: 'reviewer', mode: 'parallel', group: 'final-checks' },
-      { id: 'security', role: 'security-reviewer', mode: 'parallel', group: 'final-checks' },
-    ],
-  },
-  bugfix: {
-    name: 'bugfix',
-    description: 'Reproduce and scope the bug first, implement the fix, then review correctness.',
-    phases: [
-      { id: 'plan', role: 'planner', mode: 'sequential' },
-      { id: 'implement', role: 'implementer', mode: 'sequential' },
-      { id: 'review', role: 'reviewer', mode: 'parallel', group: 'final-checks' },
-    ],
-  },
-  refactor: {
-    name: 'refactor',
-    description: 'Plan safe refactor boundaries, implement small changes, then review design and regressions.',
-    phases: [
-      { id: 'plan', role: 'planner', mode: 'sequential' },
-      { id: 'implement', role: 'implementer', mode: 'sequential' },
-      { id: 'review', role: 'reviewer', mode: 'parallel', group: 'final-checks' },
-    ],
-  },
-  security: {
-    name: 'security',
-    description: 'Lead with security review, scope required changes, then implement and re-review.',
-    phases: [
-      { id: 'security-assessment', role: 'security-reviewer', mode: 'sequential' },
-      { id: 'plan', role: 'planner', mode: 'sequential' },
-      { id: 'implement', role: 'implementer', mode: 'sequential' },
-      { id: 'review', role: 'reviewer', mode: 'parallel', group: 'final-checks' },
-    ],
-  },
+  ...normalizeOrchestratorBlueprints(blueprintSpec?.blueprints),
 };
 
 export function normalizeOrchestratorBlueprint(raw = 'feature') {

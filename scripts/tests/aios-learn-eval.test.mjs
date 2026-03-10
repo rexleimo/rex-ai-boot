@@ -799,3 +799,64 @@ test('buildLearnEvalReport routes quality log failures to a concrete gate target
   });
   assert.equal(report.recommendations.fix.some((item) => item.targetId === 'gate.blocked-triage'), false);
 });
+
+test('buildLearnEvalReport routes ContextDB quality regressions to a concrete gate target', async () => {
+  const rootDir = await makeRootDir();
+  await writeSession(
+    rootDir,
+    'quality-contextdb-fix',
+    { updatedAt: '2026-03-09T06:30:00.000Z' },
+    [
+      {
+        seq: 1,
+        ts: '2026-03-09T06:00:00.000Z',
+        status: 'blocked',
+        summary: 'Context pack regression',
+        nextActions: ['Repair ContextDB pack'],
+        artifacts: [],
+        telemetry: {
+          verification: { result: 'failed', evidence: 'quality-gate pre-pr' },
+          retryCount: 0,
+          failureCategory: 'quality-contextdb',
+          elapsedMs: 100,
+        },
+      },
+      {
+        seq: 2,
+        ts: '2026-03-09T06:05:00.000Z',
+        status: 'blocked',
+        summary: 'Context pack regression',
+        nextActions: ['Repair ContextDB pack'],
+        artifacts: [],
+        telemetry: {
+          verification: { result: 'failed', evidence: 'quality-gate pre-pr' },
+          retryCount: 0,
+          failureCategory: 'quality-contextdb',
+          elapsedMs: 120,
+        },
+      },
+      {
+        seq: 3,
+        ts: '2026-03-09T06:10:00.000Z',
+        status: 'blocked',
+        summary: 'Context pack regression',
+        nextActions: ['Repair ContextDB pack'],
+        artifacts: [],
+        telemetry: {
+          verification: { result: 'failed', evidence: 'quality-gate pre-pr' },
+          retryCount: 0,
+          failureCategory: 'quality-contextdb',
+          elapsedMs: 140,
+        },
+      },
+    ]
+  );
+
+  const report = await buildLearnEvalReport({ sessionId: 'quality-contextdb-fix', limit: 5 }, { rootDir });
+  const gate = report.recommendations.fix.find((item) => item.targetId === 'gate.quality-contextdb');
+  assertRecommendationShape(gate, {
+    kind: 'fix',
+    targetType: 'gate',
+    targetId: 'gate.quality-contextdb',
+  });
+});

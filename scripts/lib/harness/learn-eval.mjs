@@ -156,6 +156,14 @@ const FAILURE_CATEGORY_ACTIONS = {
     nextCommand: getQualityGateFixCommand(),
     priority: 40,
   },
+  'quality-contextdb': {
+    targetType: 'gate',
+    targetId: 'gate.quality-contextdb',
+    title: 'quality contextdb gate',
+    reason: 'ContextDB regressions are recurring inside the local quality gate; repair context pack/index behavior before dispatch.',
+    nextCommand: getQualityGateFixCommand(),
+    priority: 40,
+  },
   'quality-logs': {
     targetType: 'gate',
     targetId: 'gate.quality-log-audit',

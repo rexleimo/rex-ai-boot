@@ -19,10 +19,40 @@
     }
   },
   "blueprints": {
-    "feature": ["planner", "implementer", "reviewer", "security-reviewer"],
-    "bugfix": ["planner", "implementer", "reviewer"],
-    "refactor": ["planner", "implementer", "reviewer"],
-    "security": ["security-reviewer", "planner", "implementer", "reviewer"]
+    "feature": {
+      "description": "Plan implementation first, then execute, then review quality and security in parallel.",
+      "phases": [
+        { "id": "plan", "role": "planner", "mode": "sequential" },
+        { "id": "implement", "role": "implementer", "mode": "sequential" },
+        { "id": "review", "role": "reviewer", "mode": "parallel", "group": "final-checks" },
+        { "id": "security", "role": "security-reviewer", "mode": "parallel", "group": "final-checks" }
+      ]
+    },
+    "bugfix": {
+      "description": "Reproduce and scope the bug first, implement the fix, then review correctness.",
+      "phases": [
+        { "id": "plan", "role": "planner", "mode": "sequential" },
+        { "id": "implement", "role": "implementer", "mode": "sequential" },
+        { "id": "review", "role": "reviewer", "mode": "parallel", "group": "final-checks" }
+      ]
+    },
+    "refactor": {
+      "description": "Plan safe refactor boundaries, implement small changes, then review design and regressions.",
+      "phases": [
+        { "id": "plan", "role": "planner", "mode": "sequential" },
+        { "id": "implement", "role": "implementer", "mode": "sequential" },
+        { "id": "review", "role": "reviewer", "mode": "parallel", "group": "final-checks" }
+      ]
+    },
+    "security": {
+      "description": "Lead with security review, scope required changes, then implement and re-review.",
+      "phases": [
+        { "id": "security-assessment", "role": "security-reviewer", "mode": "sequential" },
+        { "id": "plan", "role": "planner", "mode": "sequential" },
+        { "id": "implement", "role": "implementer", "mode": "sequential" },
+        { "id": "review", "role": "reviewer", "mode": "parallel", "group": "final-checks" }
+      ]
+    }
   },
   "mergeGate": {
     "blockStatuses": ["blocked", "needs-input"],
