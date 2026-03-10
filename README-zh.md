@@ -134,16 +134,18 @@ aios learn-eval --session <session-id> --format json
 aios orchestrate feature --task "Ship X"
 ```
 
-生成本地调度计划（不调用模型）：
+生成本地调度计划（不调用模型，不执行）：
 
 ```bash
-aios orchestrate --session <session-id> --dispatch local --format json
+aios orchestrate --session <session-id> --dispatch local --execute none --format json
 ```
 
 本地模拟执行（仍不调用模型）：
 
 ```bash
-aios orchestrate --session <session-id> --dispatch local --execute dry-run --preflight auto --format json
+aios orchestrate --session <session-id> --format json
+# 可选：在最终 DAG 选择前先跑支持的 gate/runbook 动作
+aios orchestrate --session <session-id> --preflight auto --format json
 ```
 
 ### Context Pack Fail-Open（避免包装层硬崩）
@@ -154,6 +156,12 @@ aios orchestrate --session <session-id> --dispatch local --execute dry-run --pre
 
 ```bash
 export CTXDB_PACK_STRICT=1
+```
+
+注意：shell wrapper（`codex`/`claude`/`gemini`）默认会 fail-open，即便设置了 `CTXDB_PACK_STRICT=1` 也不会让交互式会话直接“起不来”。如果你希望包装层也严格执行：
+
+```bash
+export CTXDB_PACK_STRICT_INTERACTIVE=1
 ```
 
 ## 系统架构

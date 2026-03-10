@@ -269,9 +269,36 @@ export function normalizeOrchestrateOptions(rawOptions = {}) {
   const taskTitleRaw = String(rawOptions.taskTitle || '').trim();
   const sessionId = String(rawOptions.sessionId || '').trim();
   const recommendationId = String(rawOptions.recommendationId || '').trim();
-  const dispatchMode = normalizeOrchestrateDispatchMode(rawOptions.dispatchMode ?? 'none');
-  const executionMode = normalizeOrchestrateExecutionMode(rawOptions.executionMode ?? 'none');
-  const preflightMode = normalizeOrchestratePreflightMode(rawOptions.preflightMode ?? 'none');
+  const dispatchModeRaw = String(rawOptions.dispatchMode ?? '').trim();
+  const executionModeRaw = String(rawOptions.executionMode ?? '').trim();
+  const preflightModeRaw = String(rawOptions.preflightMode ?? '').trim();
+  const dispatchModeProvided = dispatchModeRaw.length > 0;
+  const executionModeProvided = executionModeRaw.length > 0;
+  const preflightModeProvided = preflightModeRaw.length > 0;
+
+  let dispatchMode = dispatchModeProvided ? normalizeOrchestrateDispatchMode(dispatchModeRaw) : 'none';
+  let executionMode = executionModeProvided ? normalizeOrchestrateExecutionMode(executionModeRaw) : 'none';
+  let preflightMode = preflightModeProvided ? normalizeOrchestratePreflightMode(preflightModeRaw) : 'none';
+
+  // Smart defaults: if the operator didn't specify dispatch/execute, default to
+  // a local dry-run execution so we always produce a runnable DAG + evidence
+  // (0 token cost).
+  if (!dispatchModeProvided && !executionModeProvided) {
+    dispatchMode = 'local';
+    executionMode = 'dry-run';
+  }
+
+  // If an operator specifies an execution mode but omits dispatch mode, assume
+  // local dispatch (we only support local execution in this harness).
+  if (!dispatchModeProvided && executionModeProvided && executionMode !== 'none') {
+    dispatchMode = 'local';
+  }
+
+  // If an operator opts into local dispatch but omits execution mode, default
+  // to dry-run (keeps orchestration zero-cost unless explicitly set to live).
+  if (dispatchMode === 'local' && !executionModeProvided) {
+    executionMode = 'dry-run';
+  }
 
   if (recommendationId && !sessionId) {
     throw new Error('--recommendation requires --session');

@@ -157,9 +157,12 @@ export function createDefaultOrchestrateOptions() {
     sessionId: '',
     limit: 10,
     recommendationId: '',
-    dispatchMode: 'none',
-    executionMode: 'none',
-    preflightMode: 'none',
+    // Sentinel empty strings mean "flag not provided" so orchestrate can apply
+    // smarter defaults (for example auto local dry-run) without losing the
+    // ability to explicitly request "none".
+    dispatchMode: '',
+    executionMode: '',
+    preflightMode: '',
     format: 'text',
   };
 }

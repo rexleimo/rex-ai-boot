@@ -75,7 +75,15 @@ _ctxdb_invoke_bridge_or_passthrough() {
   fi
 
   _ctxdb_update_last_workspace
-  node "$bridge" --agent "$agent" --command "$passthrough" -- "$@"
+  # Avoid bricking interactive wrappers if someone left CTXDB_PACK_STRICT=1 in
+  # their shell env. Quality gates can still enforce strict mode explicitly.
+  local strict_interactive="${CTXDB_PACK_STRICT_INTERACTIVE:-}"
+  strict_interactive="${strict_interactive:l}"
+  if [[ "$strict_interactive" == "1" || "$strict_interactive" == "true" || "$strict_interactive" == "yes" || "$strict_interactive" == "on" ]]; then
+    node "$bridge" --agent "$agent" --command "$passthrough" -- "$@"
+  else
+    CTXDB_PACK_STRICT=0 node "$bridge" --agent "$agent" --command "$passthrough" -- "$@"
+  fi
 }
 
 codex() {

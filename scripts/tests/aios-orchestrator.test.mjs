@@ -279,6 +279,32 @@ test('dispatch runtime registry exposes the subagent runtime adapter contract as
   assert.match(String(result.error || ''), /AIOS_EXECUTE_LIVE/i);
 });
 
+test('dispatch runtime registry can simulate the subagent runtime when explicitly enabled', async () => {
+  const runtimes = await importDispatchRuntimes();
+  assert.ok(runtimes, 'expected runtime registry module');
+
+  const registry = runtimes.createDispatchRuntimeRegistry({ executeDryRunPlan: () => ({ mode: 'dry-run', ok: true, jobRuns: [] }) });
+  const runtime = runtimes.resolveDispatchRuntime({ runtimeId: 'subagent-runtime', executionMode: 'live' }, registry);
+
+  const plan = buildOrchestrationPlan({ blueprint: 'feature', taskTitle: 'Simulate subagent runtime' });
+  const dispatchPlan = buildLocalDispatchPlan(plan);
+
+  const result = runtime.execute({
+    plan,
+    dispatchPlan,
+    dispatchPolicy: null,
+    env: {
+      AIOS_EXECUTE_LIVE: '1',
+      AIOS_SUBAGENT_SIMULATE: '1',
+    },
+  });
+
+  assert.equal(result.mode, 'live');
+  assert.equal(result.ok, true);
+  assert.equal(result.jobRuns.length > 0, true);
+  assert.equal(result.executorRegistry.length > 0, true);
+});
+
 test('dispatch runtime registry keeps blocked workflow results as structured runtime output', async () => {
   const runtimes = await importDispatchRuntimes();
   assert.ok(runtimes, 'expected runtime registry module');
@@ -517,6 +543,22 @@ test('planOrchestrate includes dry-run execute mode in preview', () => {
 test('planOrchestrate includes live execute mode in preview', () => {
   const plan = planOrchestrate({ sessionId: 'security-stable', dispatchMode: 'local', executionMode: 'live' });
   assert.match(plan.preview, /--execute live/);
+});
+
+test('runOrchestrate defaults to local dry-run execution when dispatch/execute are omitted', async () => {
+  const rootDir = await makeRootDir();
+  const logs = [];
+  await runOrchestrate(
+    { blueprint: 'feature', taskTitle: 'Default dry-run', format: 'json' },
+    { rootDir, io: { log: (line) => logs.push(line) } }
+  );
+  const report = JSON.parse(logs.join('\n'));
+
+  assert.equal(report.dispatchPlan.mode, 'local');
+  assert.equal(report.dispatchRun.mode, 'dry-run');
+  assert.equal(report.dispatchRun.runtime?.id, 'local-dry-run');
+  assert.equal(report.dispatchEvidence.persisted, false);
+  assert.equal(report.dispatchEvidence.reason, 'session-required');
 });
 
 test('runOrchestrate resolves blueprint and context from learn-eval overlay', async () => {

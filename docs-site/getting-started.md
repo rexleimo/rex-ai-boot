@@ -235,7 +235,7 @@ aios learn-eval --limit 10
 Build a local orchestration skeleton (no model calls):
 
 ```bash
-aios orchestrate --session <session-id> --dispatch local --execute dry-run --preflight auto --format json
+aios orchestrate --session <session-id> --preflight auto --format json
 ```
 
 ## 6) Verify data created

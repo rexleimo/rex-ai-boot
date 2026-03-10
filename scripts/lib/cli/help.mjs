@@ -21,7 +21,7 @@ Examples:
   node scripts/aios.mjs doctor --strict --profile standard
   node scripts/aios.mjs quality-gate pre-pr --profile strict
   node scripts/aios.mjs orchestrate feature --task "Ship orchestrator blueprints"
-  node scripts/aios.mjs orchestrate --session codex-cli-20260303T080437-065e16c0 --dispatch local --execute dry-run --format json
+  node scripts/aios.mjs orchestrate --session codex-cli-20260303T080437-065e16c0 --format json
   node scripts/aios.mjs learn-eval --limit 5
 `;
 }
@@ -92,8 +92,8 @@ Options:
   --session <id>                 Load structured learn-eval recommendations for this session
   --limit <n>                   Number of checkpoints to inspect when loading learn-eval
   --recommendation <targetId>   Pin a specific learn-eval recommendation to the overlay
-  --dispatch <none|local>       Build a non-executing local dispatch skeleton
-  --execute <none|dry-run|live> Execute dispatch through the selected runtime (live is opt-in via AIOS_EXECUTE_LIVE=1)
+  --dispatch <none|local>       Build a local dispatch skeleton (defaults to local when omitted)
+  --execute <none|dry-run|live> Execute dispatch through the selected runtime (defaults to dry-run; live is opt-in via AIOS_EXECUTE_LIVE=1)
   --preflight <none|auto>       Run supported local gate/runbook actions before final DAG selection
   --format <text|json>
   -h, --help

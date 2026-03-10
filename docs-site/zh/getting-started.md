@@ -234,7 +234,7 @@ aios learn-eval --limit 10
 生成本地编排调度骨架（不调用模型）：
 
 ```bash
-aios orchestrate --session <session-id> --dispatch local --execute dry-run --preflight auto --format json
+aios orchestrate --session <session-id> --preflight auto --format json
 ```
 
 ## 6) 验证数据已生成

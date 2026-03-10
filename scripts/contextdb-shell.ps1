@@ -96,8 +96,27 @@ function Invoke-BridgeOrPassthrough {
   }
 
   Update-LastWorkspace
-  & node $bridge "--agent" $Agent "--command" $Passthrough "--" @Arguments
-  return $LASTEXITCODE
+  # Avoid bricking interactive wrappers if someone left CTXDB_PACK_STRICT=1 in
+  # their environment. Quality gates can still enforce strict mode explicitly.
+  $prevStrict = $env:CTXDB_PACK_STRICT
+  $strictInteractive = if ($env:CTXDB_PACK_STRICT_INTERACTIVE) { $env:CTXDB_PACK_STRICT_INTERACTIVE.Trim().ToLowerInvariant() } else { "" }
+  $allowStrict = $strictInteractive -in @("1", "true", "yes", "on")
+  if (-not $allowStrict) {
+    $env:CTXDB_PACK_STRICT = "0"
+  }
+
+  try {
+    & node $bridge "--agent" $Agent "--command" $Passthrough "--" @Arguments
+    return $LASTEXITCODE
+  } finally {
+    if ($allowStrict) {
+      # no-op
+    } elseif ($null -eq $prevStrict) {
+      Remove-Item Env:CTXDB_PACK_STRICT -ErrorAction SilentlyContinue | Out-Null
+    } else {
+      $env:CTXDB_PACK_STRICT = $prevStrict
+    }
+  }
 }
 
 function codex {

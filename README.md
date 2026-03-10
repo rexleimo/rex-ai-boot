@@ -134,16 +134,18 @@ Preview a blueprint:
 aios orchestrate feature --task "Ship X"
 ```
 
-Build a local dispatch plan (no model calls):
+Build a local dispatch plan (no model calls, no execution):
 
 ```bash
-aios orchestrate --session <session-id> --dispatch local --format json
+aios orchestrate --session <session-id> --dispatch local --execute none --format json
 ```
 
 Simulate execution locally (still no model calls):
 
 ```bash
-aios orchestrate --session <session-id> --dispatch local --execute dry-run --preflight auto --format json
+aios orchestrate --session <session-id> --format json
+# optional: run supported gate/runbook actions before final DAG selection
+aios orchestrate --session <session-id> --preflight auto --format json
 ```
 
 ### Context Pack Fail-Open (prevent wrapper hard failures)
@@ -154,6 +156,12 @@ If you want to make context packet failures fatal:
 
 ```bash
 export CTXDB_PACK_STRICT=1
+```
+
+Shell wrappers (`codex`/`claude`/`gemini`) default to fail-open even if `CTXDB_PACK_STRICT=1` is set (so interactive sessions don't get bricked). To enforce strict packing for wrapped CLI runs too:
+
+```bash
+export CTXDB_PACK_STRICT_INTERACTIVE=1
 ```
 
 ## Architecture

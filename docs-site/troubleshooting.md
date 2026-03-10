@@ -63,6 +63,12 @@ To make packing failures fatal (strict mode):
 export CTXDB_PACK_STRICT=1
 ```
 
+Note: shell wrappers (`codex`/`claude`/`gemini`) default to fail-open even if `CTXDB_PACK_STRICT=1` is set, to avoid bricking interactive sessions. To enforce strict packing for wrapped CLI runs too:
+
+```bash
+export CTXDB_PACK_STRICT_INTERACTIVE=1
+```
+
 If this keeps happening, run the quality gate (includes ContextDB regression checks):
 
 ```bash
