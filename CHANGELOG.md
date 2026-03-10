@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-03-10
+
+- feat(aios): add orchestrator agent catalog and generators
+
 ## [0.15.0] - 2026-03-10
 
 - feat(aios): gate live orchestrate execution behind AIOS_EXECUTE_LIVE

@@ -33,7 +33,9 @@ try {
     "scripts",
     "mcp-server",
     "memory",
+    ".claude/agents",
     ".codex/skills",
+    ".codex/agents",
     ".claude/skills",
     ".agents/skills"
   )

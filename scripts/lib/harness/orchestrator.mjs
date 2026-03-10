@@ -1,4 +1,5 @@
 import { normalizeHandoffPayload, validateHandoffPayload } from './handoff.mjs';
+import { resolveAgentRefIdForRole } from './orchestrator-agents.mjs';
 import {
   LOCAL_MERGE_GATE_EXECUTOR,
   LOCAL_PHASE_EXECUTOR,
@@ -330,6 +331,7 @@ function createPhaseJob(plan, phase, dependsOn = [], handoffTarget = 'next-phase
   }
 
   const mode = modeOverride || phase.mode;
+  const agentRefId = resolveAgentRefIdForRole(phase.role) || String(phase.role || '').trim();
 
   return {
     jobId: `phase.${phase.id}`,
@@ -346,6 +348,7 @@ function createPhaseJob(plan, phase, dependsOn = [], handoffTarget = 'next-phase
     launchSpec: {
       executor: LOCAL_PHASE_EXECUTOR,
       requiresModel: false,
+      agentRefId,
       inputs: contextSources,
       outputType: 'handoff',
       handoffTarget,

@@ -235,6 +235,7 @@ function main() {
     ]),
   );
   files.push(...listAgentMdFiles(workspace, '.claude/agents'));
+  files.push(...listAgentMdFiles(workspace, '.codex/agents'));
 
   if (args.scanGlobal) {
     if (homeDir) {
@@ -303,4 +304,3 @@ try {
   process.stderr.write(`[error] ${err && err.message ? err.message : String(err)}\n`);
   process.exit(2);
 }
-
