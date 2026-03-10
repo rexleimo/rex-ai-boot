@@ -77,6 +77,10 @@ export function shouldAutoRebuildNative(env = process.env) {
   return parseBoolEnv(env.CTXDB_AUTO_REBUILD_NATIVE, true);
 }
 
+function shouldStrictContextPack(env = process.env) {
+  return parseBoolEnv(env.CTXDB_PACK_STRICT, false);
+}
+
 function getCommandFailureDetail(result) {
   if (result.error) {
     return result.error.message || String(result.error);
@@ -258,21 +262,31 @@ function extractCreatedSessionId(jsonText) {
   return parseJsonValue(jsonText, (x) => x?.data?.sessionId || x?.sessionId);
 }
 
-function runOneShotAgent(agent, contextText, prompt, extraArgs) {
+function runOneShotAgent(agent, contextText, prompt, extraArgs, { injectContext = true } = {}) {
   let cmd = '';
   let args = [];
 
   if (agent === 'claude-code') {
     cmd = 'claude';
-    args = ['--print', '--append-system-prompt', contextText, prompt, ...extraArgs];
+    args = injectContext
+      ? ['--print', '--append-system-prompt', contextText, prompt, ...extraArgs]
+      : ['--print', prompt, ...extraArgs];
   } else if (agent === 'gemini-cli') {
-    const fullPrompt = `${contextText}\n\n## New User Request\n${prompt}`;
     cmd = 'gemini';
-    args = ['-p', fullPrompt, ...extraArgs];
+    if (injectContext) {
+      const fullPrompt = `${contextText}\n\n## New User Request\n${prompt}`;
+      args = ['-p', fullPrompt, ...extraArgs];
+    } else {
+      args = ['-p', prompt, ...extraArgs];
+    }
   } else {
-    const fullPrompt = `${contextText}\n\n## New User Request\n${prompt}`;
     cmd = 'codex';
-    args = ['exec', fullPrompt, ...extraArgs];
+    if (injectContext) {
+      const fullPrompt = `${contextText}\n\n## New User Request\n${prompt}`;
+      args = ['exec', fullPrompt, ...extraArgs];
+    } else {
+      args = ['exec', prompt, ...extraArgs];
+    }
   }
 
   const result = runCommand(cmd, args);
@@ -281,19 +295,19 @@ function runOneShotAgent(agent, contextText, prompt, extraArgs) {
   return { output, exitCode };
 }
 
-function runInteractiveAgent(agent, contextText, extraArgs) {
+function runInteractiveAgent(agent, contextText, extraArgs, { injectContext = true } = {}) {
   let cmd = '';
   let args = [];
 
   if (agent === 'claude-code') {
     cmd = 'claude';
-    args = ['--append-system-prompt', contextText, ...extraArgs];
+    args = injectContext ? ['--append-system-prompt', contextText, ...extraArgs] : [...extraArgs];
   } else if (agent === 'gemini-cli') {
     cmd = 'gemini';
-    args = ['-i', contextText, ...extraArgs];
+    args = injectContext ? ['-i', contextText, ...extraArgs] : [...extraArgs];
   } else {
     cmd = 'codex';
-    args = [...extraArgs, contextText];
+    args = injectContext ? [...extraArgs, contextText] : [...extraArgs];
   }
 
   const result = runCommand(cmd, args, { stdio: 'inherit' });
@@ -302,6 +316,35 @@ function runInteractiveAgent(agent, contextText, extraArgs) {
     process.exit(1);
   }
   process.exit(result.status ?? 1);
+}
+
+async function safeContextPack(workspaceRoot, { sessionId, eventLimit, packPath }, { strict = false } = {}) {
+  const packAbs = path.join(workspaceRoot, packPath);
+  try {
+    ctx(workspaceRoot, 'context:pack', ['--session', sessionId, '--limit', eventLimit, '--out', packPath]);
+    const contextText = await fs.readFile(packAbs, 'utf8');
+    return { ok: true, mode: 'fresh', packAbs, contextText };
+  } catch (error) {
+    if (strict) {
+      throw error;
+    }
+
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn(`[warn] contextdb context:pack failed: ${reason}`);
+
+    try {
+      const contextText = await fs.readFile(packAbs, 'utf8');
+      if (String(contextText).trim()) {
+        console.warn(`[warn] using last context packet: ${packAbs}`);
+        return { ok: true, mode: 'stale', packAbs, contextText };
+      }
+    } catch {
+      // ignore missing stale pack fallback
+    }
+
+    console.warn('[warn] continuing without context packet.');
+    return { ok: false, mode: 'none', packAbs, contextText: '' };
+  }
 }
 
 export async function runCtxAgent(argv = process.argv.slice(2)) {
@@ -360,13 +403,25 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
   }
 
   const packPath = path.join('memory', 'context-db', 'exports', `${opts.sessionId}-context.md`);
-  ctx(opts.workspaceRoot, 'context:pack', ['--session', opts.sessionId, '--limit', opts.eventLimit, '--out', packPath]);
-  const packAbs = path.join(opts.workspaceRoot, packPath);
-  const contextText = await fs.readFile(packAbs, 'utf8');
+  const strictPack = shouldStrictContextPack(process.env);
+  const packResult = await safeContextPack(opts.workspaceRoot, {
+    sessionId: opts.sessionId,
+    eventLimit: opts.eventLimit,
+    packPath,
+  }, { strict: strictPack });
+  const packAbs = packResult.packAbs;
+  const contextText = packResult.contextText;
+  const injectContext = packResult.ok && String(contextText).trim().length > 0;
 
   console.log(`Session: ${opts.sessionId}`);
   console.log(`Workspace: ${opts.workspaceRoot}`);
-  console.log(`Context packet: ${packAbs}`);
+  if (packResult.mode === 'fresh') {
+    console.log(`Context packet: ${packAbs}`);
+  } else if (packResult.mode === 'stale') {
+    console.log(`Context packet: ${packAbs} (stale)`);
+  } else {
+    console.log('Context packet: (unavailable)');
+  }
 
   if (opts.prompt) {
     ctx(opts.workspaceRoot, 'event:add', [
@@ -384,7 +439,7 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
       output = `[dry-run] ${opts.agent} would execute prompt with context packet: ${packAbs}
 Prompt: ${opts.prompt}`;
     } else {
-      const result = runOneShotAgent(opts.agent, contextText, opts.prompt, opts.extraArgs);
+      const result = runOneShotAgent(opts.agent, contextText, opts.prompt, opts.extraArgs, { injectContext });
       output = result.output;
       exitCode = result.exitCode;
     }
@@ -430,7 +485,16 @@ Prompt: ${opts.prompt}`;
       ctx(opts.workspaceRoot, 'checkpoint', checkpointArgs);
     }
 
-    ctx(opts.workspaceRoot, 'context:pack', ['--session', opts.sessionId, '--limit', opts.eventLimit, '--out', packPath]);
+    try {
+      await safeContextPack(opts.workspaceRoot, {
+        sessionId: opts.sessionId,
+        eventLimit: opts.eventLimit,
+        packPath,
+      }, { strict: strictPack });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn(`[warn] context packet refresh skipped: ${reason}`);
+    }
 
     if (exitCode !== 0) {
       process.exit(exitCode);
@@ -438,5 +502,5 @@ Prompt: ${opts.prompt}`;
     return;
   }
 
-  runInteractiveAgent(opts.agent, contextText, opts.extraArgs);
+  runInteractiveAgent(opts.agent, contextText, opts.extraArgs, { injectContext });
 }

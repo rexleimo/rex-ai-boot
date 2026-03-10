@@ -9,6 +9,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - feat(aios): wire orchestrator agents into lifecycle components
 - feat(orchestrate): derive blueprint phases from orchestrator-blueprints spec
 - fix(learn-eval): route ContextDB quality failures to a concrete gate target
+- fix(ctx-agent): fail-open when context:pack fails (set CTXDB_PACK_STRICT=1 to make it fatal)
 - fix(contextdb): tolerate legacy context records (missing text/refs/actions) in context packs
 - test(contextdb): add ContextDB quality gate to prevent context:pack regressions
 

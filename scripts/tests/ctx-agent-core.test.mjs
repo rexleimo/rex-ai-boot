@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtemp, rm, stat } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import { classifyOneShotFailure, isBetterSqlite3AbiMismatch, shouldAutoRebuildNative } from '../ctx-agent-core.mjs';
+import { runContextDbCli } from '../lib/contextdb-cli.mjs';
 
 test('detects better-sqlite3 Node ABI mismatch errors', () => {
   const detail = [
@@ -41,4 +46,68 @@ test('classifyOneShotFailure recognizes timeout-like failures', () => {
 
 test('classifyOneShotFailure falls back to tool for generic failures', () => {
   assert.equal(classifyOneShotFailure('Unhandled exit=1'), 'tool');
+});
+
+test('ctx-agent tolerates context:pack failures by running without a context packet', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'aios-ctx-agent-pack-fail-'));
+  const sessionId = 'ctx-pack-failure';
+
+  try {
+    runContextDbCli([
+      'session:new',
+      '--workspace',
+      workspaceRoot,
+      '--agent',
+      'codex-cli',
+      '--project',
+      'tmp-project',
+      '--goal',
+      'Verify ctx-agent pack fail-open',
+      '--session-id',
+      sessionId,
+    ]);
+
+    // Remove the L0 summary so context:pack fails on the first attempt.
+    await rm(
+      path.join(workspaceRoot, 'memory', 'context-db', 'sessions', sessionId, 'l0-summary.md'),
+      { force: true }
+    );
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        'scripts/ctx-agent.mjs',
+        '--agent',
+        'codex-cli',
+        '--workspace',
+        workspaceRoot,
+        '--project',
+        'tmp-project',
+        '--session',
+        sessionId,
+        '--prompt',
+        'smoke',
+        '--dry-run',
+        '--no-bootstrap',
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          CTXDB_PACK_STRICT: '0',
+        },
+      }
+    );
+
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /\[dry-run\]/);
+    assert.match(result.stderr, /contextdb context:pack failed/i);
+
+    // The checkpoint path recreates the summary, so a later pack should succeed and write the export.
+    await stat(path.join(workspaceRoot, 'memory', 'context-db', 'sessions', sessionId, 'l0-summary.md'));
+    await stat(path.join(workspaceRoot, 'memory', 'context-db', 'exports', `${sessionId}-context.md`));
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
 });
