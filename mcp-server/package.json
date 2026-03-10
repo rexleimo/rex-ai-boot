@@ -13,6 +13,7 @@
     "dev": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/**/*.test.ts",
+    "test:contextdb": "tsx --test tests/contextdb.test.ts",
     "contextdb": "tsx src/contextdb/cli.ts"
   },
   "dependencies": {

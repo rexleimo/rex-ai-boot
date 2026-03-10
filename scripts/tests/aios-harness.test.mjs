@@ -111,7 +111,7 @@ test('runQualityGate log audit excludes cli entrypoints and tests', async () => 
       rootDir,
       io: { log() {} },
       env: {
-        AIOS_DISABLED_GATES: 'quality:build,quality:types,quality:scripts,quality:git',
+        AIOS_DISABLED_GATES: 'quality:build,quality:types,quality:scripts,quality:contextdb,quality:git',
       },
     }
   );
@@ -133,7 +133,7 @@ test('runQualityGate persists verification checkpoint when session is provided',
       rootDir,
       io: { log() {} },
       checkRunner(command, args) {
-        if (command === 'npm' && args[0] === 'run' && ['build', 'typecheck', 'test:scripts'].includes(args[1])) {
+        if (command === 'npm' && args[0] === 'run' && ['build', 'typecheck', 'test:scripts', 'test:contextdb'].includes(args[1])) {
           return { status: 0, stdout: `${args[1]} ok\n`, stderr: '' };
         }
         if (command === 'rg') {
@@ -173,7 +173,7 @@ test('runQualityGate persists quality-specific failure category when session is 
       rootDir,
       io: { log() {} },
       env: {
-        AIOS_DISABLED_GATES: 'quality:build,quality:types,quality:scripts,quality:git',
+        AIOS_DISABLED_GATES: 'quality:build,quality:types,quality:scripts,quality:contextdb,quality:git',
       },
       checkRunner(command) {
         if (command === 'rg') {

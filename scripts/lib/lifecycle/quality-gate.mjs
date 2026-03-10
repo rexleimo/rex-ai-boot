@@ -21,6 +21,7 @@ const LOG_AUDIT_EXCLUDE_GLOBS = [
 const QUALITY_FAILURE_CATEGORY_BY_LABEL = {
   Build: 'quality-build',
   Types: 'quality-types',
+  ContextDB: 'quality-contextdb',
   Scripts: 'quality-scripts',
   Logs: 'quality-logs',
   Security: 'quality-security',
@@ -141,6 +142,13 @@ export async function runQualityGate(
       results.push({ label: 'Scripts', status: summarizeCommandResult(result), detail: result.stderr || result.stdout });
     } else {
       results.push({ label: 'Scripts', status: 'SKIP', detail: 'disabled by profile/gates' });
+    }
+
+    if (isHarnessGateEnabled('quality:contextdb', { profile: options.profile, disabledGates, profiles: ['standard', 'strict'] })) {
+      const result = checkRunner('npm', ['run', 'test:contextdb'], { cwd: mcpDir });
+      results.push({ label: 'ContextDB', status: summarizeCommandResult(result), detail: result.stderr || result.stdout });
+    } else {
+      results.push({ label: 'ContextDB', status: 'SKIP', detail: 'disabled by profile/gates' });
     }
 
     if (isHarnessGateEnabled('quality:logs', { profile: options.profile, disabledGates, profiles: ['standard', 'strict'] })) {

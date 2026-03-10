@@ -8,6 +8,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 - feat(aios): wire orchestrator agents into lifecycle components
 - fix(contextdb): tolerate legacy context records (missing text/refs/actions) in context packs
+- test(contextdb): add ContextDB quality gate to prevent context:pack regressions
 
 ## [0.16.0] - 2026-03-10
 
