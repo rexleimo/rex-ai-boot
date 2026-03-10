@@ -51,6 +51,24 @@ If `memory/context-db/index/context.db` is missing or stale:
 1. Run `cd mcp-server && npm run contextdb -- index:rebuild`
 2. Retry `search` / `timeline` / `event:get`
 
+## `contextdb context:pack failed`
+
+AIOS wraps `codex`/`claude`/`gemini` by generating a ContextDB “context packet” (`context:pack`) first.
+
+If packing fails, `ctx-agent` will **warn and continue** (it runs the CLI without injected context rather than crashing).
+
+To make packing failures fatal (strict mode):
+
+```bash
+export CTXDB_PACK_STRICT=1
+```
+
+If this keeps happening, run the quality gate (includes ContextDB regression checks):
+
+```bash
+aios quality-gate pre-pr --profile strict
+```
+
 ## Commands not wrapped
 
 Check these conditions:

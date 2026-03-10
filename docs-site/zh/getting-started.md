@@ -217,6 +217,26 @@ claude
 gemini
 ```
 
+## 5.1) 可选：运营/门禁工具（quality-gate + learn-eval + orchestrate）
+
+仓库健康门禁（包含 ContextDB 回归检查）：
+
+```bash
+aios quality-gate pre-pr --profile strict
+```
+
+分析最近一次会话的遥测：
+
+```bash
+aios learn-eval --limit 10
+```
+
+生成本地编排调度骨架（不调用模型）：
+
+```bash
+aios orchestrate --session <session-id> --dispatch local --execute dry-run --preflight auto --format json
+```
+
 ## 6) 验证数据已生成
 
 === "macOS / Linux"

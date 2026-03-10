@@ -59,11 +59,17 @@ function normalizeRoleCards(rawRoles = {}) {
       throw new Error(`Invalid orchestrator-blueprints spec: roles.${roleId}.ownership missing`);
     }
 
+    const ownedPathPrefixes = Array.isArray(entry?.ownedPathPrefixes)
+      ? entry.ownedPathPrefixes.map((item) => normalizeText(item)).filter((item) => item.length > 0 || item === '')
+      : [];
+
     roleCards[roleId] = {
       id: roleId,
       label: normalizeRoleLabel(roleId),
       responsibility,
       ownership,
+      canEditFiles: entry?.canEditFiles === true,
+      ownedPathPrefixes,
     };
   }
 
@@ -386,6 +392,8 @@ export function buildOrchestrationPlan({
       label: phase.roleCard.label,
       responsibility: phase.roleCard.responsibility,
       ownership: phase.roleCard.ownership,
+      canEditFiles: phase.roleCard.canEditFiles === true,
+      ownedPathPrefixes: Array.isArray(phase.roleCard.ownedPathPrefixes) ? [...phase.roleCard.ownedPathPrefixes] : [],
     })),
   };
 }
@@ -418,6 +426,8 @@ function createPhaseJob(plan, phase, dependsOn = [], handoffTarget = 'next-phase
       inputs: contextSources,
       outputType: 'handoff',
       handoffTarget,
+      canEditFiles: phase.canEditFiles === true,
+      ownedPathPrefixes: Array.isArray(phase.ownedPathPrefixes) ? [...phase.ownedPathPrefixes] : [],
       promptSeed: `${phase.label}: ${phase.responsibility} Ownership: ${phase.ownership}`,
     },
   };
@@ -561,23 +571,59 @@ export function mergeParallelHandoffs(handoffs = []) {
   });
 
   const blocked = validated.filter((handoff) => handoff.status === 'blocked' || handoff.status === 'needs-input');
+  const ownershipViolations = [];
   const fileOwners = new Map();
   const conflicts = [];
 
+  const normalizeTouchedPath = (value) => normalizeText(value)
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/^\/+/, '');
+
+  const getRoleEditPolicy = (roleId) => {
+    const key = normalizeText(roleId).toLowerCase();
+    const card = ROLE_CARDS[key];
+    return {
+      canEditFiles: card?.canEditFiles === true,
+      ownedPathPrefixes: Array.isArray(card?.ownedPathPrefixes) ? card.ownedPathPrefixes : [],
+    };
+  };
+
+  const isAllowedByPrefixes = (filePath, prefixes = []) => {
+    if (!Array.isArray(prefixes) || prefixes.length === 0) return false;
+    if (prefixes.some((prefix) => prefix === '')) return true;
+    return prefixes.some((prefix) => filePath.startsWith(prefix));
+  };
+
   for (const handoff of validated) {
+    const policy = getRoleEditPolicy(handoff.fromRole);
     for (const filePath of handoff.filesTouched) {
-      const previousOwner = fileOwners.get(filePath);
+      const normalizedPath = normalizeTouchedPath(filePath);
+      if (!normalizedPath) continue;
+
+      if (!policy.canEditFiles) {
+        ownershipViolations.push({ filePath: normalizedPath, fromRole: handoff.fromRole, rule: 'role is read-only' });
+      } else if (!isAllowedByPrefixes(normalizedPath, policy.ownedPathPrefixes)) {
+        ownershipViolations.push({
+          filePath: normalizedPath,
+          fromRole: handoff.fromRole,
+          rule: `path not under owned prefixes (${policy.ownedPathPrefixes.join(', ') || 'none'})`,
+        });
+      }
+
+      const previousOwner = fileOwners.get(normalizedPath);
       if (previousOwner && previousOwner !== handoff.fromRole) {
-        conflicts.push({ filePath, owners: [previousOwner, handoff.fromRole] });
+        conflicts.push({ filePath: normalizedPath, owners: [previousOwner, handoff.fromRole] });
         continue;
       }
-      fileOwners.set(filePath, handoff.fromRole);
+      fileOwners.set(normalizedPath, handoff.fromRole);
     }
   }
 
   return {
-    ok: blocked.length === 0 && conflicts.length === 0,
+    ok: blocked.length === 0 && conflicts.length === 0 && ownershipViolations.length === 0,
     blocked,
+    ownershipViolations,
     conflicts,
     mergedFindings: validated.flatMap((handoff) => handoff.findings),
     mergedRecommendations: validated.flatMap((handoff) => handoff.recommendations),
@@ -1097,6 +1143,7 @@ export function renderOrchestrationReport(input = {}) {
     ...formatDispatchEvidence(plan.dispatchEvidence),
     'Merge Gate:',
     '- Block on handoff status = blocked|needs-input',
+    '- Block when read-only roles report filesTouched',
     '- Block on overlapping file ownership across parallel outputs',
     '- Merge only findings and recommendations when ownership is clean',
     '',

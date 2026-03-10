@@ -3,19 +3,27 @@
   "roles": {
     "planner": {
       "responsibility": "Clarify scope, risks, dependencies, and execution order before code changes.",
-      "ownership": "Plans, scope boundaries, and work breakdown."
+      "ownership": "Plans, scope boundaries, and work breakdown.",
+      "canEditFiles": false,
+      "ownedPathPrefixes": []
     },
     "implementer": {
       "responsibility": "Own code changes inside the agreed file scope and report concrete results.",
-      "ownership": "Production code, tests, and local verification for owned files."
+      "ownership": "Production code, tests, and local verification for owned files.",
+      "canEditFiles": true,
+      "ownedPathPrefixes": [""]
     },
     "reviewer": {
       "responsibility": "Review correctness, regressions, maintainability, and test coverage.",
-      "ownership": "Findings only; does not own source edits in the orchestration contract."
+      "ownership": "Findings only; does not own source edits in the orchestration contract.",
+      "canEditFiles": false,
+      "ownedPathPrefixes": []
     },
     "security-reviewer": {
       "responsibility": "Review auth, data handling, secrets, injection risks, and unsafe automation.",
-      "ownership": "Security findings only; does not own source edits in the orchestration contract."
+      "ownership": "Security findings only; does not own source edits in the orchestration contract.",
+      "canEditFiles": false,
+      "ownedPathPrefixes": []
     }
   },
   "blueprints": {

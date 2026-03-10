@@ -95,6 +95,67 @@ Disable options:
 - Global: `export AIOS_BOOTSTRAP_AUTO=0`
 - Per invocation: `scripts/ctx-agent.mjs ... --no-bootstrap`
 
+## Operator Toolkit (Quality Gate / Learn-Eval / Orchestrate)
+
+These commands are designed to keep the workflow local-first and predictable before you plug in any real parallel model runtime.
+
+### Quality Gate (repo health + ContextDB regression guard)
+
+Run the full gate:
+
+```bash
+aios quality-gate full
+```
+
+Run a stricter pre-PR gate:
+
+```bash
+aios quality-gate pre-pr --profile strict
+```
+
+Disable a specific check (comma-separated):
+
+```bash
+AIOS_DISABLED_GATES=quality:contextdb aios quality-gate pre-pr
+```
+
+### Learn-Eval (turn checkpoint telemetry into recommendations)
+
+```bash
+aios learn-eval --limit 10
+aios learn-eval --session <session-id> --format json
+```
+
+### Orchestrate (blueprints + local dispatch skeleton + token-free dry-run)
+
+Preview a blueprint:
+
+```bash
+aios orchestrate feature --task "Ship X"
+```
+
+Build a local dispatch plan (no model calls):
+
+```bash
+aios orchestrate --session <session-id> --dispatch local --format json
+```
+
+Simulate execution locally (still no model calls):
+
+```bash
+aios orchestrate --session <session-id> --dispatch local --execute dry-run --preflight auto --format json
+```
+
+### Context Pack Fail-Open (prevent wrapper hard failures)
+
+By default, `ctx-agent` will **warn and continue** if `contextdb context:pack` fails (it will run the CLI without injected context rather than crashing).
+
+If you want to make context packet failures fatal:
+
+```bash
+export CTXDB_PACK_STRICT=1
+```
+
 ## Architecture
 
 ```text

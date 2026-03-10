@@ -476,6 +476,23 @@ test('mergeParallelHandoffs blocks blocked statuses', () => {
   assert.equal(result.blocked.length, 1);
 });
 
+test('mergeParallelHandoffs blocks file touches from read-only roles', () => {
+  const result = mergeParallelHandoffs([
+    {
+      fromRole: 'reviewer',
+      toRole: 'merge-gate',
+      taskTitle: 'Review auth flow',
+      contextSummary: 'Quality findings',
+      filesTouched: ['src/new-file.ts'],
+    },
+  ]);
+
+  assert.equal(result.ok, false);
+  assert.equal(Array.isArray(result.ownershipViolations), true);
+  assert.equal(result.ownershipViolations.length, 1);
+  assert.equal(result.ownershipViolations[0].filePath, 'src/new-file.ts');
+});
+
 test('planOrchestrate emits stable preview', () => {
   const plan = planOrchestrate({ blueprint: 'security', taskTitle: 'Audit login flow', format: 'json' });
   assert.match(plan.preview, /orchestrate security --task/);

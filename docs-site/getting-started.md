@@ -218,6 +218,26 @@ claude
 gemini
 ```
 
+## 5.1) Optional: operator tools (quality gate + learn-eval + orchestrate)
+
+Repo health gate (includes ContextDB regression checks):
+
+```bash
+aios quality-gate pre-pr --profile strict
+```
+
+Analyze the latest session telemetry:
+
+```bash
+aios learn-eval --limit 10
+```
+
+Build a local orchestration skeleton (no model calls):
+
+```bash
+aios orchestrate --session <session-id> --dispatch local --execute dry-run --preflight auto --format json
+```
+
 ## 6) Verify data created
 
 === "macOS / Linux"

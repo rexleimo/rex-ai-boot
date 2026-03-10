@@ -95,6 +95,67 @@ powershell -ExecutionPolicy Bypass -File .\scripts\aios.ps1
 - 全局关闭：`export AIOS_BOOTSTRAP_AUTO=0`
 - 单次关闭：`scripts/ctx-agent.mjs ... --no-bootstrap`
 
+## Operator 工具箱（Quality Gate / Learn-Eval / Orchestrate）
+
+这些命令用于在“接入真实并发 runtime 之前”，把流程门禁、失败语义、记忆闭环先跑通，并且保持本地可复现。
+
+### Quality Gate（仓库健康检查 + ContextDB 回归门禁）
+
+跑完整门禁：
+
+```bash
+aios quality-gate full
+```
+
+跑更严格的 pre-PR 门禁：
+
+```bash
+aios quality-gate pre-pr --profile strict
+```
+
+按需禁用某个检查（逗号分隔）：
+
+```bash
+AIOS_DISABLED_GATES=quality:contextdb aios quality-gate pre-pr
+```
+
+### Learn-Eval（把 checkpoint 遥测变成可执行建议）
+
+```bash
+aios learn-eval --limit 10
+aios learn-eval --session <session-id> --format json
+```
+
+### Orchestrate（蓝图 + 本地调度骨架 + 免 token dry-run）
+
+预览蓝图：
+
+```bash
+aios orchestrate feature --task "Ship X"
+```
+
+生成本地调度计划（不调用模型）：
+
+```bash
+aios orchestrate --session <session-id> --dispatch local --format json
+```
+
+本地模拟执行（仍不调用模型）：
+
+```bash
+aios orchestrate --session <session-id> --dispatch local --execute dry-run --preflight auto --format json
+```
+
+### Context Pack Fail-Open（避免包装层硬崩）
+
+默认情况下，如果 `contextdb context:pack` 失败，`ctx-agent` 会**告警并继续运行**（不注入上下文，也不让 `codex/claude/gemini` 整体起不来）。
+
+如果你希望 context packet 失败直接中断（严格模式）：
+
+```bash
+export CTXDB_PACK_STRICT=1
+```
+
 ## 系统架构
 
 ```text

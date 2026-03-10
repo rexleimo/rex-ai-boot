@@ -1,6 +1,8 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
+import { getHarnessTarget } from './targets.mjs';
+
 const SESSION_STATUS_NAMES = ['running', 'blocked', 'done'];
 const VERIFICATION_RESULT_NAMES = ['unknown', 'passed', 'failed', 'partial'];
 const RECOMMENDATION_KIND_ORDER = ['fix', 'observe', 'promote'];
@@ -78,15 +80,18 @@ function createRecommendation({
   nextArtifact,
   priority = 0,
 }) {
+  const targetDefinition = targetId ? getHarnessTarget(targetId) : null;
+  const resolvedTitle = title || targetDefinition?.title || targetId;
+  const resolvedNextCommand = nextCommand || targetDefinition?.nextCommand;
   return {
     kind,
     targetType,
     targetId,
-    title,
+    title: resolvedTitle,
     reason,
     evidence,
     priority: RECOMMENDATION_KIND_BASE_PRIORITY[kind] + Math.max(0, Math.floor(priority)),
-    ...(nextCommand ? { nextCommand } : {}),
+    ...(resolvedNextCommand ? { nextCommand: resolvedNextCommand } : {}),
     ...(nextArtifact ? { nextArtifact } : {}),
   };
 }
@@ -95,129 +100,97 @@ const FAILURE_CATEGORY_ACTIONS = {
   auth: {
     targetType: 'gate',
     targetId: 'gate.auth-preflight',
-    title: 'auth preflight gate',
     reason: 'Auth-related failures are recurring; add a reusable login/session-validity check before execution.',
-    nextCommand: getQualityGateFixCommand(),
     priority: 40,
   },
   timeout: {
     targetType: 'gate',
     targetId: 'gate.timeout-budget',
-    title: 'timeout budget gate',
     reason: 'Timeouts are recurring; add wait-budget checks or split long actions before dispatch.',
-    nextCommand: getQualityGateFixCommand(),
     priority: 40,
   },
   network: {
     targetType: 'gate',
     targetId: 'gate.retry-backoff',
-    title: 'network retry/backoff gate',
     reason: 'Network failures are recurring; standardize retry/backoff and transient-error handling.',
-    nextCommand: getQualityGateFixCommand(),
     priority: 40,
   },
   permission: {
     targetType: 'gate',
     targetId: 'gate.human-approval',
-    title: 'human approval gate',
     reason: 'Permission-related failures suggest the workflow needs a clear human approval or access check.',
-    nextCommand: getQualityGateFixCommand(),
     priority: 40,
   },
   'rate-limit': {
     targetType: 'gate',
     targetId: 'gate.rate-limit-pacing',
-    title: 'rate-limit pacing gate',
     reason: 'Rate limits are recurring; add pacing and cooldown controls before retries.',
-    nextCommand: getQualityGateFixCommand(),
     priority: 40,
   },
   'quality-build': {
     targetType: 'gate',
     targetId: 'gate.quality-build',
-    title: 'quality build gate',
     reason: 'Build failures are recurring inside the local quality gate; repair the build before dispatch.',
-    nextCommand: getQualityGateFixCommand(),
     priority: 40,
   },
   'quality-types': {
     targetType: 'gate',
     targetId: 'gate.quality-types',
-    title: 'quality types gate',
     reason: 'Typecheck failures are recurring inside the local quality gate; fix type errors before dispatch.',
-    nextCommand: getQualityGateFixCommand(),
     priority: 40,
   },
   'quality-scripts': {
     targetType: 'gate',
     targetId: 'gate.quality-scripts',
-    title: 'quality scripts gate',
     reason: 'Script test failures are recurring inside the local quality gate; stabilize script coverage before dispatch.',
-    nextCommand: getQualityGateFixCommand(),
     priority: 40,
   },
   'quality-contextdb': {
     targetType: 'gate',
     targetId: 'gate.quality-contextdb',
-    title: 'quality contextdb gate',
     reason: 'ContextDB regressions are recurring inside the local quality gate; repair context pack/index behavior before dispatch.',
-    nextCommand: getQualityGateFixCommand(),
     priority: 40,
   },
   'quality-logs': {
     targetType: 'gate',
     targetId: 'gate.quality-log-audit',
-    title: 'quality log audit gate',
     reason: 'The local quality gate is failing on stdout log audit; remove accidental debug logs or tighten the allowlist for intentional CLI output.',
-    nextCommand: getQualityGateFixCommand(),
     priority: 40,
   },
   'quality-security': {
     targetType: 'gate',
     targetId: 'gate.quality-security',
-    title: 'quality security gate',
     reason: 'Security config failures are recurring inside the local quality gate; repair the security checklist before dispatch.',
-    nextCommand: getQualityGateFixCommand(),
     priority: 40,
   },
   'quality-git': {
     targetType: 'gate',
     targetId: 'gate.quality-git',
-    title: 'quality git gate',
     reason: 'Git state checks are failing inside the local quality gate; repair repository health before dispatch.',
-    nextCommand: getQualityGateFixCommand(),
     priority: 35,
   },
   'quality-multi': {
     targetType: 'gate',
     targetId: 'gate.quality-triage',
-    title: 'quality triage gate',
     reason: 'Multiple quality-gate checks are failing together; triage the failing checks before dispatch.',
-    nextCommand: getQualityGateFixCommand(),
     priority: 35,
   },
   tool: {
     targetType: 'runbook',
     targetId: 'runbook.tool-repair',
-    title: 'tooling repair runbook',
     reason: 'Generic tool failures are recurring; capture the recovery path in a reusable runbook.',
-    nextCommand: getDoctorCommand(),
     priority: 40,
   },
   'merge-gate-blocked': {
     targetType: 'runbook',
     targetId: 'runbook.dispatch-merge-triage',
-    title: 'dispatch merge triage runbook',
     reason: 'Dry-run orchestration is blocking at the merge gate; resolve ownership or blocked handoff issues before enabling a real runtime.',
-    nextCommand: getDoctorCommand(),
     priority: 45,
   },
   default: {
     targetType: 'runbook',
     targetId: 'runbook.failure-triage',
-    title: 'failure triage runbook',
     reason: 'Failures are recurring; document a short triage path before promoting the workflow.',
-    nextCommand: getDoctorCommand(),
     priority: 40,
   },
 };
