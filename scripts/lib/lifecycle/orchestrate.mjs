@@ -459,18 +459,17 @@ export async function runOrchestrate(
   const dispatchRuntime = options.executionMode !== 'none'
     ? resolveDispatchRuntime({ executionMode: options.executionMode }, dispatchRuntimeRegistry)
     : null;
-  const dispatchRun = dispatchRuntime
-    ? normalizeDispatchRuntimeResult(
-      dispatchRuntime.execute({
-        plan: dagPlan,
-        dispatchPlan,
-        dispatchPolicy: effectiveDispatchPolicy,
-        io,
-        env,
-      }),
-      dispatchRuntime,
-      options.executionMode
-    )
+  const rawDispatchRun = dispatchRuntime
+    ? await dispatchRuntime.execute({
+      plan: dagPlan,
+      dispatchPlan,
+      dispatchPolicy: effectiveDispatchPolicy,
+      io,
+      env,
+    })
+    : null;
+  const dispatchRun = dispatchRuntime && rawDispatchRun
+    ? normalizeDispatchRuntimeResult(rawDispatchRun, dispatchRuntime, options.executionMode)
     : null;
 
   const postDispatchPolicy = buildDispatchPolicy({

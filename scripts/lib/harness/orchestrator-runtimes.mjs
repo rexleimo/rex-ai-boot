@@ -1,6 +1,7 @@
 import runtimeSpec from '../../../memory/specs/orchestrator-runtimes.json' with { type: 'json' };
 import { normalizeHandoffPayload } from './handoff.mjs';
 import { createHandoffFromPhase, executeLocalDispatchPlan, mergeParallelHandoffs } from './orchestrator.mjs';
+import { executeSubagentDispatchPlan } from './subagent-runtime.mjs';
 
 export const LOCAL_DRY_RUN_RUNTIME = 'local-dry-run';
 export const SUBAGENT_RUNTIME = 'subagent-runtime';
@@ -268,7 +269,7 @@ export function createDispatchRuntimeRegistry({ executeDryRunPlan = executeLocal
     if (runtime.id === LOCAL_DRY_RUN_RUNTIME) {
       registry[LOCAL_DRY_RUN_RUNTIME] = {
         ...runtime,
-        execute({ plan, dispatchPlan, dispatchPolicy, io, env } = {}) {
+        async execute({ plan, dispatchPlan, dispatchPolicy, io, env } = {}) {
           const result = executeDryRunPlan(plan, dispatchPlan, { dispatchPolicy, io, env });
           return normalizeDispatchRuntimeResult(result, runtime, 'dry-run');
         },
@@ -276,31 +277,56 @@ export function createDispatchRuntimeRegistry({ executeDryRunPlan = executeLocal
       continue;
     }
 
+    if (runtime.id === SUBAGENT_RUNTIME) {
+      registry[SUBAGENT_RUNTIME] = {
+        ...runtime,
+        async execute({ plan, dispatchPlan, dispatchPolicy, io, env } = {}) {
+          const mode = runtime.executionModes[0] || 'live';
+          const gated = !isLiveExecutionEnabled(env);
+          const simulate = isSubagentSimulationEnabled(env);
+
+          if (gated) {
+            return normalizeDispatchRuntimeResult({
+              mode,
+              ok: false,
+              error: `Live execution is disabled by default. Set ${LIVE_EXECUTION_ENV}=1 to opt in.`,
+              executorRegistry: Array.isArray(dispatchPlan?.executorRegistry) ? [...dispatchPlan.executorRegistry] : [],
+              executorDetails: Array.isArray(dispatchPlan?.executorDetails)
+                ? dispatchPlan.executorDetails.map((item) => ({ ...item }))
+                : [],
+              jobRuns: [],
+              finalOutputs: [],
+            }, runtime, mode);
+          }
+
+          if (simulate) {
+            return normalizeDispatchRuntimeResult(
+              simulateSubagentDispatchRun(plan, dispatchPlan, { dispatchPolicy, io, env }),
+              runtime,
+              mode
+            );
+          }
+
+          const result = await executeSubagentDispatchPlan(plan, dispatchPlan, { dispatchPolicy, io, env });
+          return normalizeDispatchRuntimeResult(result, runtime, mode);
+        },
+      };
+      continue;
+    }
+
     registry[runtime.id] = {
       ...runtime,
-      execute({ plan, dispatchPlan, dispatchPolicy, io, env } = {}) {
+      async execute() {
         const mode = runtime.executionModes[0] || 'live';
-        const gated = runtime.id === SUBAGENT_RUNTIME && !isLiveExecutionEnabled(env);
-        const simulate = runtime.id === SUBAGENT_RUNTIME && isSubagentSimulationEnabled(env);
-        const message = gated
-          ? `Live execution is disabled by default. Set ${LIVE_EXECUTION_ENV}=1 to opt in.`
-          : simulate
-            ? ''
-            : `Dispatch runtime ${runtime.id} is not implemented yet. Set ${SUBAGENT_SIMULATE_ENV}=1 to simulate.`;
-
-        if (!gated && simulate) {
-          return simulateSubagentDispatchRun(plan, dispatchPlan, { dispatchPolicy, io, env });
-        }
-
-        return {
+        return normalizeDispatchRuntimeResult({
           mode,
           ok: false,
-          error: message,
+          error: `Dispatch runtime ${runtime.id} is not implemented yet.`,
           executorRegistry: [],
           executorDetails: [],
           jobRuns: [],
           finalOutputs: [],
-        };
+        }, runtime, mode);
       },
     };
   }

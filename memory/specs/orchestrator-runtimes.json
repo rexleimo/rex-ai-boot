@@ -8,8 +8,8 @@
       "executionModes": ["dry-run"]
     },
     "subagent-runtime": {
-      "label": "Subagent Runtime (Stub)",
-      "description": "Placeholder runtime adapter for future real subagent execution. This entry is a stub and does not execute any models yet.",
+      "label": "Subagent Runtime",
+      "description": "Runs orchestration phase jobs via external CLI subagents (codex/claude/gemini). Live execution is opt-in via AIOS_EXECUTE_LIVE=1 and requires AIOS_SUBAGENT_CLIENT.",
       "requiresModel": true,
       "executionModes": ["live"]
     }

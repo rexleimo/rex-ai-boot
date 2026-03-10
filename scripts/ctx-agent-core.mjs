@@ -40,7 +40,7 @@ function runCommand(command, args, options = {}) {
     cwd: options.cwd,
     encoding: 'utf8',
     stdio: options.stdio ?? ['pipe', 'pipe', 'pipe'],
-    shell: false,
+    shell: spec.shell ?? false,
   });
 
   return result;

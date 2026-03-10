@@ -93,7 +93,7 @@ Options:
   --limit <n>                   Number of checkpoints to inspect when loading learn-eval
   --recommendation <targetId>   Pin a specific learn-eval recommendation to the overlay
   --dispatch <none|local>       Build a local dispatch skeleton (defaults to local when omitted)
-  --execute <none|dry-run|live> Execute dispatch through the selected runtime (defaults to dry-run; live is opt-in via AIOS_EXECUTE_LIVE=1)
+  --execute <none|dry-run|live> Execute dispatch through the selected runtime (defaults to dry-run; live is opt-in via AIOS_EXECUTE_LIVE=1 + AIOS_SUBAGENT_CLIENT=codex-cli|claude-code|gemini-cli)
   --preflight <none|auto>       Run supported local gate/runbook actions before final DAG selection
   --format <text|json>
   -h, --help

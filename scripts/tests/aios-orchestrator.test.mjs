@@ -41,6 +41,36 @@ async function makeRootDir() {
   return await fs.mkdtemp(path.join(os.tmpdir(), 'aios-orchestrator-'));
 }
 
+async function createFakeCodexCommand(payload = null) {
+  const binDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-orchestrator-bin-'));
+  const json = payload || {
+    status: 'completed',
+    fromRole: 'subagent',
+    toRole: 'next-phase',
+    taskTitle: 'Fake subagent task',
+    contextSummary: 'Synthetic subagent output for harness tests.',
+    findings: [],
+    filesTouched: [],
+    openQuestions: [],
+    recommendations: [],
+  };
+  const jsonText = JSON.stringify(json);
+  const jsTextLiteral = JSON.stringify(`${jsonText}\n`);
+
+  if (process.platform === 'win32') {
+    const script = path.join(binDir, 'codex-fake.mjs');
+    await fs.writeFile(script, `process.stdout.write(${jsTextLiteral});\n`, 'utf8');
+    const shim = path.join(binDir, 'codex.cmd');
+    await fs.writeFile(shim, `@echo off\r\nnode "${script}" %*\r\n`, 'utf8');
+    return binDir;
+  }
+
+  const file = path.join(binDir, 'codex');
+  await fs.writeFile(file, `#!/usr/bin/env node\nprocess.stdout.write(${jsTextLiteral});\n`, 'utf8');
+  await fs.chmod(file, 0o755);
+  return binDir;
+}
+
 async function writeSession(rootDir, sessionId, metaOverrides = {}, checkpoints = []) {
   const sessionDir = path.join(rootDir, 'memory', 'context-db', 'sessions', sessionId);
   await fs.mkdir(sessionDir, { recursive: true });
@@ -262,7 +292,7 @@ test('dispatch runtime registry rejects unknown runtime ids and unsupported mode
   assert.throws(() => runtimes.selectDispatchRuntime({ executionMode: 'none' }), /No dispatch runtime available/i);
 });
 
-test('dispatch runtime registry exposes the subagent runtime adapter contract as a stub', async () => {
+test('dispatch runtime registry blocks live subagent execution until explicitly opted in', async () => {
   const runtimes = await importDispatchRuntimes();
   assert.ok(runtimes, 'expected runtime registry module');
 
@@ -272,7 +302,7 @@ test('dispatch runtime registry exposes the subagent runtime adapter contract as
   assert.equal(runtime.requiresModel, true);
   assert.equal(runtime.manifestVersion, 1);
 
-  const result = runtime.execute({ plan: { phases: [] }, dispatchPlan: { jobs: [] }, dispatchPolicy: null, env: {} });
+  const result = await runtime.execute({ plan: { phases: [] }, dispatchPlan: { jobs: [] }, dispatchPolicy: null, env: {} });
   assert.equal(result.mode, 'live');
   assert.equal(result.ok, false);
   assert.equal(Array.isArray(result.jobRuns), true);
@@ -289,7 +319,7 @@ test('dispatch runtime registry can simulate the subagent runtime when explicitl
   const plan = buildOrchestrationPlan({ blueprint: 'feature', taskTitle: 'Simulate subagent runtime' });
   const dispatchPlan = buildLocalDispatchPlan(plan);
 
-  const result = runtime.execute({
+  const result = await runtime.execute({
     plan,
     dispatchPlan,
     dispatchPolicy: null,
@@ -303,6 +333,39 @@ test('dispatch runtime registry can simulate the subagent runtime when explicitl
   assert.equal(result.ok, true);
   assert.equal(result.jobRuns.length > 0, true);
   assert.equal(result.executorRegistry.length > 0, true);
+});
+
+test('dispatch runtime registry can execute the subagent runtime with a configured client', async () => {
+  const runtimes = await importDispatchRuntimes();
+  assert.ok(runtimes, 'expected runtime registry module');
+
+  const fakeBin = await createFakeCodexCommand();
+  const registry = runtimes.createDispatchRuntimeRegistry({ executeDryRunPlan: () => ({ mode: 'dry-run', ok: true, jobRuns: [] }) });
+  const runtime = runtimes.resolveDispatchRuntime({ runtimeId: 'subagent-runtime', executionMode: 'live' }, registry);
+
+  const plan = buildOrchestrationPlan({ blueprint: 'feature', taskTitle: 'Execute subagent runtime' });
+  const dispatchPlan = buildLocalDispatchPlan(plan);
+
+  const result = await runtime.execute({
+    plan,
+    dispatchPlan,
+    dispatchPolicy: null,
+    env: {
+      ...process.env,
+      AIOS_EXECUTE_LIVE: '1',
+      AIOS_SUBAGENT_CLIENT: 'codex-cli',
+      AIOS_SUBAGENT_CONCURRENCY: '2',
+      PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
+    },
+    io: { log() {} },
+  });
+
+  assert.equal(result.mode, 'live');
+  assert.equal(result.ok, true);
+  assert.equal(result.runtime?.id, 'subagent-runtime');
+  assert.equal(result.jobRuns.length > plan.phases.length, true);
+  assert.equal(result.jobRuns.every((jobRun) => jobRun.status !== 'blocked'), true);
+  assert.equal(result.finalOutputs.length > 0, true);
 });
 
 test('dispatch runtime registry keeps blocked workflow results as structured runtime output', async () => {
@@ -322,7 +385,7 @@ test('dispatch runtime registry keeps blocked workflow results as structured run
     }),
   });
   const runtime = runtimes.resolveDispatchRuntime({ executionMode: 'dry-run' }, registry);
-  const result = runtime.execute({ plan: { phases: [] }, dispatchPlan: { jobs: [] }, dispatchPolicy: null });
+  const result = await runtime.execute({ plan: { phases: [] }, dispatchPlan: { jobs: [] }, dispatchPolicy: null });
 
   assert.equal(result.ok, false);
   assert.equal(result.runtime.id, 'local-dry-run');
@@ -338,7 +401,7 @@ test('dispatch runtime registry rejects invalid runtime output', async () => {
   });
   const runtime = runtimes.resolveDispatchRuntime({ executionMode: 'dry-run' }, registry);
 
-  assert.throws(
+  await assert.rejects(
     () => runtime.execute({ plan: { phases: [] }, dispatchPlan: { jobs: [] }, dispatchPolicy: null }),
     /invalid jobRuns/i
   );
