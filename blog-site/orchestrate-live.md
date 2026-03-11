@@ -25,6 +25,8 @@ export AIOS_SUBAGENT_CLIENT=codex-cli  # or claude-code, gemini-cli
 aios orchestrate --session <session-id> --dispatch local --execute live --format json
 ```
 
+Tip (codex-cli): Codex CLI v0.114+ supports `codex exec` structured outputs (`--output-schema`, `--output-last-message`, stdin). AIOS uses them when available for more reliable JSON handoffs.
+
 Token cost:
 
 - `dry-run` does not call any model runtime
@@ -54,4 +56,3 @@ This makes orchestration actionable without inventing a new runtime:
 - same ContextDB session memory
 - same merge/ownership rules
 - now with real (opt-in) parallel execution
-

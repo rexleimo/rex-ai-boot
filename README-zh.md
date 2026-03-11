@@ -156,6 +156,8 @@ export AIOS_SUBAGENT_CLIENT=codex-cli  # 或 claude-code, gemini-cli
 aios orchestrate --session <session-id> --dispatch local --execute live --format json
 ```
 
+提示（codex-cli）：推荐 Codex CLI >= v0.114。AIOS 会在可用时自动使用 `codex exec` 的结构化输出（`--output-schema` + `--output-last-message` + stdin），旧版本会自动降级为 stdout 解析。
+
 ### Context Pack Fail-Open（避免包装层硬崩）
 
 默认情况下，如果 `contextdb context:pack` 失败，`ctx-agent` 会**告警并继续运行**（不注入上下文，也不让 `codex/claude/gemini` 整体起不来）。

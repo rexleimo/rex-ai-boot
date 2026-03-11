@@ -23,6 +23,9 @@ Use this harness to keep long tasks stable under UI drift, model variability, an
 - If the runtime has no true subagent tool, emulate dispatch with explicit per-domain task queues and only parallelize safe independent reads/checks.
 - Always finish with `superpowers:verification-before-completion` before claiming run success.
 
+## Orchestrate Live Notes
+- When running `aios orchestrate --execute live` with `AIOS_SUBAGENT_CLIENT=codex-cli`, Codex CLI v0.114+ supports structured exec outputs (`--output-schema`, `--output-last-message`, stdin). AIOS uses them when available and falls back to stdout parsing for older versions.
+
 ## Required Controls
 - Time budget per step and per run.
 - Retry budget per failure class.

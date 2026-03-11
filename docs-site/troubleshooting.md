@@ -93,6 +93,8 @@ export AIOS_SUBAGENT_CLIENT=codex-cli  # or claude-code, gemini-cli
 
 3. Ensure the selected CLI exists on `PATH` and is authenticated (for example, `codex --version`, `claude --version`).
 
+Tip (codex-cli): Codex CLI v0.114+ supports `codex exec` structured outputs (`--output-schema`, `--output-last-message`, stdin). AIOS uses them when available for more reliable JSON handoffs.
+
 Tip: to validate the DAG without any model calls, use `--execute dry-run` (or set `AIOS_SUBAGENT_SIMULATE=1` for the live runtime adapter simulation).
 
 ## Commands not wrapped

@@ -211,6 +211,8 @@ export AIOS_SUBAGENT_CLIENT=codex-cli  # 또는 claude-code, gemini-cli
 aios orchestrate --session <session-id> --dispatch local --execute live --format json
 ```
 
+Tip (codex-cli): Codex CLI v0.114+는 `codex exec` 구조화 출력(`--output-schema`, `--output-last-message`, stdin)을 지원합니다. AIOS는 가능하면 자동 사용하고, 구버전에서는 stdout 파싱으로 폴백합니다.
+
 선택 제어:
 
 - `AIOS_SUBAGENT_CONCURRENCY` (default: `2`)

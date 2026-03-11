@@ -14,7 +14,7 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
 
 ## Recent Versions
 
-- `main` (Unreleased): ship `subagent-runtime` live execution for `aios orchestrate` (opt-in via `AIOS_EXECUTE_LIVE=1`)
+- `main` (Unreleased): ship `subagent-runtime` live execution for `aios orchestrate` (opt-in via `AIOS_EXECUTE_LIVE=1`); prefer Codex CLI v0.114+ structured exec outputs for stable JSON handoffs
 - `0.16.0` (2026-03-10): add orchestrator agent catalog and generators
 - `0.15.0` (2026-03-10): gate live orchestrate execution behind `AIOS_EXECUTE_LIVE`
 - `0.14.0` (2026-03-10): add `subagent-runtime` runtime adapter (stub)

@@ -156,6 +156,8 @@ export AIOS_SUBAGENT_CLIENT=codex-cli  # or claude-code, gemini-cli
 aios orchestrate --session <session-id> --dispatch local --execute live --format json
 ```
 
+Tip (codex-cli): Codex CLI v0.114+ supports structured exec outputs. AIOS will auto-use `codex exec` with `--output-schema` + `--output-last-message` + stdin when available, and fall back to stdout parsing for older versions.
+
 ### Context Pack Fail-Open (prevent wrapper hard failures)
 
 By default, `ctx-agent` will **warn and continue** if `contextdb context:pack` fails (it will run the CLI without injected context rather than crashing).

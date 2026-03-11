@@ -25,6 +25,8 @@ export AIOS_SUBAGENT_CLIENT=codex-cli  # 或 claude-code, gemini-cli
 aios orchestrate --session <session-id> --dispatch local --execute live --format json
 ```
 
+提示（codex-cli）：推荐 Codex CLI >= v0.114。AIOS 会在可用时自动使用 `codex exec` 的结构化输出（`--output-schema`、`--output-last-message`、stdin），让 JSON handoff 更稳定。
+
 关于 token 成本：
 
 - `dry-run` 不会调用任何模型
@@ -54,4 +56,3 @@ aios orchestrate --session <session-id> --dispatch local --execute live --format
 - 记忆还是 ContextDB
 - 合并规则还是显式的 ownership/merge-gate
 - 只是把 live 执行补齐，并且依旧默认安全
-

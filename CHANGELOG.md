@@ -9,6 +9,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - feat(aios): wire orchestrator agents into lifecycle components
 - feat(orchestrate): derive blueprint phases from orchestrator-blueprints spec
 - feat(harness): implement `subagent-runtime` live execution via CLI subagents (`AIOS_SUBAGENT_CLIENT=codex-cli|claude-code|gemini-cli`)
+- feat(harness): prefer codex-cli v0.114+ structured exec outputs (`--output-schema`, `--output-last-message`, stdin) for stable JSON handoffs (falls back for older versions)
 - fix(learn-eval): route ContextDB quality failures to a concrete gate target
 - fix(ctx-agent): fail-open when context:pack fails (set CTXDB_PACK_STRICT=1 to make it fatal)
 - fix(ctx-agent): honor cmd-backed CLI wrappers by using shell-aware spawn specs (prevents Windows wrapper regressions)

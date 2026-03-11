@@ -246,6 +246,8 @@ export AIOS_SUBAGENT_CLIENT=codex-cli  # or claude-code, gemini-cli
 aios orchestrate --session <session-id> --dispatch local --execute live --format json
 ```
 
+Tip (codex-cli): Codex CLI v0.114+ supports `codex exec` structured outputs (`--output-schema`, `--output-last-message`, stdin). AIOS uses them when available and falls back to stdout parsing on older versions.
+
 Optional controls:
 
 - `AIOS_SUBAGENT_CONCURRENCY` (default: `2`)

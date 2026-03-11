@@ -75,6 +75,8 @@ export AIOS_SUBAGENT_CLIENT=codex-cli  # 또는 claude-code, gemini-cli
 
 선택한 CLI가 `PATH`에 있고 인증되어 있는지 확인하세요 (예: `codex --version`, `claude --version`).
 
+Tip (codex-cli): Codex CLI v0.114+는 `codex exec` 구조화 출력(`--output-schema`, `--output-last-message`, stdin)을 지원합니다. AIOS는 가능하면 자동 사용해 JSON handoff 안정성을 높입니다.
+
 Tip: 먼저 DAG를 검증하고 싶다면 `--execute dry-run`을 사용하거나, `AIOS_SUBAGENT_SIMULATE=1`로 live 런타임을 로컬 시뮬레이션할 수 있습니다.
 
 ## 래퍼가 동작하지 않음

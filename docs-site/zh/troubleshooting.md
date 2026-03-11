@@ -83,6 +83,8 @@ export AIOS_SUBAGENT_CLIENT=codex-cli  # 或 claude-code, gemini-cli
 
 同时确保所选 CLI 在 `PATH` 中并已登录（例如 `codex --version`、`claude --version`）。
 
+提示（codex-cli）：推荐 Codex CLI >= v0.114。AIOS 会在可用时自动使用 `codex exec` 的结构化输出（`--output-schema`、`--output-last-message`、stdin），让 JSON handoff 更稳定。
+
 提示：想先验证 DAG 而不产生 token 成本，可以用 `--execute dry-run`，或设置 `AIOS_SUBAGENT_SIMULATE=1` 走 live runtime 的本地模拟路径。
 
 ## 命令没有被包装

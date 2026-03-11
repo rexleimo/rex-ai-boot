@@ -14,7 +14,7 @@ description: 릴리스 이력, 업그레이드 안내, 관련 문서 링크.
 
 ## 최근 버전
 
-- `main` (미릴리스): `aios orchestrate`에 `subagent-runtime` live 실행 추가 (`AIOS_EXECUTE_LIVE=1` 필요)
+- `main` (미릴리스): `aios orchestrate`에 `subagent-runtime` live 실행 추가 (`AIOS_EXECUTE_LIVE=1` 필요); Codex CLI v0.114+ 구조화 출력으로 JSON handoff 안정화
 - `0.16.0` (2026-03-10): orchestrator agent catalog 및 생성기 추가
 - `0.15.0` (2026-03-10): `orchestrate live` 기본 게이트 (`AIOS_EXECUTE_LIVE`)
 - `0.14.0` (2026-03-10): `subagent-runtime` 런타임 어댑터(stub) 추가

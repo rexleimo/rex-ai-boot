@@ -14,7 +14,7 @@ description: 版本历史、升级说明与文档变更入口。
 
 ## 最近版本
 
-- `main`（未发布）：`aios orchestrate` 上线 `subagent-runtime` live 执行（需 `AIOS_EXECUTE_LIVE=1`）
+- `main`（未发布）：`aios orchestrate` 上线 `subagent-runtime` live 执行（需 `AIOS_EXECUTE_LIVE=1`）；优先使用 Codex CLI v0.114+ 的结构化输出生成稳定 JSON handoff
 - `0.16.0`（2026-03-10）：新增 orchestrator agent catalog 与生成器
 - `0.15.0`（2026-03-10）：`orchestrate live` 默认门禁（`AIOS_EXECUTE_LIVE`）
 - `0.14.0`（2026-03-10）：新增 `subagent-runtime` 运行时适配器（stub）
