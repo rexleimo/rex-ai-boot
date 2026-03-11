@@ -195,8 +195,13 @@ aios() {
       return 0
       ;;
     *)
-      echo "[warn] unknown aios subcommand: $sub"
-      echo "Usage: aios [doctor|update|privacy] [args]"
+      local script="$rootpath/scripts/aios.sh"
+      if [[ -x "$script" ]]; then
+        "$script" "$sub" "$@"
+        return $?
+      fi
+      echo "[warn] missing TUI entry script: $script"
+      echo "Usage: aios [doctor|update|privacy|<other>] [args]"
       return 1
       ;;
   esac

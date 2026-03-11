@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { getCommandSpawnSpec } from './lib/platform/process.mjs';
 import { promises as fs } from 'node:fs';
 import { existsSync } from 'node:fs';
@@ -71,6 +72,181 @@ function parseBoolEnv(value, defaultValue) {
     return false;
   }
   return defaultValue;
+}
+
+function shouldInjectWorkspaceMemory(env = process.env) {
+  return parseBoolEnv(env.CTXDB_WORKSPACE_MEMORY, true);
+}
+
+function parseBoundedIntegerEnv(value, defaultValue, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return defaultValue;
+  }
+  const parsed = Number.parseInt(String(value).trim(), 10);
+  if (!Number.isFinite(parsed)) {
+    return defaultValue;
+  }
+  return Math.min(Math.max(parsed, min), max);
+}
+
+function normalizeWorkspaceMemorySpace(raw) {
+  const value = String(raw || '').trim();
+  return value ? value : 'default';
+}
+
+function workspaceMemoryStatePath(workspaceRoot) {
+  return path.join(workspaceRoot, 'memory', 'context-db', '.workspace-memory.json');
+}
+
+async function readActiveSpaceFromState(workspaceRoot) {
+  try {
+    const raw = await fs.readFile(workspaceMemoryStatePath(workspaceRoot), 'utf8');
+    if (!raw) return '';
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.activeSpace === 'string' ? parsed.activeSpace.trim() : '';
+  } catch {
+    return '';
+  }
+}
+
+async function resolveWorkspaceMemorySpace(workspaceRoot, env = process.env) {
+  const envSpace = String(env.WORKSPACE_MEMORY_SPACE || '').trim();
+  if (envSpace) return normalizeWorkspaceMemorySpace(envSpace);
+  const stored = await readActiveSpaceFromState(workspaceRoot);
+  if (stored) return normalizeWorkspaceMemorySpace(stored);
+  return 'default';
+}
+
+function sanitizeSpaceForSessionId(space) {
+  const trimmed = normalizeWorkspaceMemorySpace(space);
+  const normalized = trimmed
+    .toLowerCase()
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  if (normalized) return normalized;
+  const hash = createHash('sha256').update(trimmed, 'utf8').digest('hex').slice(0, 10);
+  return `space-${hash}`;
+}
+
+function workspaceMemorySessionId(space) {
+  return `workspace-memory--${sanitizeSpaceForSessionId(space)}`;
+}
+
+async function readTailText(filePath, maxBytes) {
+  try {
+    const stats = await fs.stat(filePath);
+    const size = Number(stats.size) || 0;
+    if (size <= 0) return '';
+    const readSize = Math.min(size, maxBytes);
+    const start = size - readSize;
+
+    const handle = await fs.open(filePath, 'r');
+    try {
+      const buffer = Buffer.alloc(readSize);
+      await handle.read(buffer, 0, readSize, start);
+      let text = buffer.toString('utf8');
+      if (start > 0) {
+        const newline = text.indexOf('\n');
+        text = newline >= 0 ? text.slice(newline + 1) : '';
+      }
+      return text;
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    return '';
+  }
+}
+
+function formatWorkspaceMemoRefs(refs) {
+  if (!Array.isArray(refs) || refs.length === 0) return '';
+  const tokens = refs
+    .map((ref) => String(ref || '').trim())
+    .filter(Boolean)
+    .slice(0, 8)
+    .map((ref) => `#${ref}`);
+  return tokens.length > 0 ? ` ${tokens.join(' ')}` : '';
+}
+
+function formatWorkspaceMemoLine(event) {
+  const ts = event?.ts ? String(event.ts) : '';
+  const rawText = event?.text ? String(event.text) : '';
+  const text = rawText.replace(/\s+/g, ' ').trim();
+  const refsLabel = formatWorkspaceMemoRefs(event?.refs);
+  return ts ? `- [${ts}]${refsLabel}: ${text}` : `- ${text}`;
+}
+
+async function loadRecentMemoEvents(eventsPath, limit) {
+  if (limit <= 0) return [];
+  const tail = await readTailText(eventsPath, 1_000_000);
+  if (!tail.trim()) return [];
+
+  const lines = tail.split('\n');
+  const results = [];
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = String(lines[index] || '').trim();
+    if (!line) continue;
+    try {
+      const event = JSON.parse(line);
+      if (event?.kind !== 'memo') continue;
+      if (event?.role && String(event.role) !== 'user') continue;
+      results.push(event);
+      if (results.length >= limit) break;
+    } catch {
+      // ignore malformed lines
+    }
+  }
+  return results;
+}
+
+export async function buildWorkspaceMemoryOverlay(workspaceRoot, env = process.env) {
+  if (!shouldInjectWorkspaceMemory(env)) return '';
+
+  const space = await resolveWorkspaceMemorySpace(workspaceRoot, env);
+  const maxChars = parseBoundedIntegerEnv(env.WORKSPACE_MEMORY_MAX_CHARS, 4000, { min: 256, max: 20000 });
+  const recentLimit = parseBoundedIntegerEnv(env.WORKSPACE_MEMORY_RECENT_LIMIT, 10, { min: 0, max: 50 });
+
+  const sessionId = workspaceMemorySessionId(space);
+  const sessionRoot = path.join(workspaceRoot, 'memory', 'context-db', 'sessions', sessionId);
+  if (!existsSync(path.join(sessionRoot, 'meta.json'))) {
+    return '';
+  }
+
+  let pinned = '';
+  try {
+    pinned = await fs.readFile(path.join(sessionRoot, 'pinned.md'), 'utf8');
+  } catch {
+    pinned = '';
+  }
+  pinned = String(pinned || '').trim();
+
+  const memos = await loadRecentMemoEvents(path.join(sessionRoot, 'l2-events.jsonl'), recentLimit);
+
+  if (!pinned && memos.length === 0) {
+    return '';
+  }
+
+  const sections = [`## Workspace Memory`, `Space: ${space}`];
+  if (pinned) {
+    sections.push('### Pinned', pinned);
+  }
+  if (memos.length > 0) {
+    const lines = memos.map((event) => formatWorkspaceMemoLine(event));
+    sections.push('### Recent memos', lines.join('\n'));
+  }
+
+  const overlayRaw = `${sections.join('\n\n')}\n`;
+  if (overlayRaw.length <= maxChars) {
+    return overlayRaw;
+  }
+
+  const suffix = '\n[workspace memory truncated]\n';
+  const budget = Math.max(0, maxChars - suffix.length);
+  const trimmed = overlayRaw.slice(0, budget).trimEnd();
+  return `${trimmed}${suffix}`;
 }
 
 export function shouldAutoRebuildNative(env = process.env) {
@@ -411,7 +587,24 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
   }, { strict: strictPack });
   const packAbs = packResult.packAbs;
   const contextText = packResult.contextText;
-  const injectContext = packResult.ok && String(contextText).trim().length > 0;
+  let workspaceMemoryOverlay = '';
+  try {
+    workspaceMemoryOverlay = await buildWorkspaceMemoryOverlay(opts.workspaceRoot, process.env);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn(`[warn] workspace memory overlay skipped: ${reason}`);
+  }
+
+  if (workspaceMemoryOverlay) {
+    console.log('Workspace memory overlay: enabled');
+  }
+
+  const effectiveContextText = workspaceMemoryOverlay
+    ? contextText
+      ? `${workspaceMemoryOverlay}\n\n${contextText}`
+      : workspaceMemoryOverlay
+    : contextText;
+  const injectContext = String(effectiveContextText).trim().length > 0;
 
   console.log(`Session: ${opts.sessionId}`);
   console.log(`Workspace: ${opts.workspaceRoot}`);
@@ -439,7 +632,7 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
       output = `[dry-run] ${opts.agent} would execute prompt with context packet: ${packAbs}
 Prompt: ${opts.prompt}`;
     } else {
-      const result = runOneShotAgent(opts.agent, contextText, opts.prompt, opts.extraArgs, { injectContext });
+      const result = runOneShotAgent(opts.agent, effectiveContextText, opts.prompt, opts.extraArgs, { injectContext });
       output = result.output;
       exitCode = result.exitCode;
     }
@@ -502,5 +695,5 @@ Prompt: ${opts.prompt}`;
     return;
   }
 
-  runInteractiveAgent(opts.agent, contextText, opts.extraArgs, { injectContext });
+  runInteractiveAgent(opts.agent, effectiveContextText, opts.extraArgs, { injectContext });
 }

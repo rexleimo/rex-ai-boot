@@ -10,6 +10,7 @@ Commands:
   update        Update AIOS integrations
   uninstall     Remove selected AIOS integrations
   doctor        Verify AIOS installation and repo health
+  memo          Workspace memo + pinned memory helpers
   quality-gate  Run repo quality checks with harness profiles
   orchestrate   Preview reusable subagent workflow blueprints
   learn-eval    Turn checkpoint telemetry into operator recommendations
@@ -19,6 +20,7 @@ Examples:
   node scripts/aios.mjs update --components shell,skills --skip-doctor
   node scripts/aios.mjs uninstall --components shell,skills
   node scripts/aios.mjs doctor --strict --profile standard
+  node scripts/aios.mjs memo add "note #tag"
   node scripts/aios.mjs quality-gate pre-pr --profile strict
   node scripts/aios.mjs orchestrate feature --task "Ship orchestrator blueprints"
   node scripts/aios.mjs orchestrate --session codex-cli-20260303T080437-065e16c0 --format json
@@ -70,6 +72,24 @@ Options:
   --global-security
   --profile <minimal|standard|strict>
   -h, --help
+`;
+    case 'memo':
+      return `Usage:
+  node scripts/aios.mjs memo <subcommand> [options]
+
+Subcommands:
+  use <space>                         Set active workspace memory space
+  space list                          List existing spaces
+  add <text>                          Append memo event (supports #tag)
+  list [--limit N]                    List recent memos (default: 20)
+  search <query> [--limit N] [--semantic]
+                                      Search memos in current space
+  pin show                            Print pinned memory for current space
+  pin set <text>                      Replace pinned memory for current space
+  pin add <text>                      Append to pinned memory for current space
+
+Environment:
+  WORKSPACE_MEMORY_SPACE              Override active space for this run
 `;
     case 'quality-gate':
       return `Usage:

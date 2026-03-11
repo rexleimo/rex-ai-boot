@@ -31,6 +31,36 @@ Configure your client MCP config (use the absolute path printed by installer):
 }
 ```
 
+## Streamable HTTP (Bearer Token)
+
+Optional: expose the MCP server over Streamable HTTP at `/mcp` with `Authorization: Bearer <token>`.
+
+Environment:
+- `MCP_HTTP=1` enable HTTP server
+- `MCP_HTTP_HOST` (default: `127.0.0.1`)
+- `MCP_HTTP_PORT` (default: `43110`)
+- `MCP_HTTP_TOKEN` (required)
+- `MCP_HTTP_SESSION_TTL_MS` (default: `1800000`)
+
+Start (dev):
+
+```bash
+cd mcp-server
+export MCP_HTTP=1
+export MCP_HTTP_TOKEN="$(openssl rand -hex 16)"
+npm run dev
+```
+
+Smoke test initialize:
+
+```bash
+curl -sS -X POST "http://127.0.0.1:43110/mcp" \
+  -H "Authorization: Bearer $MCP_HTTP_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"curl","version":"0.0.0"}}}'
+```
+
 Then restart your client and smoke test:
 
 1. `browser_launch` `{"profile":"default","visible":true}`

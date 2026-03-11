@@ -30,6 +30,20 @@ test('parseArgs rejects invalid mode', () => {
   assert.throws(() => parseArgs(['setup', '--mode', 'bad-value']), /--mode must be one of/);
 });
 
+test('parseArgs accepts memo passthrough args', () => {
+  const result = parseArgs(['memo', 'add', 'hello', '#tag']);
+  assert.equal(result.command, 'memo');
+  assert.equal(result.mode, 'command');
+  assert.deepEqual(result.options.argv, ['add', 'hello', '#tag']);
+});
+
+test('parseArgs treats memo help as help mode', () => {
+  const result = parseArgs(['memo', '--help']);
+  assert.equal(result.command, 'memo');
+  assert.equal(result.mode, 'help');
+  assert.equal(result.help, true);
+});
+
 test('aios CLI prints help', () => {
   const result = spawnSync('node', ['scripts/aios.mjs', '--help'], {
     cwd: process.cwd(),
@@ -40,4 +54,15 @@ test('aios CLI prints help', () => {
   assert.match(result.stdout, /AIOS unified entry/i);
   assert.match(result.stdout, /setup/);
   assert.match(result.stdout, /doctor/);
+});
+
+test('aios memo prints help', () => {
+  const result = spawnSync('node', ['scripts/aios.mjs', 'memo', '--help'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /add <text>/i);
+  assert.match(result.stdout, /pin show/i);
 });

@@ -119,6 +119,34 @@ function parseInternalArgs(argv) {
   };
 }
 
+function parseMemoArgs(argv) {
+  const rest = argv.slice(1);
+  let help = false;
+  const passthrough = [];
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const arg = rest[index];
+    if (arg === '--') {
+      passthrough.push(...rest.slice(index + 1));
+      break;
+    }
+    if (arg === '-h' || arg === '--help' || arg === 'help') {
+      help = true;
+      continue;
+    }
+    passthrough.push(arg);
+  }
+
+  return {
+    mode: help ? 'help' : 'command',
+    help,
+    command: 'memo',
+    options: {
+      argv: passthrough,
+    },
+  };
+}
+
 function getCommandDefaults(command) {
   if (command === 'setup') return createDefaultSetupOptions();
   if (command === 'update') return createDefaultUpdateOptions();
@@ -278,6 +306,10 @@ export function parseArgs(argv = []) {
       command: 'root',
       options: {},
     };
+  }
+
+  if (first === 'memo') {
+    return parseMemoArgs(argv);
   }
 
   if (first === 'internal') {

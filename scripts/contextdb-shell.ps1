@@ -221,7 +221,15 @@ function aios {
     "--help" { }
     "help" { }
     default {
-      Write-Host "[warn] unknown aios subcommand: $sub"
+      $script = Join-Path $env:ROOTPATH "scripts/aios.ps1"
+      if (-not (Test-Path -LiteralPath $script)) {
+        Write-Host "[warn] missing TUI entry script: $script"
+        $global:LASTEXITCODE = 1
+        return
+      }
+      & $script $sub @rest
+      $global:LASTEXITCODE = $LASTEXITCODE
+      return
     }
   }
 

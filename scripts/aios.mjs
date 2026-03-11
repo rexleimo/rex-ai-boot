@@ -171,6 +171,12 @@ async function main() {
       process.exitCode = result.exitCode;
     }
   }
+
+  if (parsed.command === 'memo') {
+    const { runMemo } = await import('./lib/memo/memo.mjs');
+    await runMemo(parsed.options, { rootDir });
+    return;
+  }
 }
 
 main().catch((error) => {

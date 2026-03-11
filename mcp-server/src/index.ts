@@ -1,9 +1,13 @@
 // mcp-server/src/index.ts
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  isInitializeRequest,
 } from '@modelcontextprotocol/sdk/types.js';
 import {
   tools as playwrightTools,
@@ -16,49 +20,6 @@ import {
   authCheck,
   challengeCheck,
 } from './browser/index.js';
-
-const server = new Server(
-  {
-    name: 'playwright-browser-mcp',
-    version: '1.0.0',
-  },
-  {
-    capabilities: {
-      tools: {},
-    },
-  }
-);
-
-// 注册工具列表
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      // Playwright 浏览器工具
-      ...playwrightTools,
-      {
-        name: 'browser_close',
-        description: 'Close browser',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            profile: { type: 'string', default: 'default' },
-          },
-        },
-      },
-      {
-        name: 'browser_list_tabs',
-        description: 'List all tabs',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            profile: { type: 'string', default: 'default' },
-          },
-        },
-      },
-      // 保留旧版 puppeteer 工具（可选）
-    ],
-  };
-});
 
 // 工具处理器映射
 const toolHandlers: Record<string, (args: any) => Promise<any>> = {
@@ -133,43 +94,278 @@ const toolHandlers: Record<string, (args: any) => Promise<any>> = {
   },
 };
 
-// 处理工具调用
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
+function parseBoolEnv(value: string | undefined, fallback = false): boolean {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true;
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false;
+  return fallback;
+}
 
-  try {
-    const tool = toolHandlers[name];
-    if (!tool) {
-      throw new Error(`Unknown tool: ${name}`);
+function parsePortEnv(value: string | undefined, fallback: number): number {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback;
+  const parsed = Number.parseInt(String(value).trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 65535) return fallback;
+  return parsed;
+}
+
+function parseDurationMsEnv(value: string | undefined, fallback: number): number {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback;
+  const parsed = Number.parseInt(String(value).trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
+}
+
+function safeTimingEqual(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a, 'utf8');
+  const bBuf = Buffer.from(b, 'utf8');
+  if (aBuf.length !== bBuf.length) return false;
+  return timingSafeEqual(aBuf, bBuf);
+}
+
+function extractBearerToken(header: unknown): string {
+  const raw = Array.isArray(header) ? header[0] : header;
+  const text = typeof raw === 'string' ? raw.trim() : '';
+  if (!text) return '';
+  const match = /^bearer\s+(.+)$/i.exec(text);
+  return match ? match[1].trim() : '';
+}
+
+function createPlaywrightBrowserServer(): Server {
+  const server = new Server(
+    {
+      name: 'playwright-browser-mcp',
+      version: '1.0.0',
+    },
+    {
+      capabilities: {
+        tools: {},
+      },
     }
+  );
 
-    const result = await tool(args);
+  // 注册工具列表
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
-      content: [
+      tools: [
+        // Playwright 浏览器工具
+        ...playwrightTools,
         {
-          type: 'text',
-          text: JSON.stringify(result),
+          name: 'browser_close',
+          description: 'Close browser',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              profile: { type: 'string', default: 'default' },
+            },
+          },
         },
+        {
+          name: 'browser_list_tabs',
+          description: 'List all tabs',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              profile: { type: 'string', default: 'default' },
+            },
+          },
+        },
+        // 保留旧版 puppeteer 工具（可选）
       ],
     };
-  } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
-        },
-      ],
-      isError: true,
-    };
-  }
-});
+  });
 
-// 启动服务器
-async function main() {
+  // 处理工具调用
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+
+    try {
+      const tool = toolHandlers[name];
+      if (!tool) {
+        throw new Error(`Unknown tool: ${name}`);
+      }
+
+      const result = await tool(args);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result),
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
+          },
+        ],
+        isError: true,
+      };
+    }
+  });
+
+  return server;
+}
+
+async function startStdioServer() {
+  const server = createPlaywrightBrowserServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('Playwright Browser MCP Server running on stdio');
+}
+
+async function startHttpServer() {
+  const host = String(process.env.MCP_HTTP_HOST || '127.0.0.1').trim() || '127.0.0.1';
+  const port = parsePortEnv(process.env.MCP_HTTP_PORT, 43110);
+  const token = String(process.env.MCP_HTTP_TOKEN || '').trim();
+  if (!token) {
+    throw new Error('MCP_HTTP_TOKEN is required when MCP_HTTP=1');
+  }
+
+  const sessionTtlMs = parseDurationMsEnv(process.env.MCP_HTTP_SESSION_TTL_MS, 30 * 60 * 1000);
+  const app = createMcpExpressApp({ host });
+
+  type SessionEntry = {
+    transport: StreamableHTTPServerTransport;
+    server: Server;
+    lastSeenAt: number;
+  };
+  const sessions = new Map<string, SessionEntry>();
+
+  function touchSession(sessionId: string) {
+    const entry = sessions.get(sessionId);
+    if (entry) {
+      entry.lastSeenAt = Date.now();
+    }
+  }
+
+  function closeSession(sessionId: string) {
+    const entry = sessions.get(sessionId);
+    if (!entry) return;
+    sessions.delete(sessionId);
+    entry.transport.close().catch((error) => {
+      console.error(`[mcp-http] failed closing session ${sessionId}:`, error);
+    });
+  }
+
+  const cleanupTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [sessionId, entry] of sessions.entries()) {
+      if (now - entry.lastSeenAt > sessionTtlMs) {
+        console.error(`[mcp-http] session ttl expired: ${sessionId}`);
+        closeSession(sessionId);
+      }
+    }
+  }, Math.min(sessionTtlMs, 60_000));
+  cleanupTimer.unref?.();
+
+  app.all('/mcp', async (req: any, res: any) => {
+    const headerToken = extractBearerToken(req.headers?.authorization);
+    if (!headerToken || !safeTimingEqual(headerToken, token)) {
+      res.status(401).json({
+        jsonrpc: '2.0',
+        error: { code: -32001, message: 'Unauthorized' },
+        id: null,
+      });
+      return;
+    }
+
+    try {
+      const rawSessionId = req.headers?.['mcp-session-id'];
+      const sessionId = Array.isArray(rawSessionId) ? rawSessionId[0] : rawSessionId;
+      const sid = typeof sessionId === 'string' ? sessionId.trim() : '';
+
+      if (sid) {
+        const entry = sessions.get(sid);
+        if (!entry) {
+          res.status(404).json({
+            jsonrpc: '2.0',
+            error: { code: -32004, message: 'Not Found: Unknown session' },
+            id: null,
+          });
+          return;
+        }
+
+        entry.lastSeenAt = Date.now();
+        await entry.transport.handleRequest(req, res, req.body);
+        return;
+      }
+
+      if (req.method !== 'POST' || !isInitializeRequest(req.body)) {
+        res.status(400).json({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Bad Request: No valid session ID provided' },
+          id: null,
+        });
+        return;
+      }
+
+      const server = createPlaywrightBrowserServer();
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (newSessionId) => {
+          sessions.set(newSessionId, {
+            transport,
+            server,
+            lastSeenAt: Date.now(),
+          });
+        },
+      });
+
+      transport.onclose = () => {
+        const closedSessionId = transport.sessionId;
+        if (closedSessionId) {
+          sessions.delete(closedSessionId);
+        }
+      };
+
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+
+      const initializedSessionId = transport.sessionId;
+      if (initializedSessionId) {
+        touchSession(initializedSessionId);
+      }
+    } catch (error) {
+      console.error('[mcp-http] error handling request:', error);
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: '2.0',
+          error: { code: -32603, message: 'Internal server error' },
+          id: null,
+        });
+      }
+    }
+  });
+
+  const httpServer = app.listen(port, host, () => {
+    console.error(`Playwright Browser MCP Server HTTP listening on http://${host}:${port}/mcp`);
+  });
+
+  httpServer.on('error', (error: any) => {
+    console.error('[mcp-http] failed to start http server:', error);
+    process.exit(1);
+  });
+
+  process.on('SIGINT', () => {
+    console.error('Shutting down MCP HTTP server...');
+    for (const sessionId of sessions.keys()) {
+      closeSession(sessionId);
+    }
+    httpServer.close(() => process.exit(0));
+  });
+}
+
+// 启动服务器
+async function main() {
+  await startStdioServer();
+
+  if (parseBoolEnv(process.env.MCP_HTTP, false)) {
+    await startHttpServer();
+  }
 }
 
 main().catch(console.error);
