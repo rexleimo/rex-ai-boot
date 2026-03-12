@@ -169,17 +169,45 @@ test('windows npx falls back to npm exec when npx cli is absent', async () => {
   assert.deepEqual(spec.args, [npmCli, 'exec', '--', 'playwright', 'install', 'chromium']);
 });
 
-test('windows codex uses shell execution for cmd-backed cli wrappers', () => {
-  const spec = getCommandSpawnSpec('codex', ['--version'], { platform: 'win32' });
+test('windows codex uses shell execution for cmd-backed cli wrappers', async () => {
+  const binDir = await makeTemp('aios-win-codex-path-');
+  await writeFile(path.join(binDir, 'codex.cmd'), '', 'utf8');
+
+  const spec = getCommandSpawnSpec('codex', ['--version'], {
+    platform: 'win32',
+    env: { PATH: binDir, PATHEXT: '.EXE;.CMD' },
+  });
 
   assert.equal(spec.command, 'codex');
   assert.deepEqual(spec.args, ['--version']);
   assert.equal(spec.shell, true);
 });
 
-test('windows claude and gemini also use shell execution', () => {
-  const claudeSpec = getCommandSpawnSpec('claude', ['--version'], { platform: 'win32' });
-  const geminiSpec = getCommandSpawnSpec('gemini', ['--version'], { platform: 'win32' });
+test('windows codex avoids shell when a native executable is available', async () => {
+  const binDir = await makeTemp('aios-win-codex-exe-path-');
+  await writeFile(path.join(binDir, 'codex.exe'), '', 'utf8');
+
+  const spec = getCommandSpawnSpec('codex', ['--version'], {
+    platform: 'win32',
+    env: { PATH: binDir, PATHEXT: '.EXE;.CMD' },
+  });
+
+  assert.equal(spec.shell, false);
+});
+
+test('windows claude and gemini also use shell execution for cmd-backed wrappers', async () => {
+  const binDir = await makeTemp('aios-win-cli-path-');
+  await writeFile(path.join(binDir, 'claude.cmd'), '', 'utf8');
+  await writeFile(path.join(binDir, 'gemini.cmd'), '', 'utf8');
+
+  const claudeSpec = getCommandSpawnSpec('claude', ['--version'], {
+    platform: 'win32',
+    env: { PATH: binDir, PATHEXT: '.EXE;.CMD' },
+  });
+  const geminiSpec = getCommandSpawnSpec('gemini', ['--version'], {
+    platform: 'win32',
+    env: { PATH: binDir, PATHEXT: '.EXE;.CMD' },
+  });
 
   assert.equal(claudeSpec.shell, true);
   assert.equal(geminiSpec.shell, true);

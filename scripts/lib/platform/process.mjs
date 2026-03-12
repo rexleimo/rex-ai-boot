@@ -4,6 +4,59 @@ import { spawn, spawnSync } from 'node:child_process';
 
 const WINDOWS_SHELL_COMMANDS = new Set(['codex', 'claude', 'gemini']);
 
+function getEnvCaseInsensitive(env, key) {
+  if (!env) return '';
+  if (key in env) return env[key];
+  const lowerKey = key.toLowerCase();
+  const match = Object.keys(env).find((candidate) => candidate.toLowerCase() === lowerKey);
+  return match ? env[match] : '';
+}
+
+function splitWindowsPathEntries(rawPathValue = '') {
+  const entries = String(rawPathValue || '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => part.replace(/^"(.*)"$/u, '$1'));
+  return entries;
+}
+
+function splitWindowsPathExt(rawPathExt = '') {
+  const parts = String(rawPathExt || '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const normalized = part.startsWith('.') ? part : `.${part}`;
+      return normalized.toLowerCase();
+    });
+  return parts;
+}
+
+function resolveWindowsCommandExt(command, env = process.env) {
+  const base = path.basename(command).trim();
+  if (!base) return '';
+
+  const directExt = path.extname(base).toLowerCase();
+  if (directExt) return directExt;
+
+  const pathValue = getEnvCaseInsensitive(env, 'PATH') || '';
+  const pathExtValue = getEnvCaseInsensitive(env, 'PATHEXT') || '.COM;.EXE;.BAT;.CMD';
+  const dirs = splitWindowsPathEntries(pathValue);
+  const exts = splitWindowsPathExt(pathExtValue);
+
+  for (const dir of dirs) {
+    for (const ext of exts) {
+      const candidate = path.join(dir, `${base}${ext}`);
+      if (fs.existsSync(candidate)) {
+        return ext;
+      }
+    }
+  }
+
+  return '';
+}
+
 function splitExecutionOptions(options = {}) {
   const {
     platform = process.platform,
@@ -57,7 +110,7 @@ function getWindowsNodeCli(command, { platform = process.platform, execPath = pr
   return null;
 }
 
-function shouldUseWindowsShellCommand(command, { platform = process.platform } = {}) {
+function shouldUseWindowsShellCommand(command, { platform = process.platform, env = process.env } = {}) {
   if (platform !== 'win32') {
     return false;
   }
@@ -72,11 +125,24 @@ function shouldUseWindowsShellCommand(command, { platform = process.platform } =
     return false;
   }
 
-  return WINDOWS_SHELL_COMMANDS.has(normalized);
+  if (!WINDOWS_SHELL_COMMANDS.has(normalized)) {
+    return false;
+  }
+
+  const resolvedExt = resolveWindowsCommandExt(normalized, env);
+  if (resolvedExt === '.cmd' || resolvedExt === '.bat') {
+    return true;
+  }
+
+  if (resolvedExt) {
+    return false;
+  }
+
+  return true;
 }
 
 export function getCommandSpawnSpec(command, args = [], options = {}) {
-  const { platform, execPath } = splitExecutionOptions(options);
+  const { platform, execPath, spawnOptions } = splitExecutionOptions(options);
   const windowsNodeCli = getWindowsNodeCli(command, { platform, execPath });
   if (windowsNodeCli) {
     return {
@@ -89,7 +155,7 @@ export function getCommandSpawnSpec(command, args = [], options = {}) {
   return {
     command,
     args,
-    shell: shouldUseWindowsShellCommand(command, { platform }),
+    shell: shouldUseWindowsShellCommand(command, { platform, env: spawnOptions.env }),
   };
 }
 

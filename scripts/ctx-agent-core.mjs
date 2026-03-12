@@ -54,6 +54,19 @@ function runCommand(command, args, options = {}) {
   return result;
 }
 
+function runCommandWithInput(command, args, input, options = {}) {
+  const spec = getCommandSpawnSpec(command, args, options);
+  const result = spawnSync(spec.command, spec.args, {
+    cwd: options.cwd,
+    encoding: 'utf8',
+    input: String(input ?? ''),
+    stdio: options.stdio ?? ['pipe', 'pipe', 'pipe'],
+    shell: spec.shell ?? false,
+  });
+
+  return result;
+}
+
 function ensureSuccess(result, context) {
   if (result.error) {
     const reason = result.error.message || String(result.error);
@@ -438,9 +451,17 @@ function runOneShotAgent(agent, contextText, prompt, extraArgs, { injectContext 
     cmd = 'codex';
     if (injectContext) {
       const fullPrompt = `${contextText}\n\n## New User Request\n${prompt}`;
-      args = ['exec', fullPrompt, ...extraArgs];
+      args = ['exec', '-', ...extraArgs];
+      const result = runCommandWithInput(cmd, args, fullPrompt);
+      const output = `${result.stdout || ''}${result.stderr || ''}`;
+      const exitCode = result.status ?? 1;
+      return { output, exitCode };
     } else {
-      args = ['exec', prompt, ...extraArgs];
+      args = ['exec', '-', ...extraArgs];
+      const result = runCommandWithInput(cmd, args, prompt);
+      const output = `${result.stdout || ''}${result.stderr || ''}`;
+      const exitCode = result.status ?? 1;
+      return { output, exitCode };
     }
   }
 
@@ -462,7 +483,15 @@ function runInteractiveAgent(agent, contextText, extraArgs, { injectContext = tr
     args = injectContext ? ['-i', contextText, ...extraArgs] : [...extraArgs];
   } else {
     cmd = 'codex';
-    args = injectContext ? [...extraArgs, contextText] : [...extraArgs];
+    let shouldInject = injectContext;
+    if (shouldInject && process.platform === 'win32') {
+      const spec = getCommandSpawnSpec(cmd, [], { env: process.env });
+      if (spec.shell === true) {
+        shouldInject = false;
+        console.warn('[warn] Windows shell wrapper detected for codex; skipping auto prompt injection. Paste the context packet as your first prompt.');
+      }
+    }
+    args = shouldInject ? [...extraArgs, contextText] : [...extraArgs];
   }
 
   const result = runCommand(cmd, args, { stdio: 'inherit' });
