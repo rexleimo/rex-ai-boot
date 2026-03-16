@@ -358,3 +358,69 @@ For `rex-ai-boot`, the best path is:
 1. Continue live sampling and watch `sample.latency-watch` trend until average runtime stabilizes downward.
 2. Keep timeout budgets unchanged for now (`avgElapsedMs` rose to `243398` in the latest sample).
 3. Maintain runbook-first flow (`node scripts/aios.mjs doctor`) when `runbook.failure-triage` remains active.
+
+## 14) Checkpoint (2026-03-16, Latency Watch Continue)
+
+### Completed
+
+1. Re-ran runbook triage baseline:
+- `node scripts/aios.mjs doctor`
+- result: pass; only known warning remains (`default CDP port 9222` unreachable, local fallback available).
+
+2. Ran one additional live sample:
+- command:
+  - `AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=codex-cli node scripts/aios.mjs orchestrate --session codex-cli-20260303T080437-065e16c0 --dispatch local --execute live --format json`
+- result:
+  - `dispatchRun.ok=true`
+  - artifact: `memory/context-db/sessions/codex-cli-20260303T080437-065e16c0/artifacts/dispatch-run-20260316T103816Z.json`
+  - key elapsed:
+    - `phase.plan=45860ms`
+    - `phase.implement.wi.1=79620ms`
+    - `phase.implement.wi.2=32670ms`
+    - `phase.implement.wi.3=108732ms`
+  - `phase.review` and `phase.security` remained auto-completed at `0ms`.
+
+3. Refreshed learn-eval:
+- `node scripts/aios.mjs learn-eval --session codex-cli-20260303T080437-065e16c0 --format json`
+- latest artifact pointer:
+  - `memory/context-db/sessions/codex-cli-20260303T080437-065e16c0/artifacts/dispatch-run-20260316T103816Z.json`
+- trend update:
+  - `avgElapsedMs` improved from `243398` to `195953`.
+  - recommendation still includes `[observe] sample.latency-watch` and `[fix] runbook.failure-triage` (`clarity-needs-input=4`).
+
+### Decision
+
+1. Continue observation; do not reduce timeout yet.
+2. Keep runbook-first sequence (`doctor` before next live run) while collecting more successful live samples.
+
+## 15) Checkpoint (2026-03-16, Additional Consecutive Live Sample)
+
+### Completed
+
+1. Ran one more consecutive live sample for latency-watch:
+- command:
+  - `AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=codex-cli node scripts/aios.mjs orchestrate --session codex-cli-20260303T080437-065e16c0 --dispatch local --execute live --format json`
+- result:
+  - `dispatchRun.ok=true`
+  - artifact: `memory/context-db/sessions/codex-cli-20260303T080437-065e16c0/artifacts/dispatch-run-20260316T104413Z.json`
+  - key elapsed:
+    - `phase.plan=45282ms`
+    - `phase.implement.wi.1=233183ms` (spike)
+    - `phase.implement.wi.2=35132ms`
+    - `phase.implement.wi.3=38938ms`
+  - review/security stayed auto-completed at `0ms`.
+
+2. Refreshed learn-eval immediately after this run:
+- latest artifact pointer now:
+  - `memory/context-db/sessions/codex-cli-20260303T080437-065e16c0/artifacts/dispatch-run-20260316T104413Z.json`
+- trend:
+  - `avgElapsedMs=227731`
+  - `workItems.blockedRate=0.30`
+  - top signals remain:
+    - `[fix] runbook.failure-triage` (`clarity-needs-input=4`)
+    - `[observe] sample.latency-watch`
+
+### Decision
+
+1. Continue latency observation; timeout budgets remain unchanged.
+2. The `wi.1` spike confirms runtime volatility still exists, so no timeout reduction yet.
