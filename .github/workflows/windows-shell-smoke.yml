@@ -1,0 +1,79 @@
+name: windows-shell-smoke
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  windows-shell-smoke:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: mcp-server/package-lock.json
+
+      - name: Install mcp-server deps
+        run: npm ci
+        working-directory: mcp-server
+
+      - name: Install contextdb shell
+        id: install
+        shell: pwsh
+        run: .\scripts\install-contextdb-shell.ps1 --mode repo-only --force
+
+      - name: Shell doctor (internal)
+        shell: pwsh
+        run: node scripts/aios.mjs internal shell doctor
+
+      - name: Validate shell profiles (install)
+        shell: pwsh
+        run: |
+          $profiles = @(
+            "$HOME\Documents\PowerShell\Microsoft.PowerShell_profile.ps1",
+            "$HOME\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1"
+          )
+
+          foreach ($profile in $profiles) {
+            if (-not (Test-Path $profile)) {
+              throw "Missing profile: $profile"
+            }
+          }
+
+          foreach ($profile in $profiles) {
+            if (-not (Select-String -Path $profile -Pattern '# >>> contextdb-shell >>>' -SimpleMatch)) {
+              throw "Marker missing in: $profile"
+            }
+          }
+
+      - name: Uninstall contextdb shell
+        if: always()
+        shell: pwsh
+        run: .\scripts\uninstall-contextdb-shell.ps1
+
+      - name: Validate shell profiles (uninstall)
+        if: ${{ always() && steps.install.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          $profiles = @(
+            "$HOME\Documents\PowerShell\Microsoft.PowerShell_profile.ps1",
+            "$HOME\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1"
+          )
+
+          foreach ($profile in $profiles) {
+            if (-not (Test-Path $profile)) {
+              throw "Missing profile: $profile"
+            }
+          }
+
+          foreach ($profile in $profiles) {
+            if (Select-String -Path $profile -Pattern '# >>> contextdb-shell >>>' -SimpleMatch) {
+              throw "Marker still present in: $profile"
+            }
+          }
