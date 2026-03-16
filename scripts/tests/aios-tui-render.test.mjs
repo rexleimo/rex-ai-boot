@@ -10,6 +10,13 @@ test('skill picker renders descriptions for visible skills', () => {
   const state = createInitialState({
     catalogSkills: [
       {
+        name: 'verification-loop',
+        description: 'Evidence-before-assertions workflow for critical system verification and release checks.',
+        clients: ['codex'],
+        scopes: ['global', 'project'],
+        defaultInstall: { global: true, project: false },
+      },
+      {
         name: 'seo-geo-page-optimization',
         description: 'Optimize a page for SEO and GEO.',
         clients: ['codex'],
@@ -37,10 +44,15 @@ test('skill picker renders descriptions for visible skills', () => {
   next = reduceState(next, 'enter');
 
   const output = renderState(next, '/tmp/project');
+  assert.match(output, /Core/);
+  assert.match(output, /Optional/);
+  assert.match(output, /verification-loop/);
+  assert.match(output, /Evidence-before-assertions workflow for critical syst\.\.\./);
+  assert.doesNotMatch(output, /release checks\./);
   assert.match(output, /seo-geo-page-optimization/);
   assert.match(output, /Optimize a page for SEO and GEO\./);
   assert.match(output, /skill-constraints/);
-  assert.match(output, /Operational constraints and best practices for skill execution\./);
+  assert.match(output, /Operational constraints and best practices for skill\.\.\./);
 });
 
 test('global skill picker can show business skills without selecting them by default', () => {
@@ -97,13 +109,22 @@ test('repo catalog exposes xhs and jimeng skills to global scope without default
   assert.equal(jimeng.defaultInstall.project, false);
 });
 
-test('repo catalog keeps skill-constraints in the default core selection set', () => {
+test('repo catalog keeps system core skills in the default core selection set', () => {
   const catalogPath = path.resolve(process.cwd(), 'config', 'skills-catalog.json');
   const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
   const skillConstraints = catalog.skills.find((skill) => skill.name === 'skill-constraints');
+  const projectSystem = catalog.skills.find((skill) => skill.name === 'aios-project-system');
+  const longRunningHarness = catalog.skills.find((skill) => skill.name === 'aios-long-running-harness');
+  const contextdbAutopilot = catalog.skills.find((skill) => skill.name === 'contextdb-autopilot');
 
   assert.equal(skillConstraints.defaultInstall.global, true);
   assert.equal(skillConstraints.defaultInstall.project, false);
+  assert.equal(projectSystem.defaultInstall.global, true);
+  assert.equal(projectSystem.defaultInstall.project, false);
+  assert.equal(longRunningHarness.defaultInstall.global, true);
+  assert.equal(longRunningHarness.defaultInstall.project, false);
+  assert.equal(contextdbAutopilot.defaultInstall.global, true);
+  assert.equal(contextdbAutopilot.defaultInstall.project, false);
 });
 
 test('uninstall picker renders only installed skills for current scope and client', () => {

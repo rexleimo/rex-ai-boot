@@ -16,6 +16,14 @@ function renderDescription(text) {
   return `      ${text}`;
 }
 
+function truncateDescription(text, maxLength = 56) {
+  const value = String(text || '').trim();
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `${value.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
 function installedSkillNames(installedSkills, client, scope) {
   const scopeMap = installedSkills?.[scope] || {};
   if (client === 'all') {
@@ -39,6 +47,35 @@ function joinSelected(components) {
     .filter(([, selected]) => selected)
     .map(([name]) => name)
     .join(',') || '<none>';
+}
+
+function splitSkillGroups(skills) {
+  const core = [];
+  const optional = [];
+  for (const skill of skills) {
+    if (skill?.defaultInstall?.global) {
+      core.push(skill);
+    } else {
+      optional.push(skill);
+    }
+  }
+  return { core, optional };
+}
+
+function renderSkillSection(lines, skills, options, stateCursor, startIndex, title) {
+  if (skills.length === 0) {
+    return startIndex;
+  }
+  lines.push(title);
+  let cursorIndex = startIndex;
+  for (const skill of skills) {
+    lines.push(renderCheckbox(skill.name, Array.isArray(options?.selectedSkills) && options.selectedSkills.includes(skill.name), stateCursor === cursorIndex));
+    if (skill.description) {
+      lines.push(renderDescription(truncateDescription(skill.description)));
+    }
+    cursorIndex += 1;
+  }
+  return cursorIndex;
 }
 
 export function renderState(state, rootDir) {
@@ -158,12 +195,12 @@ export function renderState(state, rootDir) {
     if (skills.length === 0 && owner === 'uninstall') {
       lines.push('No installed skills for current scope/client');
     }
-    for (let index = 0; index < skills.length; index += 1) {
-      const skill = skills[index];
-      lines.push(renderCheckbox(skill.name, Array.isArray(options?.selectedSkills) && options.selectedSkills.includes(skill.name), state.cursor === index));
-      if (skill.description) {
-        lines.push(renderDescription(skill.description));
-      }
+    const groups = splitSkillGroups(skills);
+    let cursorIndex = 0;
+    cursorIndex = renderSkillSection(lines, groups.core, options, state.cursor, cursorIndex, 'Core');
+    cursorIndex = renderSkillSection(lines, groups.optional, options, state.cursor, cursorIndex, 'Optional');
+    if (skills.length === 0 && owner !== 'uninstall') {
+      lines.push('No skills available for current scope/client');
     }
     lines.push(renderItem('Done', state.cursor === skills.length));
     return `${lines.join('\n')}\n`;

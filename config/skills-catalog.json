@@ -92,7 +92,7 @@
       "clients": ["codex", "claude"],
       "scopes": ["global", "project"],
       "defaultInstall": {
-        "global": false,
+        "global": true,
         "project": false
       },
       "tags": ["aios", "repo"]
@@ -104,7 +104,7 @@
       "clients": ["codex", "claude"],
       "scopes": ["global", "project"],
       "defaultInstall": {
-        "global": false,
+        "global": true,
         "project": false
       },
       "tags": ["aios", "harness"]
@@ -116,7 +116,7 @@
       "clients": ["codex", "claude"],
       "scopes": ["global", "project"],
       "defaultInstall": {
-        "global": false,
+        "global": true,
         "project": false
       },
       "tags": ["aios", "contextdb"]
