@@ -33,14 +33,21 @@ Steps:
 1. Checkout repository.
 2. Setup Node.js (version 22, consistent with release workflow).
 3. Install `mcp-server` dependencies via `npm ci`.
-4. Run `scripts/install-contextdb-shell.ps1` with PowerShell.
-5. Run `node scripts/aios.mjs doctor` (non-strict, standard profile).
-6. Run `scripts/uninstall-contextdb-shell.ps1` (always, even on failure).
+4. Run `scripts/install-contextdb-shell.ps1 --mode repo-only --force` with PowerShell.
+5. Run `node scripts/aios.mjs internal shell doctor` (minimal, shell-only scope).
+6. Validate PowerShell profile(s) contain the managed block marker (`# >>> contextdb-shell >>>`).
+7. Run `scripts/uninstall-contextdb-shell.ps1` (always, even on failure).
+8. Validate PowerShell profile(s) no longer contain the managed block marker.
+
+PowerShell invocation:
+- Use `shell: pwsh` for all PowerShell steps.
+- Call scripts via `pwsh -NoProfile -ExecutionPolicy Bypass -File <script> <args>`.
 
 ## Error Handling
 
 - The uninstall step uses `if: always()` to ensure cleanup even if earlier steps fail.
 - A failing `doctor` or install step should fail the workflow (non-zero exit).
+- Profile block checks should fail the workflow if the marker is missing after install or still present after uninstall.
 
 ## Evidence
 
@@ -59,6 +66,7 @@ Local verification is not required for the GitHub Actions runner, but the workfl
 - Correct paths and PowerShell invocation.
 - Node version alignment with existing workflows.
 - Proper cleanup on failure.
+- Managed block insert/remove behavior in Windows PowerShell profiles.
 
 ## Rollback
 
