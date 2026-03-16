@@ -54,6 +54,53 @@ test('setup screen can cycle skills scope and retain selected skills metadata', 
   assert.deepEqual(state.options.setup.selectedSkills, []);
 });
 
+test('uninstall screen shows only installed skills for current scope and client, with no default selection', () => {
+  let state = createInitialState({
+    catalogSkills: [
+      {
+        name: 'find-skills',
+        clients: ['codex'],
+        scopes: ['global', 'project'],
+        defaultInstall: { global: true, project: false },
+      },
+      {
+        name: 'xhs-ops-methods',
+        clients: ['codex'],
+        scopes: ['global', 'project'],
+        defaultInstall: { global: false, project: false },
+      },
+    ],
+    installedSkills: {
+      global: {
+        codex: ['find-skills'],
+      },
+      project: {
+        codex: ['xhs-ops-methods'],
+      },
+    },
+  });
+
+  state = reduceState(state, 'down');
+  state = reduceState(state, 'down');
+  state = reduceState(state, 'enter');
+  assert.equal(state.screen, 'uninstall');
+  assert.deepEqual(state.options.uninstall.selectedSkills, []);
+
+  for (let index = 0; index < 5; index += 1) {
+    state = reduceState(state, 'down');
+  }
+  assert.equal(state.cursor, 5);
+  state = reduceState(state, 'space');
+  assert.equal(state.options.uninstall.client, 'codex');
+  assert.deepEqual(state.options.uninstall.selectedSkills, []);
+
+  state = reduceState(state, 'up');
+  assert.equal(state.cursor, 4);
+  state = reduceState(state, 'space');
+  assert.equal(state.options.uninstall.scope, 'project');
+  assert.deepEqual(state.options.uninstall.selectedSkills, []);
+});
+
 test('quit key always requests exit', () => {
   const state = reduceState(createInitialState(), 'quit');
   assert.equal(state.exitRequested, true);

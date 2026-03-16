@@ -96,3 +96,47 @@ test('repo catalog exposes xhs and jimeng skills to global scope without default
   assert.equal(jimeng.defaultInstall.global, false);
   assert.equal(jimeng.defaultInstall.project, false);
 });
+
+test('uninstall picker renders only installed skills for current scope and client', () => {
+  const state = createInitialState({
+    catalogSkills: [
+      {
+        name: 'find-skills',
+        description: 'Discover installable skills.',
+        clients: ['codex'],
+        scopes: ['global', 'project'],
+        defaultInstall: { global: true, project: false },
+      },
+      {
+        name: 'xhs-ops-methods',
+        description: 'Reusable Xiaohongshu operations workflow.',
+        clients: ['codex'],
+        scopes: ['global', 'project'],
+        defaultInstall: { global: false, project: false },
+      },
+    ],
+    installedSkills: {
+      global: {
+        codex: ['find-skills'],
+      },
+      project: {
+        codex: ['xhs-ops-methods'],
+      },
+    },
+  });
+
+  let next = reduceState(state, 'down');
+  next = reduceState(next, 'down');
+  next = reduceState(next, 'enter');
+  for (let index = 0; index < 5; index += 1) {
+    next = reduceState(next, 'down');
+  }
+  next = reduceState(next, 'space');
+  next = reduceState(next, 'down');
+  next = reduceState(next, 'enter');
+
+  const output = renderState(next, '/tmp/project');
+  assert.match(output, /find-skills/);
+  assert.doesNotMatch(output, /xhs-ops-methods/);
+  assert.match(output, /\[ \] find-skills/);
+});

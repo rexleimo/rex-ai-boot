@@ -61,6 +61,14 @@ function visibleSkillNames(catalogSkills, client, scope) {
     .filter(Boolean);
 }
 
+function installedSkillNames(installedSkills, client, scope) {
+  const scopeMap = installedSkills?.[scope] || {};
+  if (client === 'all') {
+    return [...new Set(Object.values(scopeMap).flatMap((items) => Array.isArray(items) ? items : []))];
+  }
+  return Array.isArray(scopeMap[client]) ? scopeMap[client] : [];
+}
+
 function defaultSelectedSkills(catalogSkills, client, scope) {
   return catalogSkills
     .filter((skill) => Array.isArray(skill.scopes) && skill.scopes.includes(scope))
@@ -69,10 +77,23 @@ function defaultSelectedSkills(catalogSkills, client, scope) {
     .map((skill) => skill.name);
 }
 
-function syncSelectedSkills(option, catalogSkills) {
+function defaultUninstallSelectedSkills(catalogSkills, installedSkills, client, scope) {
+  const visible = new Set(visibleSkillNames(catalogSkills, client, scope));
+  return installedSkillNames(installedSkills, client, scope).filter((name) => visible.has(name));
+}
+
+function syncSelectedSkills(option, catalogSkills, installedSkills, mode = 'catalog-default') {
+  if (mode === 'installed') {
+    option.selectedSkills = [];
+    return;
+  }
   const visible = new Set(visibleSkillNames(catalogSkills, option.client, option.scope));
   const selected = Array.isArray(option.selectedSkills) ? option.selectedSkills.filter((name) => visible.has(name)) : [];
-  option.selectedSkills = selected.length > 0 ? selected : defaultSelectedSkills(catalogSkills, option.client, option.scope);
+  if (selected.length > 0) {
+    option.selectedSkills = selected;
+    return;
+  }
+  option.selectedSkills = defaultSelectedSkills(catalogSkills, option.client, option.scope);
 }
 
 function getSkillPickerActionState(state) {
@@ -81,13 +102,15 @@ function getSkillPickerActionState(state) {
     return { action: '', skills: [] };
   }
   const option = state.options[action];
+  const visible = visibleSkillNames(state.catalogSkills, option.client, option.scope);
+  const installedVisible = defaultUninstallSelectedSkills(state.catalogSkills, state.installedSkills, option.client, option.scope);
   return {
     action,
-    skills: visibleSkillNames(state.catalogSkills, option.client, option.scope),
+    skills: action === 'uninstall' ? installedVisible : visible,
   };
 }
 
-export function createInitialState({ catalogSkills = [] } = {}) {
+export function createInitialState({ catalogSkills = [], installedSkills = {} } = {}) {
   const setup = {
     components: {
       browser: true,
@@ -136,6 +159,7 @@ export function createInitialState({ catalogSkills = [] } = {}) {
     exitRequested: false,
     shouldRun: null,
     catalogSkills,
+    installedSkills,
     options: {
       setup,
       update,
@@ -196,11 +220,11 @@ export function reduceState(state, action) {
             break;
           case 5:
             next.options.setup.scope = cycle(SCOPE_OPTIONS, next.options.setup.scope);
-            syncSelectedSkills(next.options.setup, next.catalogSkills);
+            syncSelectedSkills(next.options.setup, next.catalogSkills, next.installedSkills, 'catalog-default');
             break;
           case 6:
             next.options.setup.client = cycle(CLIENT_OPTIONS, next.options.setup.client);
-            syncSelectedSkills(next.options.setup, next.catalogSkills);
+            syncSelectedSkills(next.options.setup, next.catalogSkills, next.installedSkills, 'catalog-default');
             break;
           case 7:
             next.options.setup.skipPlaywrightInstall = !next.options.setup.skipPlaywrightInstall;
@@ -250,11 +274,11 @@ export function reduceState(state, action) {
             break;
           case 5:
             next.options.update.scope = cycle(SCOPE_OPTIONS, next.options.update.scope);
-            syncSelectedSkills(next.options.update, next.catalogSkills);
+            syncSelectedSkills(next.options.update, next.catalogSkills, next.installedSkills, 'catalog-default');
             break;
           case 6:
             next.options.update.client = cycle(CLIENT_OPTIONS, next.options.update.client);
-            syncSelectedSkills(next.options.update, next.catalogSkills);
+            syncSelectedSkills(next.options.update, next.catalogSkills, next.installedSkills, 'catalog-default');
             break;
           case 7:
             next.options.update.withPlaywrightInstall = !next.options.update.withPlaywrightInstall;
@@ -301,11 +325,11 @@ export function reduceState(state, action) {
             break;
           case 4:
             next.options.uninstall.scope = cycle(SCOPE_OPTIONS, next.options.uninstall.scope);
-            syncSelectedSkills(next.options.uninstall, next.catalogSkills);
+            syncSelectedSkills(next.options.uninstall, next.catalogSkills, next.installedSkills, 'installed');
             break;
           case 5:
             next.options.uninstall.client = cycle(CLIENT_OPTIONS, next.options.uninstall.client);
-            syncSelectedSkills(next.options.uninstall, next.catalogSkills);
+            syncSelectedSkills(next.options.uninstall, next.catalogSkills, next.installedSkills, 'installed');
             break;
           default:
             break;

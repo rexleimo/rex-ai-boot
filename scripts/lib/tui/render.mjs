@@ -16,6 +16,14 @@ function renderDescription(text) {
   return `      ${text}`;
 }
 
+function installedSkillNames(installedSkills, client, scope) {
+  const scopeMap = installedSkills?.[scope] || {};
+  if (client === 'all') {
+    return [...new Set(Object.values(scopeMap).flatMap((items) => Array.isArray(items) ? items : []))];
+  }
+  return Array.isArray(scopeMap[client]) ? scopeMap[client] : [];
+}
+
 function renderSelectedSkills(selectedSkills) {
   if (!Array.isArray(selectedSkills) || selectedSkills.length === 0) {
     return '<none>';
@@ -144,8 +152,12 @@ export function renderState(state, rootDir) {
       ? state.catalogSkills
         .filter((skill) => Array.isArray(skill.scopes) && skill.scopes.includes(options.scope))
         .filter((skill) => options.client === 'all' || (Array.isArray(skill.clients) && skill.clients.includes(options.client)))
+        .filter((skill) => owner !== 'uninstall' || installedSkillNames(state.installedSkills, options.client, options.scope).includes(skill.name))
       : [];
     lines.push(`Select skills for ${owner || 'unknown'}`, '');
+    if (skills.length === 0 && owner === 'uninstall') {
+      lines.push('No installed skills for current scope/client');
+    }
     for (let index = 0; index < skills.length; index += 1) {
       const skill = skills[index];
       lines.push(renderCheckbox(skill.name, Array.isArray(options?.selectedSkills) && options.selectedSkills.includes(skill.name), state.cursor === index));

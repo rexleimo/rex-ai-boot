@@ -1,6 +1,9 @@
 import readline from 'node:readline';
+import fs from 'node:fs';
+import path from 'node:path';
 
 import { loadSkillsCatalog } from '../components/skills.mjs';
+import { getClientHomes } from '../platform/paths.mjs';
 import { renderState } from './render.mjs';
 import { createInitialState, reduceState } from './state.mjs';
 
@@ -30,6 +33,34 @@ async function waitForReturn() {
   });
 }
 
+function collectInstalledSkills({ rootDir, projectRoot, catalogSkills }) {
+  const homes = getClientHomes(process.env);
+  const installedSkills = {
+    global: {},
+    project: {},
+  };
+
+  for (const skill of catalogSkills) {
+    for (const client of Array.isArray(skill.clients) ? skill.clients : []) {
+      const globalRoot = path.join(homes[client] || '', 'skills');
+      const projectRootForClient = path.join(projectRoot, client === 'opencode' ? '.opencode/skills' : `.${client}/skills`);
+      const globalPath = path.join(globalRoot, skill.name);
+      const projectPath = path.join(projectRootForClient, skill.name);
+
+      if (fs.existsSync(globalPath)) {
+        installedSkills.global[client] = installedSkills.global[client] || [];
+        installedSkills.global[client].push(skill.name);
+      }
+      if (fs.existsSync(projectPath)) {
+        installedSkills.project[client] = installedSkills.project[client] || [];
+        installedSkills.project[client].push(skill.name);
+      }
+    }
+  }
+
+  return installedSkills;
+}
+
 export async function runInteractiveSession({ rootDir, onRun }) {
   let catalogSkills = [];
   try {
@@ -37,7 +68,8 @@ export async function runInteractiveSession({ rootDir, onRun }) {
   } catch {
     catalogSkills = [];
   }
-  const stateRef = { current: createInitialState({ catalogSkills }) };
+  const installedSkills = collectInstalledSkills({ rootDir, projectRoot: process.cwd(), catalogSkills });
+  const stateRef = { current: createInitialState({ catalogSkills, installedSkills }) };
 
   readline.emitKeypressEvents(process.stdin);
   process.stdin.setRawMode(true);
