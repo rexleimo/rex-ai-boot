@@ -33,21 +33,25 @@ Steps:
 1. Checkout repository.
 2. Setup Node.js (version 22, consistent with release workflow).
 3. Install `mcp-server` dependencies via `npm ci`.
-4. Run `scripts/install-contextdb-shell.ps1 --mode repo-only --force` with PowerShell.
+4. Run `.\scripts\install-contextdb-shell.ps1 --mode repo-only --force`.
 5. Run `node scripts/aios.mjs internal shell doctor` (minimal, shell-only scope).
 6. Validate PowerShell profile(s) contain the managed block marker (`# >>> contextdb-shell >>>`).
-7. Run `scripts/uninstall-contextdb-shell.ps1` (always, even on failure).
+7. Run `.\scripts\uninstall-contextdb-shell.ps1` (always, even on failure).
 8. Validate PowerShell profile(s) no longer contain the managed block marker.
 
 PowerShell invocation:
 - Use `shell: pwsh` for all PowerShell steps.
-- Call scripts via `pwsh -NoProfile -ExecutionPolicy Bypass -File <script> <args>`.
+- Call scripts directly (for example `.\scripts\install-contextdb-shell.ps1 --mode repo-only --force`).
 
 ## Error Handling
 
 - The uninstall step uses `if: always()` to ensure cleanup even if earlier steps fail.
-- A failing `doctor` or install step should fail the workflow (non-zero exit).
+- Doctor step success criteria is **exit code only** (warnings allowed).
 - Profile block checks should fail the workflow if the marker is missing after install or still present after uninstall.
+- Profile validation targets **both** PowerShell profiles used by the runtime:
+  - `Documents/PowerShell/Microsoft.PowerShell_profile.ps1`
+  - `Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1`
+  (use `$PROFILE.CurrentUserAllHosts` and `$PROFILE.CurrentUserCurrentHost`).
 
 ## Evidence
 
@@ -71,3 +75,15 @@ Local verification is not required for the GitHub Actions runner, but the workfl
 ## Rollback
 
 Remove `.github/workflows/windows-shell-smoke.yml` if the workflow proves noisy or unstable.
+
+## Acceptance Criteria
+
+The workflow is considered passing when all are true:
+- Install step exits 0.
+- `node scripts/aios.mjs internal shell doctor` exits 0 (warnings allowed).
+- After install, both `$PROFILE.CurrentUserAllHosts` and `$PROFILE.CurrentUserCurrentHost` contain `# >>> contextdb-shell >>>`.
+- After uninstall, neither profile file contains `# >>> contextdb-shell >>>`.
+
+Failure conditions:
+- Any step exits non-zero.
+- Marker missing after install or still present after uninstall.
