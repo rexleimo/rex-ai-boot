@@ -3,6 +3,8 @@ import {
   hasComponent,
   normalizeClient,
   normalizeComponents,
+  normalizeSkillNames,
+  normalizeSkillScope,
 } from './options.mjs';
 import { uninstallOrchestratorAgents } from '../components/agents.mjs';
 import { uninstallContextDbShell } from '../components/shell.mjs';
@@ -13,6 +15,8 @@ export function normalizeUninstallOptions(rawOptions = {}) {
   return {
     components: normalizeComponents(rawOptions.components, defaults.components),
     client: normalizeClient(rawOptions.client ?? defaults.client),
+    scope: normalizeSkillScope(rawOptions.scope ?? defaults.scope),
+    skills: normalizeSkillNames(rawOptions.skills ?? defaults.skills),
   };
 }
 
@@ -22,7 +26,9 @@ export function planUninstall(rawOptions = {}) {
     'uninstall',
     '--components', options.components.join(','),
     '--client', options.client,
+    '--scope', options.scope,
   ];
+  if (options.skills.length > 0) args.push('--skills', options.skills.join(','));
   return {
     command: 'uninstall',
     options,
@@ -30,7 +36,7 @@ export function planUninstall(rawOptions = {}) {
   };
 }
 
-export async function runUninstall(rawOptions = {}, { io = console, rootDir } = {}) {
+export async function runUninstall(rawOptions = {}, { io = console, rootDir, projectRoot = rootDir } = {}) {
   const { options } = planUninstall(rawOptions);
   io.log(`Uninstall components: ${options.components.join(',')}`);
 
@@ -39,7 +45,7 @@ export async function runUninstall(rawOptions = {}, { io = console, rootDir } = 
   }
 
   if (hasComponent(options.components, 'skills')) {
-    await uninstallContextDbSkills({ rootDir, client: options.client, io });
+    await uninstallContextDbSkills({ rootDir, projectRoot, client: options.client, scope: options.scope, selectedSkills: options.skills, io });
   }
 
   if (hasComponent(options.components, 'agents')) {

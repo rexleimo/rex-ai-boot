@@ -30,16 +30,28 @@ test('setup screen space toggles selected component', () => {
 
 test('setup screen enter on run goes to confirm and back returns to setup', () => {
   let state = reduceState(createInitialState(), 'enter');
-  for (let index = 0; index < 8; index += 1) {
+  for (let index = 0; index < 10; index += 1) {
     state = reduceState(state, 'down');
   }
-  assert.equal(state.cursor, 8);
+  assert.equal(state.cursor, 10);
   state = reduceState(state, 'enter');
   assert.equal(state.screen, 'confirm');
   assert.equal(state.confirmAction, 'setup');
 
   state = reduceState(state, 'back');
   assert.equal(state.screen, 'setup');
+});
+
+test('setup screen can cycle skills scope and retain selected skills metadata', () => {
+  let state = reduceState(createInitialState(), 'enter');
+  for (let index = 0; index < 5; index += 1) {
+    state = reduceState(state, 'down');
+  }
+  assert.equal(state.cursor, 5);
+  assert.equal(state.options.setup.scope, 'global');
+  state = reduceState(state, 'space');
+  assert.equal(state.options.setup.scope, 'project');
+  assert.deepEqual(state.options.setup.selectedSkills, []);
 });
 
 test('quit key always requests exit', () => {

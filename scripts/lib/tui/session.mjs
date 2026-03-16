@@ -1,5 +1,6 @@
 import readline from 'node:readline';
 
+import { loadSkillsCatalog } from '../components/skills.mjs';
 import { renderState } from './render.mjs';
 import { createInitialState, reduceState } from './state.mjs';
 
@@ -30,7 +31,13 @@ async function waitForReturn() {
 }
 
 export async function runInteractiveSession({ rootDir, onRun }) {
-  const stateRef = { current: createInitialState() };
+  let catalogSkills = [];
+  try {
+    catalogSkills = loadSkillsCatalog(rootDir);
+  } catch {
+    catalogSkills = [];
+  }
+  const stateRef = { current: createInitialState({ catalogSkills }) };
 
   readline.emitKeypressEvents(process.stdin);
   process.stdin.setRawMode(true);

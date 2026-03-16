@@ -3,6 +3,7 @@ import { HARNESS_PROFILE_NAMES, normalizeHarnessProfile } from '../harness/profi
 export const COMPONENT_NAMES = ['browser', 'shell', 'skills', 'agents', 'superpowers'];
 export const WRAP_MODES = ['all', 'repo-only', 'opt-in', 'off'];
 export const CLIENT_NAMES = ['all', 'codex', 'claude', 'gemini', 'opencode'];
+export const SKILL_SCOPE_NAMES = ['global', 'project'];
 export const QUALITY_GATE_MODES = ['quick', 'full', 'pre-pr'];
 export const ORCHESTRATOR_FORMAT_NAMES = ['text', 'json'];
 export const ORCHESTRATOR_BLUEPRINT_NAMES = ['feature', 'bugfix', 'refactor', 'security'];
@@ -27,6 +28,27 @@ export function normalizeClient(raw = 'all') {
     throw new Error(`--client must be one of: ${CLIENT_NAMES.join(', ')}`);
   }
   return value;
+}
+
+export function normalizeSkillScope(raw = 'global') {
+  const value = String(raw || 'global').trim().toLowerCase();
+  if (!SKILL_SCOPE_NAMES.includes(value)) {
+    throw new Error(`--scope must be one of: ${SKILL_SCOPE_NAMES.join(', ')}`);
+  }
+  return value;
+}
+
+export function normalizeSkillNames(raw = []) {
+  if (Array.isArray(raw)) {
+    return [...new Set(raw.map((item) => String(item || '').trim()).filter(Boolean))];
+  }
+
+  const input = String(raw ?? '').trim();
+  if (!input) {
+    return [];
+  }
+
+  return [...new Set(input.split(',').map((item) => item.trim()).filter(Boolean))];
 }
 
 export function normalizeQualityGateMode(raw = 'full') {
@@ -128,6 +150,8 @@ export function createDefaultSetupOptions() {
     components: [...COMPONENT_NAMES],
     wrapMode: 'opt-in',
     client: 'all',
+    scope: 'global',
+    skills: [],
     skipPlaywrightInstall: false,
     skipDoctor: false,
   };
@@ -138,6 +162,8 @@ export function createDefaultUpdateOptions() {
     components: [...COMPONENT_NAMES],
     wrapMode: 'opt-in',
     client: 'all',
+    scope: 'global',
+    skills: [],
     withPlaywrightInstall: false,
     skipDoctor: false,
   };
@@ -147,6 +173,8 @@ export function createDefaultUninstallOptions() {
   return {
     components: ['shell', 'skills'],
     client: 'all',
+    scope: 'global',
+    skills: [],
   };
 }
 

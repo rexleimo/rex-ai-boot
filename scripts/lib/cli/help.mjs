@@ -40,6 +40,8 @@ Options:
   --components <list>            Comma list: browser,shell,skills,agents,superpowers (default: browser,shell,skills,agents,superpowers)
   --mode <all|repo-only|opt-in|off>
   --client <all|codex|claude|gemini|opencode>
+  --scope <global|project>       Skills install scope (default: global)
+  --skills <list>                Comma list of skill names to install
   --skip-playwright-install
   --skip-doctor
   -h, --help
@@ -52,6 +54,8 @@ Options:
   --components <list>            Comma list: browser,shell,skills,agents,superpowers (default: browser,shell,skills,agents,superpowers)
   --mode <all|repo-only|opt-in|off>
   --client <all|codex|claude|gemini|opencode>
+  --scope <global|project>       Skills install scope (default: global)
+  --skills <list>                Comma list of skill names to install
   --with-playwright-install
   --skip-doctor
   -h, --help
@@ -63,6 +67,8 @@ Options:
 Options:
   --components <list>            Comma list: shell,skills,agents,browser,superpowers (default: shell,skills)
   --client <all|codex|claude|gemini|opencode>
+  --scope <global|project>       Skills uninstall scope (default: global)
+  --skills <list>                Comma list of skill names to uninstall
   -h, --help
 `;
     case 'doctor':
@@ -167,13 +173,13 @@ export function getInternalHelpText(target, action) {
 
   if (target === 'skills' && (action === 'install' || action === 'update')) {
     return `Usage:
-  node scripts/aios.mjs internal skills ${action} [--client <all|codex|claude|gemini|opencode>] [--force]
+  node scripts/aios.mjs internal skills ${action} [--client <all|codex|claude|gemini|opencode>] [--scope <global|project>] [--skills <list>] [--force]
 `;
   }
 
   if (target === 'skills' && (action === 'uninstall' || action === 'doctor')) {
     return `Usage:
-  node scripts/aios.mjs internal skills ${action} [--client <all|codex|claude|gemini|opencode>]
+  node scripts/aios.mjs internal skills ${action} [--client <all|codex|claude|gemini|opencode>] [--scope <global|project>] [--skills <list>]
 `;
   }
 

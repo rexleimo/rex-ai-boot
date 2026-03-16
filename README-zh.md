@@ -364,13 +364,27 @@ ContextDB 包装和 CLI 的 Skills 加载是两层机制：
 
 - 包装范围由上面的 `CTXDB_WRAP_MODE` 控制。
 - 使用上面的 skills 生命周期脚本完成安装/更新/卸载/诊断。
+- `aios` 的 skills 安装由 `config/skills-catalog.json` 驱动，不再是“扫描到什么就全装什么”。
 - skills 安装脚本默认会跳过同名已有目录；只有你明确要替换时再使用 `--force` / `-Force`。
+- 用 `--scope global` 把通用技能安装到用户 home；用 `--scope project` 把技能安装到当前仓库。
+- 用 `--skills <name1,name2>` 只安装或卸载你明确选中的技能。
 - 安装在 `~/.codex/skills`、`~/.claude/skills`、`~/.gemini/skills`、`~/.config/opencode/skills` 的技能是全局可见。
 - 仅项目可见的技能应放在 `<repo>/.codex/skills`、`<repo>/.claude/skills`。
+- 即梦、小红书这类强业务工作流技能通常应保持为项目级，而不是默认全局安装。
 - 不要把带 `SKILL.md` 的可发现技能放进 `.baoyu-skills/` 之类的平行目录；这类目录不会被 Codex/Claude 当作 repo-local skills 发现。`.baoyu-skills/` 只适合放 `EXTEND.md` 这类扩展配置。
 - `CODEX_HOME` 可以使用相对路径（包装器会在运行时按当前工作目录解析），但全局场景仍推荐绝对路径以减少歧义。
 
 如果你不希望跨项目复用技能，请把自定义技能放在仓库本地目录，而不是 `~` 下的全局目录。
+
+示例：
+
+```bash
+# 安装可跨项目复用的全局技能
+node scripts/aios.mjs setup --components skills --client codex --scope global --skills find-skills,verification-loop
+
+# 把仓库专用工作流技能安装到当前项目
+node scripts/aios.mjs setup --components skills --client codex --scope project --skills xhs-ops-methods,aios-jimeng-image-ops
+```
 
 ### 3.3 Privacy Guard（默认严格）
 

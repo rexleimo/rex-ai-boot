@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "name": "find-skills",
+      "description": "Discover installable skills.",
+      "source": ".codex/skills/find-skills",
+      "clients": ["codex", "claude", "gemini", "opencode"],
+      "scopes": ["global", "project"],
+      "defaultInstall": {
+        "global": true,
+        "project": false
+      },
+      "tags": ["general", "discovery"]
+    },
+    {
+      "name": "search-first",
+      "description": "Research-before-building workflow.",
+      "source": ".codex/skills/search-first",
+      "clients": ["codex", "claude", "gemini", "opencode"],
+      "scopes": ["global", "project"],
+      "defaultInstall": {
+        "global": true,
+        "project": false
+      },
+      "tags": ["general", "research"]
+    },
+    {
+      "name": "security-scan",
+      "description": "Lightweight security hygiene for agent configs.",
+      "source": ".codex/skills/security-scan",
+      "clients": ["codex", "claude", "gemini", "opencode"],
+      "scopes": ["global", "project"],
+      "defaultInstall": {
+        "global": true,
+        "project": false
+      },
+      "tags": ["general", "security"]
+    },
+    {
+      "name": "verification-loop",
+      "description": "Evidence-before-assertions workflow.",
+      "source": ".codex/skills/verification-loop",
+      "clients": ["codex", "claude", "gemini", "opencode"],
+      "scopes": ["global", "project"],
+      "defaultInstall": {
+        "global": true,
+        "project": false
+      },
+      "tags": ["general", "verification"]
+    },
+    {
+      "name": "versioning-by-impact",
+      "description": "Decide semantic versioning impact before release.",
+      "source": ".codex/skills/versioning-by-impact",
+      "clients": ["codex", "claude", "gemini", "opencode"],
+      "scopes": ["global", "project"],
+      "defaultInstall": {
+        "global": true,
+        "project": false
+      },
+      "tags": ["general", "release"]
+    },
+    {
+      "name": "seo-geo-page-optimization",
+      "description": "Optimize a page for SEO and GEO.",
+      "source": ".codex/skills/seo-geo-page-optimization",
+      "clients": ["codex", "claude"],
+      "scopes": ["global", "project"],
+      "defaultInstall": {
+        "global": false,
+        "project": false
+      },
+      "tags": ["content", "seo"]
+    },
+    {
+      "name": "skill-constraints",
+      "description": "Operational constraints and best practices for skill execution.",
+      "source": ".codex/skills/skill-constraints",
+      "clients": ["codex", "claude", "gemini", "opencode"],
+      "scopes": ["global", "project"],
+      "defaultInstall": {
+        "global": false,
+        "project": false
+      },
+      "tags": ["general", "safety"]
+    },
+    {
+      "name": "aios-project-system",
+      "description": "Canonical architecture and operating constraints for aios.",
+      "source": ".codex/skills/aios-project-system",
+      "clients": ["codex", "claude"],
+      "scopes": ["project"],
+      "defaultInstall": {
+        "global": false,
+        "project": true
+      },
+      "tags": ["aios", "repo"]
+    },
+    {
+      "name": "aios-long-running-harness",
+      "description": "Harness controls for long-running AIOS jobs.",
+      "source": ".codex/skills/aios-long-running-harness",
+      "clients": ["codex", "claude"],
+      "scopes": ["project"],
+      "defaultInstall": {
+        "global": false,
+        "project": true
+      },
+      "tags": ["aios", "harness"]
+    },
+    {
+      "name": "contextdb-autopilot",
+      "description": "Automatic ContextDB persistence workflow.",
+      "source": ".codex/skills/contextdb-autopilot",
+      "clients": ["codex", "claude"],
+      "scopes": ["project"],
+      "defaultInstall": {
+        "global": false,
+        "project": true
+      },
+      "tags": ["aios", "contextdb"]
+    },
+    {
+      "name": "cap-commit-push",
+      "description": "Fast commit-and-push shortcut for this repository.",
+      "source": ".codex/skills/cap-commit-push",
+      "clients": ["codex", "claude"],
+      "scopes": ["project"],
+      "defaultInstall": {
+        "global": false,
+        "project": false
+      },
+      "tags": ["aios", "git"]
+    },
+    {
+      "name": "aios-jimeng-image-ops",
+      "description": "Jimeng image generation workflow for aios.",
+      "source": ".codex/skills/aios-jimeng-image-ops",
+      "clients": ["codex", "claude"],
+      "scopes": ["project"],
+      "defaultInstall": {
+        "global": false,
+        "project": false
+      },
+      "tags": ["jimeng", "ops"]
+    },
+    {
+      "name": "seed2-manga-drama",
+      "description": "Seed2 style manga-drama generation workflow.",
+      "source": ".codex/skills/seed2-manga-drama",
+      "clients": ["codex", "claude"],
+      "scopes": ["project"],
+      "defaultInstall": {
+        "global": false,
+        "project": false
+      },
+      "tags": ["content", "video"]
+    },
+    {
+      "name": "xhs-ops-methods",
+      "description": "Reusable Xiaohongshu operations workflow.",
+      "source": ".codex/skills/xhs-ops-methods",
+      "clients": ["codex", "claude"],
+      "scopes": ["project"],
+      "defaultInstall": {
+        "global": false,
+        "project": false
+      },
+      "tags": ["xhs", "ops"]
+    }
+  ]
+}

@@ -364,13 +364,27 @@ ContextDB wrapping and CLI skill loading are different layers:
 
 - Wrapping scope is controlled by `CTXDB_WRAP_MODE` above.
 - Use skill lifecycle scripts above for install/update/uninstall/doctor.
+- `aios` skill installs are catalog-driven via `config/skills-catalog.json`, not "install everything found in the repo".
 - Skill installers skip existing same-name targets by default; use `--force` / `-Force` only when you intentionally replace them.
+- Use `--scope global` to install reusable skills into home directories, or `--scope project` to install them into the current repo.
+- Use `--skills <name1,name2>` to install or remove only the skills you selected.
 - Skills installed in `~/.codex/skills`, `~/.claude/skills`, `~/.gemini/skills`, or `~/.config/opencode/skills` are global.
 - Project-only skills should live in `<repo>/.codex/skills` or `<repo>/.claude/skills`.
+- Business-specific skills such as Jimeng or Xiaohongshu workflows should usually stay project-scoped instead of global.
 - Do not place discoverable `SKILL.md` files inside parallel folders such as `.baoyu-skills/`; Codex/Claude will not treat them as repo-local skills. Use `.baoyu-skills/` only for extension config such as `EXTEND.md`.
 - `CODEX_HOME` can be relative (wrappers resolve it against current working directory at runtime), but absolute paths are more predictable for global setups.
 
 If you don't want cross-project skill reuse, keep custom skills in repo-local folders instead of global home directories.
+
+Examples:
+
+```bash
+# install reusable global skills
+node scripts/aios.mjs setup --components skills --client codex --scope global --skills find-skills,verification-loop
+
+# install repo-specific workflow skills into the current project
+node scripts/aios.mjs setup --components skills --client codex --scope project --skills xhs-ops-methods,aios-jimeng-image-ops
+```
 
 ### 3.3 Privacy Guard (strict by default)
 

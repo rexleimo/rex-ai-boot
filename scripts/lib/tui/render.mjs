@@ -12,6 +12,16 @@ function renderValue(label, value, active) {
   return `${active ? '▸' : ' '} ${label}: ${value}`;
 }
 
+function renderSelectedSkills(selectedSkills) {
+  if (!Array.isArray(selectedSkills) || selectedSkills.length === 0) {
+    return '<none>';
+  }
+  if (selectedSkills.length <= 3) {
+    return selectedSkills.join(',');
+  }
+  return `${selectedSkills.length} selected`;
+}
+
 function joinSelected(components) {
   return Object.entries(components)
     .filter(([, selected]) => selected)
@@ -41,11 +51,13 @@ export function renderState(state, rootDir) {
     lines.push(renderCheckbox('Skills', opts.components.skills, state.cursor === 2));
     lines.push(renderCheckbox('Superpowers', opts.components.superpowers, state.cursor === 3));
     lines.push(renderValue('Mode', opts.wrapMode, state.cursor === 4));
-    lines.push(renderValue('Client', opts.client, state.cursor === 5));
-    lines.push(renderCheckbox('Skip Playwright install', opts.skipPlaywrightInstall, state.cursor === 6));
-    lines.push(renderCheckbox('Skip doctor', opts.skipDoctor, state.cursor === 7));
-    lines.push(renderItem('Run setup', state.cursor === 8));
-    lines.push(renderItem('Back', state.cursor === 9));
+    lines.push(renderValue('Skills scope', opts.scope, state.cursor === 5));
+    lines.push(renderValue('Client', opts.client, state.cursor === 6));
+    lines.push(renderCheckbox('Skip Playwright install', opts.skipPlaywrightInstall, state.cursor === 7));
+    lines.push(renderCheckbox('Skip doctor', opts.skipDoctor, state.cursor === 8));
+    lines.push(renderValue('Selected skills', renderSelectedSkills(opts.selectedSkills), state.cursor === 9));
+    lines.push(renderItem('Run setup', state.cursor === 10));
+    lines.push(renderItem('Back', state.cursor === 11));
     return `${lines.join('\n')}\n`;
   }
 
@@ -57,11 +69,13 @@ export function renderState(state, rootDir) {
     lines.push(renderCheckbox('Skills', opts.components.skills, state.cursor === 2));
     lines.push(renderCheckbox('Superpowers', opts.components.superpowers, state.cursor === 3));
     lines.push(renderValue('Mode', opts.wrapMode, state.cursor === 4));
-    lines.push(renderValue('Client', opts.client, state.cursor === 5));
-    lines.push(renderCheckbox('With Playwright install', opts.withPlaywrightInstall, state.cursor === 6));
-    lines.push(renderCheckbox('Skip doctor', opts.skipDoctor, state.cursor === 7));
-    lines.push(renderItem('Run update', state.cursor === 8));
-    lines.push(renderItem('Back', state.cursor === 9));
+    lines.push(renderValue('Skills scope', opts.scope, state.cursor === 5));
+    lines.push(renderValue('Client', opts.client, state.cursor === 6));
+    lines.push(renderCheckbox('With Playwright install', opts.withPlaywrightInstall, state.cursor === 7));
+    lines.push(renderCheckbox('Skip doctor', opts.skipDoctor, state.cursor === 8));
+    lines.push(renderValue('Selected skills', renderSelectedSkills(opts.selectedSkills), state.cursor === 9));
+    lines.push(renderItem('Run update', state.cursor === 10));
+    lines.push(renderItem('Back', state.cursor === 11));
     return `${lines.join('\n')}\n`;
   }
 
@@ -72,9 +86,11 @@ export function renderState(state, rootDir) {
     lines.push(renderCheckbox('Shell wrappers', opts.components.shell, state.cursor === 1));
     lines.push(renderCheckbox('Skills', opts.components.skills, state.cursor === 2));
     lines.push(renderCheckbox('Superpowers', opts.components.superpowers, state.cursor === 3));
-    lines.push(renderValue('Client', opts.client, state.cursor === 4));
-    lines.push(renderItem('Run uninstall', state.cursor === 5));
-    lines.push(renderItem('Back', state.cursor === 6));
+    lines.push(renderValue('Skills scope', opts.scope, state.cursor === 4));
+    lines.push(renderValue('Client', opts.client, state.cursor === 5));
+    lines.push(renderValue('Selected skills', renderSelectedSkills(opts.selectedSkills), state.cursor === 6));
+    lines.push(renderItem('Run uninstall', state.cursor === 7));
+    lines.push(renderItem('Back', state.cursor === 8));
     return `${lines.join('\n')}\n`;
   }
 
@@ -101,6 +117,12 @@ export function renderState(state, rootDir) {
     if (options.client) {
       lines.push(`Client: ${options.client}`);
     }
+    if (options.scope) {
+      lines.push(`Scope: ${options.scope}`);
+    }
+    if (Array.isArray(options.selectedSkills)) {
+      lines.push(`Selected skills: ${renderSelectedSkills(options.selectedSkills)}`);
+    }
     if (action === 'doctor') {
       lines.push(`Strict: ${options.strict ? 'true' : 'false'}`);
       lines.push(`Global security: ${options.globalSecurity ? 'true' : 'false'}`);
@@ -108,6 +130,24 @@ export function renderState(state, rootDir) {
     lines.push('');
     lines.push(renderItem(`Run ${action}`, state.cursor === 0));
     lines.push(renderItem('Back', state.cursor === 1));
+    return `${lines.join('\n')}\n`;
+  }
+
+  if (state.screen === 'skill-picker') {
+    const owner = state.skillPickerAction;
+    const options = owner ? state.options[owner] : null;
+    const skills = owner && options
+      ? state.catalogSkills
+        .filter((skill) => Array.isArray(skill.scopes) && skill.scopes.includes(options.scope))
+        .filter((skill) => options.client === 'all' || (Array.isArray(skill.clients) && skill.clients.includes(options.client)))
+        .map((skill) => skill.name)
+      : [];
+    lines.push(`Select skills for ${owner || 'unknown'}`, '');
+    for (let index = 0; index < skills.length; index += 1) {
+      const name = skills[index];
+      lines.push(renderCheckbox(name, Array.isArray(options?.selectedSkills) && options.selectedSkills.includes(name), state.cursor === index));
+    }
+    lines.push(renderItem('Done', state.cursor === skills.length));
     return `${lines.join('\n')}\n`;
   }
 

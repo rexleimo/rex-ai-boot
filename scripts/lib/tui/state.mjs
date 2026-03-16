@@ -1,5 +1,6 @@
 const MODE_OPTIONS = ['all', 'repo-only', 'opt-in', 'off'];
 const CLIENT_OPTIONS = ['all', 'codex', 'claude', 'gemini', 'opencode'];
+const SCOPE_OPTIONS = ['global', 'project'];
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -45,47 +46,100 @@ function buildRunRequest(state, action) {
   };
 }
 
-export function createInitialState() {
+function skillMatchesClient(skill, client) {
+  if (client === 'all') {
+    return Array.isArray(skill.clients) && skill.clients.length > 0;
+  }
+  return Array.isArray(skill.clients) && skill.clients.includes(client);
+}
+
+function visibleSkillNames(catalogSkills, client, scope) {
+  return catalogSkills
+    .filter((skill) => Array.isArray(skill.scopes) && skill.scopes.includes(scope))
+    .filter((skill) => skillMatchesClient(skill, client))
+    .map((skill) => skill.name)
+    .filter(Boolean);
+}
+
+function defaultSelectedSkills(catalogSkills, client, scope) {
+  return catalogSkills
+    .filter((skill) => Array.isArray(skill.scopes) && skill.scopes.includes(scope))
+    .filter((skill) => skillMatchesClient(skill, client))
+    .filter((skill) => Boolean(skill.defaultInstall?.[scope]))
+    .map((skill) => skill.name);
+}
+
+function syncSelectedSkills(option, catalogSkills) {
+  const visible = new Set(visibleSkillNames(catalogSkills, option.client, option.scope));
+  const selected = Array.isArray(option.selectedSkills) ? option.selectedSkills.filter((name) => visible.has(name)) : [];
+  option.selectedSkills = selected.length > 0 ? selected : defaultSelectedSkills(catalogSkills, option.client, option.scope);
+}
+
+function getSkillPickerActionState(state) {
+  const action = state.skillPickerAction;
+  if (!action || !state.options[action]) {
+    return { action: '', skills: [] };
+  }
+  const option = state.options[action];
+  return {
+    action,
+    skills: visibleSkillNames(state.catalogSkills, option.client, option.scope),
+  };
+}
+
+export function createInitialState({ catalogSkills = [] } = {}) {
+  const setup = {
+    components: {
+      browser: true,
+      shell: true,
+      skills: true,
+      superpowers: true,
+    },
+    wrapMode: 'opt-in',
+    scope: 'global',
+    client: 'all',
+    selectedSkills: defaultSelectedSkills(catalogSkills, 'all', 'global'),
+    skipPlaywrightInstall: false,
+    skipDoctor: false,
+  };
+  const update = {
+    components: {
+      browser: true,
+      shell: true,
+      skills: true,
+      superpowers: true,
+    },
+    wrapMode: 'opt-in',
+    scope: 'global',
+    client: 'all',
+    selectedSkills: defaultSelectedSkills(catalogSkills, 'all', 'global'),
+    withPlaywrightInstall: false,
+    skipDoctor: false,
+  };
+  const uninstall = {
+    components: {
+      browser: false,
+      shell: true,
+      skills: true,
+      superpowers: false,
+    },
+    scope: 'global',
+    client: 'all',
+    selectedSkills: [],
+  };
+
   return {
     screen: 'main',
     cursor: 0,
     confirmAction: '',
+    skillPickerAction: '',
     exitRequested: false,
     shouldRun: null,
+    catalogSkills,
     options: {
-      setup: {
-        components: {
-          browser: true,
-          shell: true,
-          skills: true,
-          superpowers: true,
-        },
-        wrapMode: 'opt-in',
-        client: 'all',
-        skipPlaywrightInstall: false,
-        skipDoctor: false,
-      },
-      update: {
-        components: {
-          browser: true,
-          shell: true,
-          skills: true,
-          superpowers: true,
-        },
-        wrapMode: 'opt-in',
-        client: 'all',
-        withPlaywrightInstall: false,
-        skipDoctor: false,
-      },
-      uninstall: {
-        components: {
-          browser: false,
-          shell: true,
-          skills: true,
-          superpowers: false,
-        },
-        client: 'all',
-      },
+      setup,
+      update,
+      uninstall,
       doctor: {
         strict: false,
         globalSecurity: false,
@@ -121,8 +175,8 @@ export function reduceState(state, action) {
     }
     case 'setup': {
       if (action === 'back') return { ...next, screen: 'main', cursor: 0 };
-      if (action === 'up') return withCursor({ ...next, cursor: next.cursor - 1 }, 9);
-      if (action === 'down') return withCursor({ ...next, cursor: next.cursor + 1 }, 9);
+      if (action === 'up') return withCursor({ ...next, cursor: next.cursor - 1 }, 11);
+      if (action === 'down') return withCursor({ ...next, cursor: next.cursor + 1 }, 11);
       if (action === 'space' || action === 'right') {
         switch (next.cursor) {
           case 0:
@@ -141,12 +195,17 @@ export function reduceState(state, action) {
             next.options.setup.wrapMode = cycle(MODE_OPTIONS, next.options.setup.wrapMode);
             break;
           case 5:
-            next.options.setup.client = cycle(CLIENT_OPTIONS, next.options.setup.client);
+            next.options.setup.scope = cycle(SCOPE_OPTIONS, next.options.setup.scope);
+            syncSelectedSkills(next.options.setup, next.catalogSkills);
             break;
           case 6:
-            next.options.setup.skipPlaywrightInstall = !next.options.setup.skipPlaywrightInstall;
+            next.options.setup.client = cycle(CLIENT_OPTIONS, next.options.setup.client);
+            syncSelectedSkills(next.options.setup, next.catalogSkills);
             break;
           case 7:
+            next.options.setup.skipPlaywrightInstall = !next.options.setup.skipPlaywrightInstall;
+            break;
+          case 8:
             next.options.setup.skipDoctor = !next.options.setup.skipDoctor;
             break;
           default:
@@ -156,10 +215,13 @@ export function reduceState(state, action) {
         return next;
       }
       if (action === 'enter') {
-        if (next.cursor === 8) {
+        if (next.cursor === 9) {
+          return { ...next, screen: 'skill-picker', skillPickerAction: 'setup', cursor: 0 };
+        }
+        if (next.cursor === 10) {
           return { ...next, screen: 'confirm', cursor: 0, confirmAction: 'setup' };
         }
-        if (next.cursor === 9) {
+        if (next.cursor === 11) {
           return { ...next, screen: 'main', cursor: 0 };
         }
       }
@@ -167,8 +229,8 @@ export function reduceState(state, action) {
     }
     case 'update': {
       if (action === 'back') return { ...next, screen: 'main', cursor: 0 };
-      if (action === 'up') return withCursor({ ...next, cursor: next.cursor - 1 }, 9);
-      if (action === 'down') return withCursor({ ...next, cursor: next.cursor + 1 }, 9);
+      if (action === 'up') return withCursor({ ...next, cursor: next.cursor - 1 }, 11);
+      if (action === 'down') return withCursor({ ...next, cursor: next.cursor + 1 }, 11);
       if (action === 'space' || action === 'right') {
         switch (next.cursor) {
           case 0:
@@ -187,12 +249,17 @@ export function reduceState(state, action) {
             next.options.update.wrapMode = cycle(MODE_OPTIONS, next.options.update.wrapMode);
             break;
           case 5:
-            next.options.update.client = cycle(CLIENT_OPTIONS, next.options.update.client);
+            next.options.update.scope = cycle(SCOPE_OPTIONS, next.options.update.scope);
+            syncSelectedSkills(next.options.update, next.catalogSkills);
             break;
           case 6:
-            next.options.update.withPlaywrightInstall = !next.options.update.withPlaywrightInstall;
+            next.options.update.client = cycle(CLIENT_OPTIONS, next.options.update.client);
+            syncSelectedSkills(next.options.update, next.catalogSkills);
             break;
           case 7:
+            next.options.update.withPlaywrightInstall = !next.options.update.withPlaywrightInstall;
+            break;
+          case 8:
             next.options.update.skipDoctor = !next.options.update.skipDoctor;
             break;
           default:
@@ -202,10 +269,13 @@ export function reduceState(state, action) {
         return next;
       }
       if (action === 'enter') {
-        if (next.cursor === 8) {
+        if (next.cursor === 9) {
+          return { ...next, screen: 'skill-picker', skillPickerAction: 'update', cursor: 0 };
+        }
+        if (next.cursor === 10) {
           return { ...next, screen: 'confirm', cursor: 0, confirmAction: 'update' };
         }
-        if (next.cursor === 9) {
+        if (next.cursor === 11) {
           return { ...next, screen: 'main', cursor: 0 };
         }
       }
@@ -213,8 +283,8 @@ export function reduceState(state, action) {
     }
     case 'uninstall': {
       if (action === 'back') return { ...next, screen: 'main', cursor: 0 };
-      if (action === 'up') return withCursor({ ...next, cursor: next.cursor - 1 }, 6);
-      if (action === 'down') return withCursor({ ...next, cursor: next.cursor + 1 }, 6);
+      if (action === 'up') return withCursor({ ...next, cursor: next.cursor - 1 }, 8);
+      if (action === 'down') return withCursor({ ...next, cursor: next.cursor + 1 }, 8);
       if (action === 'space' || action === 'right') {
         switch (next.cursor) {
           case 0:
@@ -230,7 +300,12 @@ export function reduceState(state, action) {
             next.options.uninstall.components.superpowers = !next.options.uninstall.components.superpowers;
             break;
           case 4:
+            next.options.uninstall.scope = cycle(SCOPE_OPTIONS, next.options.uninstall.scope);
+            syncSelectedSkills(next.options.uninstall, next.catalogSkills);
+            break;
+          case 5:
             next.options.uninstall.client = cycle(CLIENT_OPTIONS, next.options.uninstall.client);
+            syncSelectedSkills(next.options.uninstall, next.catalogSkills);
             break;
           default:
             break;
@@ -239,10 +314,13 @@ export function reduceState(state, action) {
         return next;
       }
       if (action === 'enter') {
-        if (next.cursor === 5) {
+        if (next.cursor === 6) {
+          return { ...next, screen: 'skill-picker', skillPickerAction: 'uninstall', cursor: 0 };
+        }
+        if (next.cursor === 7) {
           return { ...next, screen: 'confirm', cursor: 0, confirmAction: 'uninstall' };
         }
-        if (next.cursor === 6) {
+        if (next.cursor === 8) {
           return { ...next, screen: 'main', cursor: 0 };
         }
       }
@@ -264,6 +342,32 @@ export function reduceState(state, action) {
         if (next.cursor === 3) {
           return { ...next, screen: 'main', cursor: 0 };
         }
+      }
+      return next;
+    }
+    case 'skill-picker': {
+      const picker = getSkillPickerActionState(next);
+      const maxCursor = picker.skills.length;
+      if (action === 'back') {
+        return { ...next, screen: next.skillPickerAction, cursor: 0 };
+      }
+      if (action === 'up') return withCursor({ ...next, cursor: next.cursor - 1 }, maxCursor);
+      if (action === 'down') return withCursor({ ...next, cursor: next.cursor + 1 }, maxCursor);
+      if (action === 'space' || action === 'right' || action === 'enter') {
+        if (next.cursor === maxCursor) {
+          return { ...next, screen: next.skillPickerAction, cursor: 0 };
+        }
+
+        const option = next.options[next.skillPickerAction];
+        const skillName = picker.skills[next.cursor];
+        const selected = new Set(option.selectedSkills || []);
+        if (selected.has(skillName)) {
+          selected.delete(skillName);
+        } else {
+          selected.add(skillName);
+        }
+        option.selectedSkills = [...selected];
+        return next;
       }
       return next;
     }

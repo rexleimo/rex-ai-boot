@@ -6,6 +6,7 @@ import { parseArgs } from './lib/cli/parse-args.mjs';
 import { getCommandHelpText, getInternalHelpText, getRootHelpText } from './lib/cli/help.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const projectRoot = process.cwd();
 
 function printHelp(parsed) {
   if (!parsed || parsed.command === 'root') {
@@ -34,10 +35,10 @@ async function runInternal(options) {
 
   if (target === 'skills') {
     const module = await import('./lib/components/skills.mjs');
-    if (action === 'install') return module.installContextDbSkills({ rootDir, client: options.client ?? 'all', force: Boolean(options.force) });
-    if (action === 'update') return module.installContextDbSkills({ rootDir, client: options.client ?? 'all', force: true });
-    if (action === 'uninstall') return module.uninstallContextDbSkills({ rootDir, client: options.client ?? 'all' });
-    if (action === 'doctor') return module.doctorContextDbSkills({ rootDir, client: options.client ?? 'all' });
+    if (action === 'install') return module.installContextDbSkills({ rootDir, projectRoot, client: options.client ?? 'all', scope: options.scope ?? 'global', selectedSkills: options.skills ?? [], force: Boolean(options.force) });
+    if (action === 'update') return module.installContextDbSkills({ rootDir, projectRoot, client: options.client ?? 'all', scope: options.scope ?? 'global', selectedSkills: options.skills ?? [], force: true });
+    if (action === 'uninstall') return module.uninstallContextDbSkills({ rootDir, projectRoot, client: options.client ?? 'all', scope: options.scope ?? 'global', selectedSkills: options.skills ?? [] });
+    if (action === 'doctor') return module.doctorContextDbSkills({ rootDir, projectRoot, client: options.client ?? 'all', scope: options.scope ?? 'global', selectedSkills: options.skills ?? [] });
   }
 
   if (target === 'superpowers') {
@@ -92,17 +93,17 @@ async function main() {
       onRun: async (action, options) => {
         if (action === 'setup') {
           const { runSetup } = await import('./lib/lifecycle/setup.mjs');
-          await runSetup(options, { rootDir });
+          await runSetup(options, { rootDir, projectRoot });
           return;
         }
         if (action === 'update') {
           const { runUpdate } = await import('./lib/lifecycle/update.mjs');
-          await runUpdate(options, { rootDir });
+          await runUpdate(options, { rootDir, projectRoot });
           return;
         }
         if (action === 'uninstall') {
           const { runUninstall } = await import('./lib/lifecycle/uninstall.mjs');
-          await runUninstall(options, { rootDir });
+          await runUninstall(options, { rootDir, projectRoot });
           return;
         }
         if (action === 'doctor') {
@@ -124,19 +125,19 @@ async function main() {
 
   if (parsed.command === 'setup') {
     const { runSetup } = await import('./lib/lifecycle/setup.mjs');
-    await runSetup(parsed.options, { rootDir });
+    await runSetup(parsed.options, { rootDir, projectRoot });
     return;
   }
 
   if (parsed.command === 'update') {
     const { runUpdate } = await import('./lib/lifecycle/update.mjs');
-    await runUpdate(parsed.options, { rootDir });
+    await runUpdate(parsed.options, { rootDir, projectRoot });
     return;
   }
 
   if (parsed.command === 'uninstall') {
     const { runUninstall } = await import('./lib/lifecycle/uninstall.mjs');
-    await runUninstall(parsed.options, { rootDir });
+    await runUninstall(parsed.options, { rootDir, projectRoot });
     return;
   }
 

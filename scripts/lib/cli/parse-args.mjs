@@ -17,6 +17,8 @@ import {
   normalizeOrchestrateExecutionMode,
   normalizeOrchestratePreflightMode,
   normalizeQualityGateMode,
+  normalizeSkillNames,
+  normalizeSkillScope,
   normalizeWrapMode,
 } from '../lifecycle/options.mjs';
 import { normalizeOrchestratorBlueprint, normalizeOrchestratorFormat } from '../harness/orchestrator.mjs';
@@ -81,6 +83,14 @@ function parseInternalArgs(argv) {
         break;
       case '--client':
         options.client = normalizeClient(takeValue(rest, index, '--client'));
+        index += 1;
+        break;
+      case '--scope':
+        options.scope = normalizeSkillScope(takeValue(rest, index, '--scope'));
+        index += 1;
+        break;
+      case '--skills':
+        options.skills = normalizeSkillNames(takeValue(rest, index, '--skills'));
         index += 1;
         break;
       case '--rc-file':
@@ -201,6 +211,20 @@ function parseTopLevelArgs(command, argv) {
         break;
       case '--client':
         options.client = normalizeClient(takeValue(rest, index, '--client'));
+        index += 1;
+        break;
+      case '--scope':
+        if (command !== 'setup' && command !== 'update' && command !== 'uninstall') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.scope = normalizeSkillScope(takeValue(rest, index, '--scope'));
+        index += 1;
+        break;
+      case '--skills':
+        if (command !== 'setup' && command !== 'update' && command !== 'uninstall') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.skills = normalizeSkillNames(takeValue(rest, index, '--skills'));
         index += 1;
         break;
       case '--skip-playwright-install':

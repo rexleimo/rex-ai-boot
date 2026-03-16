@@ -73,6 +73,15 @@ async function makeFakeMcpServer(rootDir) {
   return mcpDir;
 }
 
+async function writeSkillsCatalog(rootDir, skills) {
+  const configDir = path.join(rootDir, 'config');
+  await mkdir(configDir, { recursive: true });
+  await writeFile(path.join(configDir, 'skills-catalog.json'), JSON.stringify({
+    version: 1,
+    skills,
+  }, null, 2), 'utf8');
+}
+
 test('shell install writes managed block and uninstall removes it', async () => {
   const rootDir = await makeTemp('aios-shell-root-');
   const rcFile = path.join(rootDir, '.zshrc');
@@ -145,6 +154,17 @@ test('skills install links repo-managed skills and uninstall removes them', asyn
   const codexSkillDir = path.join(rootDir, '.codex', 'skills', 'sample-skill');
   await mkdir(codexSkillDir, { recursive: true });
   await writeFile(path.join(codexSkillDir, 'SKILL.md'), '# sample\n', 'utf8');
+  await writeSkillsCatalog(rootDir, [
+    {
+      name: 'sample-skill',
+      description: 'sample',
+      source: '.codex/skills/sample-skill',
+      clients: ['codex'],
+      scopes: ['global'],
+      defaultInstall: { global: true, project: false },
+      tags: ['sample'],
+    },
+  ]);
 
   const codexHome = await makeTemp('aios-skills-home-');
   await installContextDbSkills({
@@ -280,8 +300,22 @@ test('windows claude, gemini, and opencode resolve npm-style cmd launchers to di
 test('skills doctor warns on non-discoverable repo skill roots', async () => {
   const rootDir = await makeTemp('aios-skills-doctor-root-');
   const badSkillDir = path.join(rootDir, '.baoyu-skills', 'wrong-skill');
+  const sampleSkillDir = path.join(rootDir, '.codex', 'skills', 'sample-skill');
   await mkdir(badSkillDir, { recursive: true });
+  await mkdir(sampleSkillDir, { recursive: true });
   await writeFile(path.join(badSkillDir, 'SKILL.md'), '# wrong\n', 'utf8');
+  await writeFile(path.join(sampleSkillDir, 'SKILL.md'), '# sample\n', 'utf8');
+  await writeSkillsCatalog(rootDir, [
+    {
+      name: 'sample-skill',
+      description: 'sample',
+      source: '.codex/skills/sample-skill',
+      clients: ['codex'],
+      scopes: ['global'],
+      defaultInstall: { global: true, project: false },
+      tags: ['sample'],
+    },
+  ]);
 
   const logs = [];
   const io = { log: (line) => logs.push(String(line)) };

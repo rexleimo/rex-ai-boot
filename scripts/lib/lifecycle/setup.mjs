@@ -3,6 +3,8 @@ import {
   hasComponent,
   normalizeClient,
   normalizeComponents,
+  normalizeSkillNames,
+  normalizeSkillScope,
   normalizeWrapMode,
 } from './options.mjs';
 import { installOrchestratorAgents } from '../components/agents.mjs';
@@ -18,6 +20,8 @@ export function normalizeSetupOptions(rawOptions = {}) {
     components: normalizeComponents(rawOptions.components, defaults.components),
     wrapMode: normalizeWrapMode(rawOptions.wrapMode ?? defaults.wrapMode),
     client: normalizeClient(rawOptions.client ?? defaults.client),
+    scope: normalizeSkillScope(rawOptions.scope ?? defaults.scope),
+    skills: normalizeSkillNames(rawOptions.skills ?? defaults.skills),
     skipPlaywrightInstall: Boolean(rawOptions.skipPlaywrightInstall ?? defaults.skipPlaywrightInstall),
     skipDoctor: Boolean(rawOptions.skipDoctor ?? defaults.skipDoctor),
   };
@@ -30,7 +34,9 @@ export function planSetup(rawOptions = {}) {
     '--components', options.components.join(','),
     '--mode', options.wrapMode,
     '--client', options.client,
+    '--scope', options.scope,
   ];
+  if (options.skills.length > 0) args.push('--skills', options.skills.join(','));
   if (options.skipPlaywrightInstall) args.push('--skip-playwright-install');
   if (options.skipDoctor) args.push('--skip-doctor');
   return {
@@ -40,7 +46,7 @@ export function planSetup(rawOptions = {}) {
   };
 }
 
-export async function runSetup(rawOptions = {}, { rootDir, io = console } = {}) {
+export async function runSetup(rawOptions = {}, { rootDir, projectRoot = rootDir, io = console } = {}) {
   const { options } = planSetup(rawOptions);
   io.log(`Setup components: ${options.components.join(',')}`);
 
@@ -60,9 +66,9 @@ export async function runSetup(rawOptions = {}, { rootDir, io = console } = {}) 
   }
 
   if (hasComponent(options.components, 'skills')) {
-    await installContextDbSkills({ rootDir, client: options.client, io });
+    await installContextDbSkills({ rootDir, projectRoot, client: options.client, scope: options.scope, selectedSkills: options.skills, io });
     if (!options.skipDoctor) {
-      await doctorContextDbSkills({ rootDir, client: options.client, io });
+      await doctorContextDbSkills({ rootDir, projectRoot, client: options.client, scope: options.scope, selectedSkills: options.skills, io });
     }
   }
 

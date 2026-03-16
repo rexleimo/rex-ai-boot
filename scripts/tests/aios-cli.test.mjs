@@ -19,6 +19,28 @@ test('parseArgs normalizes setup options', () => {
   assert.equal(result.options.client, 'all');
 });
 
+test('parseArgs accepts skills scope and selected skill names', () => {
+  const result = parseArgs([
+    'setup',
+    '--components',
+    'skills',
+    '--client',
+    'codex',
+    '--scope',
+    'project',
+    '--skills',
+    'find-skills,xhs-ops-methods',
+  ]);
+  assert.equal(result.command, 'setup');
+  assert.equal(result.options.client, 'codex');
+  assert.equal(result.options.scope, 'project');
+  assert.deepEqual(result.options.skills, ['find-skills', 'xhs-ops-methods']);
+});
+
+test('parseArgs rejects invalid skills scope', () => {
+  assert.throws(() => parseArgs(['setup', '--scope', 'workspace']), /--scope must be one of/);
+});
+
 test('parseArgs accepts doctor strict mode', () => {
   const result = parseArgs(['doctor', '--strict']);
   assert.equal(result.command, 'doctor');
