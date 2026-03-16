@@ -56,3 +56,14 @@ This makes orchestration actionable without inventing a new runtime:
 - same ContextDB session memory
 - same merge/ownership rules
 - now with real (opt-in) parallel execution
+
+## 2026-03-16 Progress Update
+
+Since this post was published, we continued live sampling on the same session to validate runtime stability:
+
+- Latest live artifact: `dispatch-run-20260316T111419Z.json` (`dispatchRun.ok=true`)
+- `review` / `security` now auto-complete at `0ms` when upstream handoffs report `filesTouched=[]`
+- `learn-eval` average elapsed improved to `160678ms`, but `sample.latency-watch` is still active
+- Timeout budgets are intentionally unchanged until latency-watch clears and Windows-host validation evidence is fully closed
+
+Practical takeaway: live orchestration is stable enough for routine use, but budget tightening should remain evidence-driven.

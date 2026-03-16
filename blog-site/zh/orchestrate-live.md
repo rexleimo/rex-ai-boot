@@ -56,3 +56,14 @@ aios orchestrate --session <session-id> --dispatch local --execute live --format
 - 记忆还是 ContextDB
 - 合并规则还是显式的 ownership/merge-gate
 - 只是把 live 执行补齐，并且依旧默认安全
+
+## 2026-03-16 进展更新
+
+发布后我们继续在同一 session 上做了多轮 live sample，验证稳定性：
+
+- 最新 live artifact：`dispatch-run-20260316T111419Z.json`（`dispatchRun.ok=true`）
+- 当上游 handoff 的 `filesTouched=[]` 时，`review` / `security` 会自动 `0ms` 完成
+- `learn-eval` 平均耗时已改善到 `160678ms`，但 `sample.latency-watch` 仍在观察态
+- timeout 预算目前仍不下调，继续按证据驱动推进（等待 latency-watch 清除及 Windows 主机验证闭环）
+
+实践结论：live 编排已可稳定日常使用，但“降预算”必须等观测信号进一步收敛。

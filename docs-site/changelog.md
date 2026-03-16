@@ -14,7 +14,11 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
 
 ## Recent Versions
 
-- `main` (Unreleased): ship `subagent-runtime` live execution for `aios orchestrate` (opt-in via `AIOS_EXECUTE_LIVE=1`); prefer Codex CLI v0.114+ structured exec outputs for stable JSON handoffs
+- `main` (Unreleased):
+  - `subagent-runtime` live execution for `aios orchestrate` (opt-in via `AIOS_EXECUTE_LIVE=1`)
+  - bounded work-item queue scheduling with ownership hints
+  - no-op fast path: auto-complete `reviewer` / `security-reviewer` when upstream handoffs touched no files
+  - Windows PowerShell shell-smoke workflow on each push to `main` (`.github/workflows/windows-shell-smoke.yml`)
 - `0.16.0` (2026-03-10): add orchestrator agent catalog and generators
 - `0.15.0` (2026-03-10): gate live orchestrate execution behind `AIOS_EXECUTE_LIVE`
 - `0.14.0` (2026-03-10): add `subagent-runtime` runtime adapter (stub)
@@ -25,6 +29,15 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
 - `0.10.0` (2026-03-08): consolidate lifecycle flow into Node
 - `0.8.0` (2026-03-05): add strict Privacy Guard with Ollama support and setup integration
 - `0.5.0` (2026-03-03): ContextDB SQLite sidecar index (`index:rebuild`), optional `--semantic` search, unified `ctx-agent` core
+
+## 2026-03-16 Operational Status
+
+- Continuous live samples are succeeding (`dispatchRun.ok=true`) with latest artifact:
+  - `memory/context-db/sessions/codex-cli-20260303T080437-065e16c0/artifacts/dispatch-run-20260316T111419Z.json`
+- `learn-eval` still recommends:
+  - `[fix] runbook.failure-triage` (`clarity-needs-input=5`)
+  - `[observe] sample.latency-watch` (`avgElapsedMs=160678`)
+- Timeout budgets remain unchanged while latency-watch observation continues.
 
 ## Related Reading
 
