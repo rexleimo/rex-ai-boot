@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, stat, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { runContextDbCli } from '../lib/contextdb-cli.mjs';
+import {
+  isBetterSqlite3AbiMismatch,
+  isBetterSqlite3MissingBindings,
+  isBetterSqlite3RepairableFailure,
+  runContextDbCli,
+} from '../lib/contextdb-cli.mjs';
 import { parseArgs } from '../lib/cli/parse-args.mjs';
 import {
   getDisabledGateIds,
@@ -13,6 +18,7 @@ import {
 } from '../lib/harness/profile.mjs';
 import { renderHandoffMarkdown, validateHandoffPayload } from '../lib/harness/handoff.mjs';
 import { planDoctor } from '../lib/lifecycle/doctor.mjs';
+import { executeEntropyGc } from '../lib/lifecycle/entropy-gc.mjs';
 import { planQualityGate, runQualityGate } from '../lib/lifecycle/quality-gate.mjs';
 
 async function makeRootDir() {
@@ -72,6 +78,111 @@ test('parseArgs accepts quality-gate session', () => {
   const result = parseArgs(['quality-gate', 'full', '--session', 'session-123']);
   assert.equal(result.command, 'quality-gate');
   assert.equal(result.options.sessionId, 'session-123');
+});
+
+test('runContextDbCli auto-rebuilds better-sqlite3 once on Node ABI mismatch', () => {
+  const calls = [];
+  const responses = [
+    {
+      status: 1,
+      stdout: '',
+      stderr: `The module '/tmp/better_sqlite3.node' was compiled against a different Node.js version using NODE_MODULE_VERSION 127. This version of Node.js requires NODE_MODULE_VERSION 141.`,
+    },
+    {
+      status: 0,
+      stdout: 'rebuilt\n',
+      stderr: '',
+    },
+    {
+      status: 0,
+      stdout: '{"ok":true}\n',
+      stderr: '',
+    },
+  ];
+
+  const result = runContextDbCli(['timeline', '--workspace', '/tmp/repro'], {
+    cwd: '/tmp/repro',
+    env: { ...process.env, CTXDB_AUTO_REBUILD_NATIVE: '1' },
+    spawnSyncImpl(command, args, options) {
+      calls.push({ command, args, options });
+      return responses.shift();
+    },
+  });
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(calls.length, 3);
+  assert.equal(calls[0].command, process.execPath);
+  assert.equal(calls[1].command, 'npm');
+  assert.deepEqual(calls[1].args, ['rebuild', 'better-sqlite3']);
+  assert.match(calls[1].options.cwd, /mcp-server$/);
+  assert.equal(calls[2].command, process.execPath);
+});
+
+test('runContextDbCli surfaces ABI mismatch when auto-rebuild is disabled', () => {
+  assert.equal(
+    isBetterSqlite3AbiMismatch(`The module '/tmp/better_sqlite3.node' was compiled against a different Node.js version using NODE_MODULE_VERSION 127.`),
+    true
+  );
+
+  assert.throws(
+    () => runContextDbCli(['timeline'], {
+      env: { ...process.env, CTXDB_AUTO_REBUILD_NATIVE: '0' },
+      spawnSyncImpl() {
+        return {
+          status: 1,
+          stdout: '',
+          stderr: `The module '/tmp/better_sqlite3.node' was compiled against a different Node.js version using NODE_MODULE_VERSION 127.`,
+        };
+      },
+    }),
+    /better_sqlite3\.node/
+  );
+});
+
+test('runContextDbCli auto-rebuilds better-sqlite3 when bindings are missing', () => {
+  const calls = [];
+  const responses = [
+    {
+      status: 1,
+      stdout: '',
+      stderr: `Could not locate the bindings file. Tried:\n -> /tmp/better_sqlite3.node`,
+    },
+    {
+      status: 0,
+      stdout: 'rebuilt\n',
+      stderr: '',
+    },
+    {
+      status: 0,
+      stdout: '{"ok":true}\n',
+      stderr: '',
+    },
+  ];
+
+  const result = runContextDbCli(['timeline', '--workspace', '/tmp/repro'], {
+    cwd: '/tmp/repro',
+    env: { ...process.env, CTXDB_AUTO_REBUILD_NATIVE: '1' },
+    spawnSyncImpl(command, args, options) {
+      calls.push({ command, args, options });
+      return responses.shift();
+    },
+  });
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(calls.length, 3);
+  assert.equal(calls[1].command, 'npm');
+  assert.deepEqual(calls[1].args, ['rebuild', 'better-sqlite3']);
+});
+
+test('better-sqlite3 repair helper recognizes missing bindings failures', () => {
+  assert.equal(
+    isBetterSqlite3MissingBindings('Could not locate the bindings file. Tried: /tmp/better_sqlite3.node'),
+    true
+  );
+  assert.equal(
+    isBetterSqlite3RepairableFailure('Could not locate the bindings file. Tried: /tmp/better_sqlite3.node'),
+    true
+  );
 });
 
 test('planDoctor keeps profile out of preview when standard', () => {
@@ -196,6 +307,118 @@ test('runQualityGate persists quality-specific failure category when session is 
   assert.equal(latest.status, 'blocked');
   assert.equal(latest.telemetry.verification.result, 'failed');
   assert.equal(latest.telemetry.failureCategory, 'quality-logs');
+});
+
+test('executeEntropyGc dry-run keeps newest artifacts and skips referenced checkpoints', async () => {
+  const rootDir = await makeRootDir();
+  const sessionId = 'entropy-dry-run';
+  const sessionDir = path.join(rootDir, 'memory', 'context-db', 'sessions', sessionId);
+  const artifactsDir = path.join(sessionDir, 'artifacts');
+  await mkdir(artifactsDir, { recursive: true });
+
+  const newest = path.join(artifactsDir, 'dispatch-run-newest.json');
+  const referenced = path.join(artifactsDir, 'dispatch-run-old-ref.json');
+  const stale = path.join(artifactsDir, 'dispatch-run-old-free.json');
+  await writeFile(newest, '{"ok":true}\n', 'utf8');
+  await writeFile(referenced, '{"ok":false}\n', 'utf8');
+  await writeFile(stale, '{"ok":false}\n', 'utf8');
+
+  const nowMs = Date.parse('2026-03-16T00:00:00.000Z');
+  const oneHourAgo = new Date(nowMs - (1 * 60 * 60 * 1000));
+  const threeDaysAgo = new Date(nowMs - (72 * 60 * 60 * 1000));
+  await utimes(newest, oneHourAgo, oneHourAgo);
+  await utimes(referenced, threeDaysAgo, threeDaysAgo);
+  await utimes(stale, threeDaysAgo, threeDaysAgo);
+
+  const referencedPath = path.join(
+    'memory',
+    'context-db',
+    'sessions',
+    sessionId,
+    'artifacts',
+    'dispatch-run-old-ref.json'
+  ).split(path.sep).join('/');
+  const checkpointsPath = path.join(sessionDir, 'l1-checkpoints.jsonl');
+  await writeFile(
+    checkpointsPath,
+    `${JSON.stringify({
+      seq: 1,
+      ts: '2026-03-15T12:00:00.000Z',
+      status: 'done',
+      summary: 'Checkpoint with referenced artifact',
+      artifacts: [referencedPath],
+    })}\n`,
+    'utf8'
+  );
+
+  const report = await executeEntropyGc(
+    {
+      sessionId,
+      mode: 'dry-run',
+      retain: 1,
+      minAgeHours: 24,
+      format: 'json',
+    },
+    { rootDir, now: nowMs, persistEvidence: false }
+  );
+
+  assert.equal(report.mode, 'dry-run');
+  assert.equal(report.scannedCount, 3);
+  assert.equal(report.candidateCount, 1);
+  assert.equal(report.archivedCount, 0);
+  assert.equal(report.keep.some((item) => item.endsWith('/dispatch-run-newest.json')), true);
+  assert.equal(report.skippedReferenced.some((item) => item.path.endsWith('/dispatch-run-old-ref.json')), true);
+  assert.equal(report.candidates.some((item) => item.path.endsWith('/dispatch-run-old-free.json')), true);
+});
+
+test('executeEntropyGc auto archives stale artifacts and writes manifest', async () => {
+  const rootDir = await makeRootDir();
+  const sessionId = 'entropy-auto';
+  const sessionDir = path.join(rootDir, 'memory', 'context-db', 'sessions', sessionId);
+  const artifactsDir = path.join(sessionDir, 'artifacts');
+  await mkdir(artifactsDir, { recursive: true });
+
+  const newest = path.join(artifactsDir, 'dispatch-run-newest.json');
+  const staleA = path.join(artifactsDir, 'dispatch-run-old-a.json');
+  const staleB = path.join(artifactsDir, 'dispatch-run-old-b.json');
+  await writeFile(newest, '{"ok":true}\n', 'utf8');
+  await writeFile(staleA, '{"ok":false}\n', 'utf8');
+  await writeFile(staleB, '{"ok":false}\n', 'utf8');
+
+  const nowMs = Date.parse('2026-03-16T00:00:00.000Z');
+  const oneHourAgo = new Date(nowMs - (1 * 60 * 60 * 1000));
+  const twoDaysAgo = new Date(nowMs - (48 * 60 * 60 * 1000));
+  await utimes(newest, oneHourAgo, oneHourAgo);
+  await utimes(staleA, twoDaysAgo, twoDaysAgo);
+  await utimes(staleB, twoDaysAgo, twoDaysAgo);
+
+  const report = await executeEntropyGc(
+    {
+      sessionId,
+      mode: 'auto',
+      retain: 1,
+      minAgeHours: 24,
+      format: 'json',
+    },
+    { rootDir, now: nowMs, persistEvidence: false }
+  );
+
+  assert.equal(report.mode, 'auto');
+  assert.equal(report.scannedCount, 3);
+  assert.equal(report.candidateCount, 2);
+  assert.equal(report.archivedCount, 2);
+  assert.equal(report.manifestPath.endsWith('/manifest.json'), true);
+  assert.equal(Array.isArray(report.archived), true);
+  assert.equal(report.archived.length, 2);
+
+  const manifest = JSON.parse(await readFile(path.join(rootDir, report.manifestPath), 'utf8'));
+  assert.equal(manifest.kind, 'maintenance.entropy-gc');
+  assert.equal(manifest.archivedCount, 2);
+
+  const artifactNames = await readdir(artifactsDir);
+  assert.deepEqual(artifactNames.sort(), ['dispatch-run-newest.json']);
+  const newestStats = await stat(path.join(artifactsDir, 'dispatch-run-newest.json'));
+  assert.equal(newestStats.isFile(), true);
 });
 
 test('validateHandoffPayload rejects missing required fields', () => {

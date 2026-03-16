@@ -72,20 +72,56 @@ export CTXDB_PACK_STRICT_INTERACTIVE=1
 aios quality-gate pre-pr --profile strict
 ```
 
+## `codex /new` 或 `claude/gemini /clear` 后上下文“没了”
+
+`/new` / `/clear` 重置的是 **CLI 内部的对话状态**。ContextDB 仍在磁盘上，但包装层只会在 **启动 CLI 进程时** 注入一次 context packet。
+
+处理方式：
+
+1. 推荐：退出 CLI，然后在 shell 里重新执行 `codex` / `claude` / `gemini`。
+2. 如果必须在同一进程里继续：在新对话第一句让模型先读取：
+   - `@memory/context-db/exports/latest-codex-cli-context.md`
+   - `@memory/context-db/exports/latest-claude-code-context.md`
+   - `@memory/context-db/exports/latest-gemini-cli-context.md`
+
+如果客户端不支持 `@file` 引用，请把文件内容粘贴为首条消息。
+
 ## `aios orchestrate --execute live` 被阻塞或失败
 
 live 编排默认关闭，需要显式 opt-in：
 
 ```bash
 export AIOS_EXECUTE_LIVE=1
-export AIOS_SUBAGENT_CLIENT=codex-cli  # 或 claude-code, gemini-cli
+export AIOS_SUBAGENT_CLIENT=codex-cli  # 必须（live 当前仅支持 codex-cli）
 ```
 
-同时确保所选 CLI 在 `PATH` 中并已登录（例如 `codex --version`、`claude --version`）。
+同时确保 `codex` 在 `PATH` 中并已登录（例如 `codex --version`）。
+
+Windows 快速验证（PowerShell）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-shell.ps1
+codex --version
+codex
+```
+
+期望：不出现 `stdout is not a terminal` 等 TTY 错误，且交互式 `codex` 能正确接管当前终端。
 
 提示（codex-cli）：推荐 Codex CLI >= v0.114。AIOS 会在可用时自动使用 `codex exec` 的结构化输出（`--output-schema`、`--output-last-message`、stdin），让 JSON handoff 更稳定。
 
 提示：想先验证 DAG 而不产生 token 成本，可以用 `--execute dry-run`，或设置 `AIOS_SUBAGENT_SIMULATE=1` 走 live runtime 的本地模拟路径。
+
+常见失败特征：
+
+- `type: upstream_error` / `server_error`：上游不稳定。稍后重试（AIOS 会自动重试几次）。
+- `Timed out after 600000 ms`：增大 `AIOS_SUBAGENT_TIMEOUT_MS`（例如 `900000`），或用 `AIOS_SUBAGENT_CONTEXT_LIMIT` / `AIOS_SUBAGENT_CONTEXT_TOKEN_BUDGET` 缩小上下文包。
+- `invalid_json_schema`（`param: text.format.schema`）：后端拒绝了结构化输出 schema。更新到最新 `main` 后重试；AIOS 也会在检测到 schema 被拒绝时自动去掉 `--output-schema` 再试一次。
+
+最小 structured-output 冒烟测试（macOS/Linux）：
+
+```bash
+printf '%s' 'Return a JSON object matching the schema.' | codex exec --output-schema memory/specs/agent-handoff.schema.json -
+```
 
 ## 命令没有被包装
 

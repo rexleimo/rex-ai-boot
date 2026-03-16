@@ -16,21 +16,26 @@ Use this runbook for stable image generation on Jimeng. It includes selectors, c
 - Use `browser_screenshot` only when `visualHints.needsVisualFallback=true`, and prefer `selector`-scoped capture over full-page screenshots.
 - Prompt is policy-safe (avoid risky terms, political/person-identifiable/sensitive wording).
 
-## Execution Flow
-1. Open generation page directly:
-   - `https://jimeng.jianying.com/ai-tool/generate?ai_feature_name=image`
+## Execution Flow (Updated 2026-03-13)
+1. Open generation page:
+   - Navigate to home: `https://jimeng.jianying.com/ai-tool/home/`
+   - Click "图片生成" button (selector: `button.button-RNHVcx:has-text("图片生成")`)
+   - Or use direct URL: `https://jimeng.jianying.com/ai-tool/generate?enter_from=ai_feature&from_page=explore&ai_feature_name=image`
 2. Run `browser_auth_check` and `browser_challenge_check`; if either returns `requiresHumanAction=true`, ask user to complete login/challenge and resume.
 3. Confirm prompt box exists:
-   - `textarea[placeholder*='请描述你想生成的图片']`
-4. Fill prompt in visible textarea.
-5. Click submit button with selector strategy:
-   - Primary: `button[class*='submit-button'][class*='lv-btn-primary']:not([disabled])`
-   - Fallback: `button[class*='submit-button']:not([disabled])`
-6. Poll snapshots until one result class appears:
+   - Selector: `div.tiptap.ProseMirror` (NOT textarea, this is a rich text editor)
+4. Click prompt box to activate, then fill prompt.
+5. **Model & Ratio Selection (Bottom Toolbar)**:
+   - Model selector: `div.lv-select:has-text("图片")` (first one, position x:344)
+   - Ratio selector: Second `div.lv-select` (position x:458, shows "图片 4.1" or "图片 5.0")
+   - Note: These may show `clickable: false` in snapshot but are still interactive
+6. **Generate Button**:
+   - Primary: `button.lv-btn.lv-btn-primary` (position x:976, y:647)
+   - Note: Button may show as `collapsed-submit-button` class, enabled only after prompt is entered
+7. Poll snapshots until completion:
    - Success markers: latest task has image tiles + `重新编辑` and `再次生成`
-   - Policy failure marker: `你输入的文字不符合平台规则，请修改后重试`
-   - Timeout marker: still `生成中` after budget
-   - Read snapshot layout fields first; only take a local screenshot if the result area is visually ambiguous.
+   - Policy failure: `你输入的文字不符合平台规则，请修改后重试`
+   - Timeout: still `生成中` after budget
 
 ## Error Handling
 - Policy failure: rewrite prompt to neutral scene/style terms and retry once.

@@ -264,6 +264,19 @@ function extractHandoffPrompt(contextText) {
 
 const DEFAULT_HANDOFF_PROMPT = 'Continue from this state. Preserve constraints, avoid repeating completed work, and update the next checkpoint when done.';
 
+async function writeLatestInjectedContext({ workspaceRoot, agent, sessionId, contextText }) {
+  const text = String(contextText || '').trimEnd();
+  if (!text) return { ok: false, relPath: '', absPath: '' };
+
+  const relPath = path.join('memory', 'context-db', 'exports', `latest-${agent}-context.md`);
+  const absPath = path.join(workspaceRoot, relPath);
+  const generatedAt = new Date().toISOString();
+  const header = `<!-- AIOS: latest injected context for ${agent}; session=${sessionId}; generated=${generatedAt} -->\n`;
+  await fs.mkdir(path.dirname(absPath), { recursive: true });
+  await fs.writeFile(absPath, `${header}${text}\n`, 'utf8');
+  return { ok: true, relPath, absPath };
+}
+
 function buildOpenCodePrompt({
   contextPacketPath = '',
   contextText = '',
@@ -724,6 +737,22 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
       : workspaceMemoryOverlay
     : contextText;
   const injectContext = String(effectiveContextText).trim().length > 0;
+
+  let latestInjected = null;
+  if (injectContext) {
+    try {
+      latestInjected = await writeLatestInjectedContext({
+        workspaceRoot: opts.workspaceRoot,
+        agent: opts.agent,
+        sessionId: opts.sessionId,
+        contextText: effectiveContextText,
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn(`[warn] latest context snapshot write failed: ${reason}`);
+    }
+  }
+
   const openCodeContextPacketPath = opts.agent === 'opencode-cli' && injectContext
     ? await ensureOpenCodeContextPacket({
       workspaceRoot: opts.workspaceRoot,
@@ -742,6 +771,14 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
     console.log(`Context packet: ${packAbs} (stale)`);
   } else {
     console.log('Context packet: (unavailable)');
+  }
+  if (latestInjected?.ok && latestInjected.relPath) {
+    console.log(`Latest injected context: ${latestInjected.relPath}`);
+    if (!opts.prompt) {
+      console.log(
+        `Rehydrate tip: after /new (codex) or /clear (claude/gemini), restart the CLI (preferred) or re-attach ${latestInjected.relPath} as your first prompt.`
+      );
+    }
   }
 
   if (opts.prompt) {

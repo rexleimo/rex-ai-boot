@@ -12,6 +12,21 @@ import blueprintSpec from '../../../memory/specs/orchestrator-blueprints.json' w
 export const ORCHESTRATOR_ROLE_IDS = ['planner', 'implementer', 'reviewer', 'security-reviewer'];
 export const ORCHESTRATOR_BLUEPRINT_NAMES = ['feature', 'bugfix', 'refactor', 'security'];
 export const ORCHESTRATOR_FORMATS = ['text', 'json'];
+const DEFAULT_WORK_ITEM_LIMIT = 4;
+const WORK_ITEM_TYPE_PATTERNS = Object.freeze([
+  { type: 'auth', pattern: /\b(auth|authentication|authorize|authorization|login|oauth|token|credential|secret)\b/i },
+  { type: 'payment', pattern: /\b(payment|billing|invoice|charge|refund|payout|stripe|paypal|card)\b/i },
+  { type: 'security', pattern: /\b(security|vulnerability|xss|csrf|injection|permissions|policy|compliance|privacy)\b/i },
+  { type: 'testing', pattern: /\b(test|testing|qa|verification|assert|regression)\b/i },
+  { type: 'docs', pattern: /\b(doc|docs|documentation|readme|runbook|guide)\b/i },
+  { type: 'refactor', pattern: /\b(refactor|cleanup|rename|extract|decompose|modularize)\b/i },
+]);
+const WORK_ITEM_OWNERSHIP_HINT_PATTERNS = Object.freeze([
+  { pattern: /\bdocs?\b|\breadme\b|\brunbook\b|\bguide\b/i, hints: ['docs/'] },
+  { pattern: /\btest|testing|qa|verification|assert|regression\b/i, hints: ['scripts/tests/'] },
+  { pattern: /\bmcp-server\b/i, hints: ['mcp-server/src/'] },
+  { pattern: /\bspec|schema\b/i, hints: ['memory/specs/'] },
+]);
 export { LOCAL_PHASE_EXECUTOR, LOCAL_MERGE_GATE_EXECUTOR } from './orchestrator-executors.mjs';
 export const MERGE_GATE_BLOCK_STATUSES = normalizeMergeGateBlockStatuses(blueprintSpec?.mergeGate?.blockStatuses);
 export const MERGE_GATE_CONFLICT_RULE = normalizeText(blueprintSpec?.mergeGate?.conflictRule)
@@ -19,6 +34,19 @@ export const MERGE_GATE_CONFLICT_RULE = normalizeText(blueprintSpec?.mergeGate?.
 
 function normalizeText(value) {
   return String(value ?? '').trim();
+}
+
+function normalizeOwnedPathPrefixes(raw = null) {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .map((item) => normalizeText(item))
+    .filter((item) => item.length > 0 || item === '');
+}
+
+function hasWildcardOwnedPrefix(prefixes = []) {
+  return Array.isArray(prefixes) && prefixes.some((prefix) => prefix === '');
 }
 
 function normalizeMergeGateBlockStatuses(raw) {
@@ -59,16 +87,18 @@ function normalizeRoleCards(rawRoles = {}) {
       throw new Error(`Invalid orchestrator-blueprints spec: roles.${roleId}.ownership missing`);
     }
 
-    const ownedPathPrefixes = Array.isArray(entry?.ownedPathPrefixes)
-      ? entry.ownedPathPrefixes.map((item) => normalizeText(item)).filter((item) => item.length > 0 || item === '')
-      : [];
+    const canEditFiles = entry?.canEditFiles === true;
+    const ownedPathPrefixes = normalizeOwnedPathPrefixes(entry?.ownedPathPrefixes);
+    if (canEditFiles && hasWildcardOwnedPrefix(ownedPathPrefixes)) {
+      throw new Error(`Invalid orchestrator-blueprints spec: roles.${roleId}.ownedPathPrefixes cannot include wildcard \"\" for editable roles`);
+    }
 
     roleCards[roleId] = {
       id: roleId,
       label: normalizeRoleLabel(roleId),
       responsibility,
       ownership,
-      canEditFiles: entry?.canEditFiles === true,
+      canEditFiles,
       ownedPathPrefixes,
     };
   }
@@ -90,6 +120,12 @@ function normalizeBlueprintPhase(rawPhase, index, blueprintName) {
   const role = normalizeText(rawPhase.role);
   const mode = normalizePhaseMode(rawPhase.mode);
   const group = normalizeText(rawPhase.group);
+  const hasCanEditFiles = Object.prototype.hasOwnProperty.call(rawPhase, 'canEditFiles');
+  const canEditFiles = hasCanEditFiles ? rawPhase.canEditFiles === true : null;
+  const hasOwnedPathPrefixes = Object.prototype.hasOwnProperty.call(rawPhase, 'ownedPathPrefixes');
+  const ownedPathPrefixes = hasOwnedPathPrefixes
+    ? normalizeOwnedPathPrefixes(rawPhase.ownedPathPrefixes)
+    : null;
 
   if (!role) {
     throw new Error(`Invalid orchestrator-blueprints spec: blueprints.${blueprintName}.phases[${index}].role missing`);
@@ -100,12 +136,17 @@ function normalizeBlueprintPhase(rawPhase, index, blueprintName) {
   if (mode === 'parallel' && !group) {
     throw new Error(`Invalid orchestrator-blueprints spec: blueprints.${blueprintName}.phases[${index}].group required for parallel phases`);
   }
+  if (canEditFiles === true && hasWildcardOwnedPrefix(ownedPathPrefixes || [])) {
+    throw new Error(`Invalid orchestrator-blueprints spec: blueprints.${blueprintName}.phases[${index}].ownedPathPrefixes cannot include wildcard \"\" for editable phases`);
+  }
 
   return {
     id,
     role,
     mode,
     ...(group ? { group } : {}),
+    ...(hasCanEditFiles ? { canEditFiles } : {}),
+    ...(hasOwnedPathPrefixes ? { ownedPathPrefixes } : {}),
   };
 }
 
@@ -183,7 +224,23 @@ export function getOrchestratorBlueprint(name = 'feature') {
   const blueprint = ORCHESTRATOR_BLUEPRINTS[normalizeOrchestratorBlueprint(name)];
   return {
     ...blueprint,
-    phases: blueprint.phases.map((phase) => ({ ...phase, roleCard: getRoleCard(phase.role) })),
+    phases: blueprint.phases.map((phase) => {
+      const roleCard = getRoleCard(phase.role);
+      const canEditFiles = typeof phase.canEditFiles === 'boolean'
+        ? phase.canEditFiles
+        : roleCard.canEditFiles === true;
+      const ownedPathPrefixes = Array.isArray(phase.ownedPathPrefixes)
+        ? [...phase.ownedPathPrefixes]
+        : Array.isArray(roleCard.ownedPathPrefixes)
+          ? [...roleCard.ownedPathPrefixes]
+          : [];
+      return {
+        ...phase,
+        roleCard,
+        canEditFiles,
+        ownedPathPrefixes,
+      };
+    }),
   };
 }
 
@@ -214,6 +271,32 @@ function normalizeDispatchPlan(rawPlan) {
 
   return {
     ...rawPlan,
+    workItems: normalizeWorkItems(rawPlan.workItems),
+    workItemQueue: rawPlan.workItemQueue && typeof rawPlan.workItemQueue === 'object'
+      ? {
+        enabled: rawPlan.workItemQueue.enabled === true,
+        maxParallel: Number.isFinite(rawPlan.workItemQueue.maxParallel)
+          ? Math.max(1, Math.floor(rawPlan.workItemQueue.maxParallel))
+          : 1,
+        entries: Array.isArray(rawPlan.workItemQueue.entries)
+          ? rawPlan.workItemQueue.entries.map((entry) => ({
+            queueId: normalizeText(entry?.queueId),
+            phaseId: normalizeText(entry?.phaseId),
+            role: normalizeText(entry?.role),
+            itemId: normalizeText(entry?.itemId),
+            jobId: normalizeText(entry?.jobId),
+            dependsOn: Array.isArray(entry?.dependsOn)
+              ? entry.dependsOn.map((item) => normalizeText(item)).filter(Boolean)
+              : [],
+            status: normalizeText(entry?.status) || 'queued',
+          }))
+          : [],
+      }
+      : {
+        enabled: false,
+        maxParallel: 1,
+        entries: [],
+      },
     notes: Array.isArray(rawPlan.notes) ? [...rawPlan.notes] : [],
     executorRegistry: Array.isArray(rawPlan.executorRegistry) ? [...rawPlan.executorRegistry] : [],
     executorDetails: Array.isArray(rawPlan.executorDetails)
@@ -230,7 +313,14 @@ function normalizeDispatchPlan(rawPlan) {
         ...job,
         dependsOn: Array.isArray(job.dependsOn) ? [...job.dependsOn] : [],
         outputs: Array.isArray(job.outputs) ? [...job.outputs] : [],
-        launchSpec: job.launchSpec ? { ...job.launchSpec } : {},
+        launchSpec: job.launchSpec
+          ? {
+            ...job.launchSpec,
+            workItemRefs: Array.isArray(job.launchSpec.workItemRefs)
+              ? job.launchSpec.workItemRefs.map((item) => normalizeText(item)).filter(Boolean)
+              : [],
+          }
+          : {},
       }))
       : [],
   };
@@ -350,6 +440,207 @@ function normalizeDispatchPreflight(rawPreflight) {
   };
 }
 
+function normalizePathHint(value) {
+  return normalizeText(value)
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/^\/+/, '');
+}
+
+function normalizeOwnedPathHints(rawHints = []) {
+  if (!Array.isArray(rawHints)) {
+    return [];
+  }
+
+  const hints = [];
+  const seen = new Set();
+  for (const rawHint of rawHints) {
+    let candidate = normalizeText(rawHint)
+      .replace(/^[`"'([{<]+/, '')
+      .replace(/[`"')\]}>.,;:!?]+$/, '');
+    if (!candidate || /^[a-z]+:\/\//i.test(candidate)) {
+      continue;
+    }
+    const normalized = normalizePathHint(candidate);
+    if (!normalized || normalized.startsWith('../') || normalized.startsWith('~/') || /^[a-z]:\//i.test(normalized)) {
+      continue;
+    }
+    if (seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    hints.push(normalized);
+  }
+  return hints;
+}
+
+function extractOwnedPathHintsFromSummary(summary = '') {
+  const tokens = normalizeText(summary).split(/\s+/).filter(Boolean);
+  const rawHints = [];
+  for (const token of tokens) {
+    if (!/[\\/]/.test(token)) {
+      continue;
+    }
+    rawHints.push(token);
+  }
+  return normalizeOwnedPathHints(rawHints);
+}
+
+function inferOwnedPathHints(summary = '', type = 'general') {
+  const explicitHints = extractOwnedPathHintsFromSummary(summary);
+  if (explicitHints.length > 0) {
+    return explicitHints;
+  }
+
+  const hints = [];
+  const typeLabel = normalizeText(type).toLowerCase();
+  if (typeLabel === 'docs') {
+    hints.push('docs/');
+  } else if (typeLabel === 'testing') {
+    hints.push('scripts/tests/');
+  }
+  for (const entry of WORK_ITEM_OWNERSHIP_HINT_PATTERNS) {
+    if (entry.pattern.test(summary)) {
+      hints.push(...entry.hints);
+    }
+  }
+
+  return normalizeOwnedPathHints(hints);
+}
+
+function inferWorkItemType(text = '') {
+  const sample = normalizeText(text);
+  if (!sample) {
+    return 'general';
+  }
+  for (const entry of WORK_ITEM_TYPE_PATTERNS) {
+    if (entry.pattern.test(sample)) {
+      return entry.type;
+    }
+  }
+  return 'general';
+}
+
+function normalizeWorkItem(rawItem = {}, index = 0) {
+  const fallbackId = `wi.${index + 1}`;
+  const itemId = normalizeText(rawItem.itemId) || fallbackId;
+  const summary = normalizeText(rawItem.summary) || normalizeText(rawItem.title) || `Work item ${index + 1}`;
+  const typeSeed = `${normalizeText(rawItem.type)} ${summary}`.trim();
+  const type = inferWorkItemType(typeSeed);
+  const title = normalizeText(rawItem.title)
+    || (summary.length > 72 ? `${summary.slice(0, 71)}…` : summary);
+
+  return {
+    itemId,
+    type,
+    title,
+    summary,
+    source: normalizeText(rawItem.source) || 'decomposer-mvp',
+    status: normalizeText(rawItem.status).toLowerCase() || 'queued',
+    dependsOn: Array.isArray(rawItem.dependsOn)
+      ? rawItem.dependsOn.map((item) => normalizeText(item)).filter(Boolean)
+      : [],
+    ownedPathHints: normalizeOwnedPathHints(rawItem.ownedPathHints),
+  };
+}
+
+function normalizeWorkItems(rawItems = [], fallback = []) {
+  const sourceItems = Array.isArray(rawItems) && rawItems.length > 0 ? rawItems : fallback;
+  if (!Array.isArray(sourceItems) || sourceItems.length === 0) {
+    return [];
+  }
+
+  const normalized = [];
+  const seen = new Set();
+  for (const [index, rawItem] of sourceItems.entries()) {
+    const item = normalizeWorkItem(rawItem, index);
+    if (!item.itemId) {
+      continue;
+    }
+    let resolvedId = item.itemId;
+    let suffix = 2;
+    while (seen.has(resolvedId)) {
+      resolvedId = `${item.itemId}-${suffix}`;
+      suffix += 1;
+    }
+    seen.add(resolvedId);
+    normalized.push({
+      ...item,
+      itemId: resolvedId,
+      dependsOn: item.dependsOn.filter((depId) => depId !== resolvedId),
+    });
+  }
+
+  return normalized;
+}
+
+function splitWorkItemCandidates(contextSummary = '') {
+  const raw = String(contextSummary || '').replace(/\r/g, '\n');
+  const lines = raw.split('\n').map((line) => line.trim()).filter(Boolean);
+  const candidates = [];
+
+  for (const line of lines) {
+    const bulletMatch = /^[-*+]\s+(.+)$/.exec(line) || /^\d+[.)]\s+(.+)$/.exec(line);
+    const normalizedLine = bulletMatch ? bulletMatch[1].trim() : line;
+    const segments = normalizedLine.split(/[;；]+/).map((segment) => normalizeText(segment)).filter(Boolean);
+    candidates.push(...segments);
+  }
+
+  return candidates;
+}
+
+function buildWorkItemFallback(taskTitle = '', contextSummary = '') {
+  const summary = normalizeText(taskTitle) || normalizeText(contextSummary) || 'Deliver the orchestration task safely.';
+  const type = inferWorkItemType(summary);
+  return [{
+    itemId: 'wi.1',
+    title: summary.length > 72 ? `${summary.slice(0, 71)}…` : summary,
+    summary,
+    type,
+    source: 'task-fallback',
+    status: 'queued',
+    dependsOn: [],
+    ownedPathHints: inferOwnedPathHints(summary, type),
+  }];
+}
+
+export function buildDecomposedWorkItems({ taskTitle = '', contextSummary = '', limit = DEFAULT_WORK_ITEM_LIMIT } = {}) {
+  const maxItems = Number.isFinite(limit) ? Math.max(1, Math.floor(limit)) : DEFAULT_WORK_ITEM_LIMIT;
+  const candidates = splitWorkItemCandidates(contextSummary);
+  const deduped = [];
+  const seen = new Set();
+
+  for (const candidate of candidates) {
+    const key = candidate.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(candidate);
+    if (deduped.length >= maxItems) break;
+  }
+
+  if (deduped.length === 0) {
+    return normalizeWorkItems([], buildWorkItemFallback(taskTitle, contextSummary));
+  }
+
+  const defaultHints = normalizeOwnedPathHints(['scripts/', 'mcp-server/']);
+  const items = deduped.map((summary, index) => {
+    const type = inferWorkItemType(summary);
+    const hints = inferOwnedPathHints(summary, type);
+    return {
+      itemId: `wi.${index + 1}`,
+      title: summary.length > 72 ? `${summary.slice(0, 71)}…` : summary,
+      summary,
+      type,
+      source: 'planner-context',
+      status: 'queued',
+      dependsOn: [],
+      ownedPathHints: hints.length > 0 ? hints : defaultHints,
+    };
+  });
+
+  return normalizeWorkItems(items);
+}
+
 function collectExecutorDetails(jobs = []) {
   const usedExecutorIds = new Set(
     jobs.map((job) => String(job?.launchSpec?.executor || '').trim()).filter(Boolean)
@@ -362,6 +653,7 @@ export function buildOrchestrationPlan({
   blueprint = 'feature',
   taskTitle = '',
   contextSummary = '',
+  workItems = null,
   learnEvalOverlay = null,
   dispatchPlan = null,
   dispatchRun = null,
@@ -371,11 +663,22 @@ export function buildOrchestrationPlan({
   effectiveDispatchPolicy = null,
 } = {}) {
   const resolved = getOrchestratorBlueprint(blueprint);
+  const resolvedTaskTitle = String(taskTitle || '').trim() || 'Untitled task';
+  const resolvedContextSummary = String(contextSummary || '').trim();
+  const decomposedWorkItems = normalizeWorkItems(
+    workItems,
+    buildDecomposedWorkItems({
+      taskTitle: resolvedTaskTitle,
+      contextSummary: resolvedContextSummary,
+    })
+  );
+
   return {
     blueprint: resolved.name,
     description: resolved.description,
-    taskTitle: String(taskTitle || '').trim() || 'Untitled task',
-    contextSummary: String(contextSummary || '').trim(),
+    taskTitle: resolvedTaskTitle,
+    contextSummary: resolvedContextSummary,
+    workItems: decomposedWorkItems,
     learnEvalOverlay: normalizeLearnEvalOverlay(learnEvalOverlay),
     dispatchPlan: normalizeDispatchPlan(dispatchPlan),
     dispatchRun: normalizeDispatchRun(dispatchRun),
@@ -392,8 +695,8 @@ export function buildOrchestrationPlan({
       label: phase.roleCard.label,
       responsibility: phase.roleCard.responsibility,
       ownership: phase.roleCard.ownership,
-      canEditFiles: phase.roleCard.canEditFiles === true,
-      ownedPathPrefixes: Array.isArray(phase.roleCard.ownedPathPrefixes) ? [...phase.roleCard.ownedPathPrefixes] : [],
+      canEditFiles: phase.canEditFiles === true,
+      ownedPathPrefixes: Array.isArray(phase.ownedPathPrefixes) ? [...phase.ownedPathPrefixes] : [],
     })),
   };
 }
@@ -403,6 +706,10 @@ function createPhaseJob(plan, phase, dependsOn = [], handoffTarget = 'next-phase
   if (plan.learnEvalOverlay) {
     contextSources.push('learn-eval-overlay');
   }
+  const workItemRefs = Array.isArray(plan?.workItems)
+    ? plan.workItems.map((item) => normalizeText(item?.itemId)).filter(Boolean)
+    : [];
+  const ownedPathPrefixes = resolveOwnedPathPrefixesForWorkItemRefs(plan, phase, workItemRefs);
 
   const mode = modeOverride || phase.mode;
   const agentRefId = resolveAgentRefIdForRole(phase.role) || String(phase.role || '').trim();
@@ -426,9 +733,80 @@ function createPhaseJob(plan, phase, dependsOn = [], handoffTarget = 'next-phase
       inputs: contextSources,
       outputType: 'handoff',
       handoffTarget,
+      workItemRefs,
       canEditFiles: phase.canEditFiles === true,
-      ownedPathPrefixes: Array.isArray(phase.ownedPathPrefixes) ? [...phase.ownedPathPrefixes] : [],
+      ownedPathPrefixes,
       promptSeed: `${phase.label}: ${phase.responsibility} Ownership: ${phase.ownership}`,
+    },
+  };
+}
+
+function resolveOwnedPathPrefixesForWorkItemRefs(plan, phase, workItemRefs = []) {
+  const fallbackOwnedPrefixes = normalizeOwnedPathPrefixes(phase?.ownedPathPrefixes);
+  if (phase?.canEditFiles !== true) {
+    return fallbackOwnedPrefixes;
+  }
+
+  const refs = Array.isArray(workItemRefs)
+    ? workItemRefs.map((item) => normalizeText(item)).filter(Boolean)
+    : [];
+  if (refs.length === 0) {
+    return fallbackOwnedPrefixes;
+  }
+
+  const workItemMap = new Map(
+    normalizeWorkItems(plan?.workItems).map((item) => [normalizeText(item?.itemId), item])
+  );
+  const hints = [];
+  for (const ref of refs) {
+    const item = workItemMap.get(ref);
+    if (!item) {
+      continue;
+    }
+    hints.push(...normalizeOwnedPathHints(item.ownedPathHints));
+  }
+
+  const resolvedHints = normalizeOwnedPathPrefixes(hints);
+  if (resolvedHints.length > 0) {
+    return resolvedHints;
+  }
+  return fallbackOwnedPrefixes;
+}
+
+function normalizeJobIdSegment(value = '') {
+  const normalized = normalizeText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized || 'item';
+}
+
+function createPhaseJobWithOverrides(
+  plan,
+  phase,
+  {
+    dependsOn = [],
+    handoffTarget = 'next-phase',
+    modeOverride = null,
+    jobIdOverride = '',
+    workItemRefsOverride = null,
+    workItemId = '',
+  } = {}
+) {
+  const base = createPhaseJob(plan, phase, dependsOn, handoffTarget, modeOverride);
+  const resolvedRefs = Array.isArray(workItemRefsOverride)
+    ? workItemRefsOverride.map((item) => normalizeText(item)).filter(Boolean)
+    : base.launchSpec.workItemRefs;
+  const resolvedOwnedPrefixes = resolveOwnedPathPrefixesForWorkItemRefs(plan, phase, resolvedRefs);
+  return {
+    ...base,
+    jobId: normalizeText(jobIdOverride) || base.jobId,
+    launchSpec: {
+      ...base.launchSpec,
+      workItemRefs: resolvedRefs,
+      ownedPathPrefixes: resolvedOwnedPrefixes,
+      ...(normalizeText(workItemId) ? { workItemId: normalizeText(workItemId) } : {}),
     },
   };
 }
@@ -464,9 +842,91 @@ function getDispatchParallelism(plan) {
     : 'parallel-with-merge-gate';
 }
 
+function assertEditableParallelOwnership(plan) {
+  for (const phase of Array.isArray(plan?.phases) ? plan.phases : []) {
+    if (phase?.mode !== 'parallel' || phase?.canEditFiles !== true) {
+      continue;
+    }
+    const ownedPathPrefixes = normalizeOwnedPathPrefixes(phase?.ownedPathPrefixes);
+    if (ownedPathPrefixes.length === 0 || hasWildcardOwnedPrefix(ownedPathPrefixes)) {
+      throw new Error(
+        `Parallel editable phase "${String(phase?.id || '').trim() || 'unknown'}" requires explicit ownedPathPrefixes (wildcard \"\" is not allowed).`
+      );
+    }
+  }
+}
+
+function resolveWorkItemsForPhase(plan, phase) {
+  if (!phase?.canEditFiles) {
+    return [];
+  }
+  return normalizeWorkItems(plan?.workItems);
+}
+
+function buildBoundedWorkItemQueue({
+  phase,
+  items = [],
+  upstreamJobIds = [],
+  maxParallel = 2,
+} = {}) {
+  const boundedParallel = Number.isFinite(maxParallel) ? Math.max(1, Math.floor(maxParallel)) : 2;
+  const jobIdsByItemId = new Map();
+  const expanded = [];
+  const entries = [];
+
+  for (const [index, item] of items.entries()) {
+    const itemId = normalizeText(item?.itemId) || `wi.${index + 1}`;
+    const suffix = normalizeJobIdSegment(itemId);
+    const jobId = `phase.${phase.id}.${suffix}`;
+
+    const deps = [];
+    if (index < boundedParallel) {
+      deps.push(...upstreamJobIds);
+    } else if (expanded[index - boundedParallel]) {
+      deps.push(expanded[index - boundedParallel].jobId);
+    } else {
+      deps.push(...upstreamJobIds);
+    }
+
+    for (const depItemId of Array.isArray(item.dependsOn) ? item.dependsOn : []) {
+      const depJobId = jobIdsByItemId.get(depItemId);
+      if (depJobId) {
+        deps.push(depJobId);
+      }
+    }
+
+    const uniqueDeps = [...new Set(deps.filter(Boolean))];
+    expanded.push({
+      itemId,
+      jobId,
+      dependsOn: uniqueDeps,
+      item,
+    });
+    jobIdsByItemId.set(itemId, jobId);
+    entries.push({
+      queueId: `${phase.id}.${itemId}`,
+      phaseId: phase.id,
+      role: phase.role,
+      itemId,
+      jobId,
+      dependsOn: uniqueDeps,
+      status: 'queued',
+    });
+  }
+
+  return {
+    maxParallel: boundedParallel,
+    expanded,
+    entries,
+  };
+}
+
 export function buildLocalDispatchPlan(input = {}) {
   const plan = Array.isArray(input.phases) ? input : buildOrchestrationPlan(input);
+  assertEditableParallelOwnership(plan);
   const parallelism = getDispatchParallelism(plan);
+  const workItemQueueEntries = [];
+  const maxParallelWorkItems = 2;
   const jobs = [];
   const notes = ['Skeleton only; no model runtime is invoked.'];
   let upstreamJobIds = [];
@@ -499,6 +959,9 @@ export function buildLocalDispatchPlan(input = {}) {
   for (const phase of plan.phases) {
     const groupedParallel = phase.mode === 'parallel' && phase.group && parallelism === 'parallel-with-merge-gate';
     const policySerializedParallel = phase.mode === 'parallel' && phase.group && parallelism === 'serial-only';
+    const phaseWorkItems = resolveWorkItemsForPhase(plan, phase);
+    const shouldExpandWorkItems = phase.canEditFiles === true && phaseWorkItems.length > 1;
+    const phaseDependencies = [...upstreamJobIds];
 
     if (groupedParallel) {
       if (!openParallelGroup || openParallelGroup.name !== phase.group) {
@@ -517,14 +980,48 @@ export function buildLocalDispatchPlan(input = {}) {
     }
 
     flushParallelGroup();
-    const job = createPhaseJob(
-      plan,
-      phase,
-      upstreamJobIds,
-      'next-phase',
-      policySerializedParallel ? 'sequential' : null
-    );
+    if (shouldExpandWorkItems) {
+      const queue = buildBoundedWorkItemQueue({
+        phase,
+        items: phaseWorkItems,
+        upstreamJobIds: phaseDependencies,
+        maxParallel: maxParallelWorkItems,
+      });
+      for (const itemJob of queue.expanded) {
+        const job = createPhaseJobWithOverrides(plan, phase, {
+          dependsOn: itemJob.dependsOn,
+          handoffTarget: 'next-phase',
+          modeOverride: policySerializedParallel ? 'sequential' : null,
+          jobIdOverride: itemJob.jobId,
+          workItemRefsOverride: [itemJob.itemId],
+          workItemId: itemJob.itemId,
+        });
+        jobs.push(job);
+      }
+      workItemQueueEntries.push(...queue.entries);
+      upstreamJobIds = queue.expanded.map((itemJob) => itemJob.jobId);
+      continue;
+    }
+
+    const singleWorkItemRef = phaseWorkItems.length === 1 ? [phaseWorkItems[0].itemId] : null;
+    const job = createPhaseJobWithOverrides(plan, phase, {
+      dependsOn: phaseDependencies,
+      handoffTarget: 'next-phase',
+      modeOverride: policySerializedParallel ? 'sequential' : null,
+      ...(singleWorkItemRef ? { workItemRefsOverride: singleWorkItemRef, workItemId: singleWorkItemRef[0] } : {}),
+    });
     jobs.push(job);
+    if (phase.canEditFiles === true && singleWorkItemRef) {
+      workItemQueueEntries.push({
+        queueId: `${phase.id}.${singleWorkItemRef[0]}`,
+        phaseId: phase.id,
+        role: phase.role,
+        itemId: singleWorkItemRef[0],
+        jobId: job.jobId,
+        dependsOn: [...phaseDependencies],
+        status: 'queued',
+      });
+    }
     upstreamJobIds = [job.jobId];
   }
 
@@ -535,6 +1032,12 @@ export function buildLocalDispatchPlan(input = {}) {
   return {
     mode: 'local',
     readyForExecution: false,
+    workItems: normalizeWorkItems(plan.workItems),
+    workItemQueue: {
+      enabled: workItemQueueEntries.length > 0,
+      maxParallel: maxParallelWorkItems,
+      entries: workItemQueueEntries,
+    },
     notes,
     executorRegistry: executorDetails.map((executor) => executor.id),
     executorDetails,
@@ -981,6 +1484,25 @@ function formatLearnEvalOverlay(overlay) {
   return lines;
 }
 
+function formatWorkItemPlan(workItems = []) {
+  const items = normalizeWorkItems(workItems);
+  if (items.length === 0) {
+    return [];
+  }
+
+  const lines = [
+    'Work-Item Plan:',
+    `- items=${items.length}`,
+  ];
+
+  lines.push(...items.map((item) => {
+    const depends = item.dependsOn.length > 0 ? item.dependsOn.join(', ') : '(none)';
+    return `- [${item.type}] ${item.itemId} ${item.title} dependsOn=${depends}`;
+  }));
+  lines.push('');
+  return lines;
+}
+
 function formatPolicySection(title, policy) {
   if (!policy) {
     return [];
@@ -1055,6 +1577,13 @@ function formatDispatchPlan(dispatchPlan) {
     lines.push(...dispatchPlan.notes.map((note) => `- note=${note}`));
   }
 
+  if (Array.isArray(dispatchPlan.workItems) && dispatchPlan.workItems.length > 0) {
+    lines.push(`- workItems=${dispatchPlan.workItems.length}`);
+  }
+  if (dispatchPlan.workItemQueue?.enabled) {
+    lines.push(`- workItemQueue maxParallel=${dispatchPlan.workItemQueue.maxParallel} entries=${dispatchPlan.workItemQueue.entries.length}`);
+  }
+
   lines.push(...dispatchPlan.jobs.map((job) => {
     const dependsOn = job.dependsOn.length > 0 ? job.dependsOn.join(', ') : '(root)';
     return `- [${job.jobType}] ${job.jobId} role=${job.role} dependsOn=${dependsOn} executor=${job.launchSpec.executor}`;
@@ -1123,8 +1652,113 @@ function formatDispatchEvidence(dispatchEvidence) {
   return lines;
 }
 
+function normalizeWorkItemStatus(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'done' || normalized === 'completed' || normalized === 'simulated') return 'done';
+  if (normalized === 'running') return 'running';
+  if (normalized === 'blocked' || normalized === 'needs-input') return 'blocked';
+  if (normalized === 'queued' || normalized === 'pending') return 'queued';
+  return 'queued';
+}
+
+function summarizeWorkItemTotals(items = []) {
+  const totals = {
+    total: items.length,
+    queued: 0,
+    running: 0,
+    blocked: 0,
+    done: 0,
+  };
+  for (const item of items) {
+    const status = normalizeWorkItemStatus(item?.status);
+    if (status in totals) {
+      totals[status] += 1;
+    }
+  }
+  return totals;
+}
+
+function formatCountMap(map) {
+  return Array.from(map.entries())
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .map(([key, count]) => `${key}=${count}`)
+    .join(', ');
+}
+
+function formatWorkItemTelemetry(workItemTelemetry) {
+  if (!workItemTelemetry || typeof workItemTelemetry !== 'object') {
+    return [];
+  }
+
+  const items = Array.isArray(workItemTelemetry.items) ? workItemTelemetry.items : [];
+  const rawTotals = workItemTelemetry.totals && typeof workItemTelemetry.totals === 'object'
+    ? workItemTelemetry.totals
+    : summarizeWorkItemTotals(items);
+  const totals = {
+    total: Number.isFinite(rawTotals.total) ? Math.max(0, Math.floor(rawTotals.total)) : items.length,
+    queued: Number.isFinite(rawTotals.queued) ? Math.max(0, Math.floor(rawTotals.queued)) : 0,
+    running: Number.isFinite(rawTotals.running) ? Math.max(0, Math.floor(rawTotals.running)) : 0,
+    blocked: Number.isFinite(rawTotals.blocked) ? Math.max(0, Math.floor(rawTotals.blocked)) : 0,
+    done: Number.isFinite(rawTotals.done) ? Math.max(0, Math.floor(rawTotals.done)) : 0,
+  };
+
+  const lines = [
+    'Work-Item Telemetry:',
+    `- schemaVersion=${Number.isFinite(workItemTelemetry.schemaVersion) ? Math.floor(workItemTelemetry.schemaVersion) : 1}`,
+    `- totals total=${totals.total} queued=${totals.queued} running=${totals.running} blocked=${totals.blocked} done=${totals.done}`,
+  ];
+
+  if (items.length > 0) {
+    const blockedByType = new Map();
+    const failureCounts = new Map();
+    const retryCounts = new Map();
+
+    for (const item of items) {
+      const itemType = String(item?.itemType || 'unknown').trim() || 'unknown';
+      const status = normalizeWorkItemStatus(item?.status);
+      const typeCounts = blockedByType.get(itemType) || { total: 0, blocked: 0 };
+      typeCounts.total += 1;
+      if (status === 'blocked') {
+        typeCounts.blocked += 1;
+      }
+      blockedByType.set(itemType, typeCounts);
+
+      const failureClass = String(item?.failureClass || 'none').trim();
+      if (status === 'blocked' && failureClass && failureClass !== 'none') {
+        failureCounts.set(failureClass, (failureCounts.get(failureClass) || 0) + 1);
+      }
+
+      const retryClass = String(item?.retryClass || 'none').trim();
+      if (retryClass && retryClass !== 'none') {
+        retryCounts.set(retryClass, (retryCounts.get(retryClass) || 0) + 1);
+      }
+    }
+
+    const byTypeText = Array.from(blockedByType.entries())
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([itemType, counts]) => `${itemType}=${counts.blocked}/${counts.total}`)
+      .join(', ');
+    lines.push(`- blockedByType ${byTypeText || '(none)'}`);
+
+    if (failureCounts.size > 0) {
+      lines.push(`- failureClasses ${formatCountMap(failureCounts)}`);
+    }
+    if (retryCounts.size > 0) {
+      lines.push(`- retryClasses ${formatCountMap(retryCounts)}`);
+    }
+  }
+
+  lines.push('');
+  return lines;
+}
+
 export function renderOrchestrationReport(input = {}) {
-  const plan = Array.isArray(input.phases) ? input : buildOrchestrationPlan(input);
+  const plan = Array.isArray(input.phases)
+    ? input
+    : {
+      ...buildOrchestrationPlan(input),
+      ...(Object.prototype.hasOwnProperty.call(input, 'workItemTelemetry') ? { workItemTelemetry: input.workItemTelemetry } : {}),
+    };
   return [
     `ORCHESTRATION BLUEPRINT: ${plan.blueprint}`,
     `Task: ${plan.taskTitle}`,
@@ -1134,6 +1768,7 @@ export function renderOrchestrationReport(input = {}) {
     'Phases:',
     ...plan.phases.map((phase) => `- [${phase.mode}] ${phase.label}: ${phase.responsibility}`),
     '',
+    ...formatWorkItemPlan(plan.workItems),
     ...formatLearnEvalOverlay(plan.learnEvalOverlay),
     ...formatDispatchPolicy(plan.dispatchPolicy),
     ...formatDispatchPreflight(plan.dispatchPreflight),
@@ -1141,6 +1776,7 @@ export function renderOrchestrationReport(input = {}) {
     ...formatDispatchPlan(plan.dispatchPlan),
     ...formatDispatchRun(plan.dispatchRun),
     ...formatDispatchEvidence(plan.dispatchEvidence),
+    ...formatWorkItemTelemetry(plan.workItemTelemetry),
     'Merge Gate:',
     '- Block on handoff status = blocked|needs-input',
     '- Block when read-only roles report filesTouched',

@@ -241,7 +241,7 @@ aios orchestrate --session <session-id> --preflight auto --format json
 
 ```bash
 export AIOS_EXECUTE_LIVE=1
-export AIOS_SUBAGENT_CLIENT=codex-cli  # 或 claude-code, gemini-cli
+export AIOS_SUBAGENT_CLIENT=codex-cli  # 必须（live 当前仅支持 codex-cli）
 aios orchestrate --session <session-id> --dispatch local --execute live --format json
 ```
 

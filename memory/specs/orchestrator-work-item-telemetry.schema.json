@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "rex-ai-boot/orchestrator-work-item-telemetry.schema.json",
+  "title": "Orchestrator Work Item Telemetry",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "totals",
+    "items"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "generatedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "totals": {
+      "type": "object",
+      "required": ["total", "queued", "running", "blocked", "done"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "queued": { "type": "integer", "minimum": 0 },
+        "running": { "type": "integer", "minimum": 0 },
+        "blocked": { "type": "integer", "minimum": 0 },
+        "done": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "itemId",
+          "itemType",
+          "role",
+          "status",
+          "retryClass",
+          "attempts",
+          "dependsOn",
+          "artifactRefs"
+        ],
+        "properties": {
+          "itemId": { "type": "string", "minLength": 1 },
+          "itemType": { "type": "string", "minLength": 1 },
+          "role": { "type": "string", "minLength": 1 },
+          "status": {
+            "type": "string",
+            "enum": ["queued", "running", "blocked", "done"]
+          },
+          "failureClass": {
+            "type": "string",
+            "enum": [
+              "none",
+              "timeout",
+              "dependency-blocked",
+              "ownership-policy",
+              "contract",
+              "unsupported-job",
+              "runtime-error"
+            ]
+          },
+          "retryClass": {
+            "type": "string",
+            "enum": ["none", "same-hypothesis", "new-hypothesis"]
+          },
+          "attempts": { "type": "integer", "minimum": 0 },
+          "elapsedMs": { "type": "integer", "minimum": 0 },
+          "dependsOn": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "artifactRefs": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

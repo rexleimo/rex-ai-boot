@@ -35,6 +35,84 @@ function clipText(value, maxLen = 8000) {
   return `${text.slice(0, maxLen)}\n...[truncated]`;
 }
 
+function normalizeOwnedPath(value = '') {
+  return normalizeText(value)
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/^\/+/, '');
+}
+
+function normalizeOwnedPathPrefixes(raw = []) {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .map((item) => normalizeOwnedPath(item))
+    .filter((item) => item.length > 0 || item === '');
+}
+
+function isAllowedByOwnedPrefixes(filePath, prefixes = []) {
+  if (!Array.isArray(prefixes) || prefixes.length === 0) {
+    return false;
+  }
+  if (prefixes.some((prefix) => prefix === '')) {
+    return true;
+  }
+  return prefixes.some((prefix) => {
+    if (filePath === prefix) return true;
+    return filePath.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`);
+  });
+}
+
+function resolveOwnedPathPrefixes(phase = null, job = null) {
+  const jobPrefixes = normalizeOwnedPathPrefixes(job?.launchSpec?.ownedPathPrefixes);
+  if (jobPrefixes.length > 0) {
+    return jobPrefixes;
+  }
+  return normalizeOwnedPathPrefixes(phase?.ownedPathPrefixes);
+}
+
+function evaluatePhaseFilePolicy(payload = {}, phase = null, job = null) {
+  const filesTouched = Array.isArray(payload?.filesTouched)
+    ? payload.filesTouched.map((item) => normalizeOwnedPath(item)).filter(Boolean)
+    : [];
+  if (filesTouched.length === 0) {
+    return { ok: true, violations: [] };
+  }
+
+  const canEditFiles = phase?.canEditFiles === true;
+  const ownedPathPrefixes = resolveOwnedPathPrefixes(phase, job);
+  const violations = [];
+
+  for (const filePath of filesTouched) {
+    if (!canEditFiles) {
+      violations.push(`${filePath} (role is read-only for this phase)`);
+      continue;
+    }
+    if (ownedPathPrefixes.length === 0) {
+      violations.push(`${filePath} (ownedPathPrefixes missing for editable phase)`);
+      continue;
+    }
+    if (!isAllowedByOwnedPrefixes(filePath, ownedPathPrefixes)) {
+      violations.push(`${filePath} (not under ownedPathPrefixes: ${ownedPathPrefixes.join(', ')})`);
+    }
+  }
+
+  return {
+    ok: violations.length === 0,
+    violations,
+  };
+}
+
+function summarizeFilePolicyViolation(violations = []) {
+  if (!Array.isArray(violations) || violations.length === 0) {
+    return 'File policy violation';
+  }
+  const preview = violations.slice(0, 3).join('; ');
+  const remaining = violations.length > 3 ? `; +${violations.length - 3} more` : '';
+  return `File policy violation: ${preview}${remaining}`;
+}
+
 function resolveRepoRoot() {
   const here = path.dirname(fileURLToPath(import.meta.url));
   // scripts/lib/harness/subagent-runtime.mjs -> repo root is three levels up.
@@ -279,7 +357,8 @@ function buildSystemPrompt({ agent, contextText, plan, job, phase }) {
   lines.push('Output Contract');
   lines.push('Output a single JSON object (no surrounding text) that conforms to `memory/specs/agent-handoff.schema.json`.');
   lines.push('');
-  lines.push('Required fields: fromRole, toRole, taskTitle, contextSummary.');
+  lines.push('Required fields: schemaVersion, status, fromRole, toRole, taskTitle, contextSummary, findings, filesTouched, openQuestions, recommendations.');
+  lines.push('Set schemaVersion=1. Always include array fields (empty arrays are OK).');
   lines.push(`Set fromRole=${normalizeText(job?.role) || 'unknown'} and toRole=${normalizeText(job?.launchSpec?.handoffTarget) || 'next-phase'}.`);
   lines.push('');
 
@@ -289,12 +368,18 @@ function buildSystemPrompt({ agent, contextText, plan, job, phase }) {
     lines.push('');
   }
 
-  const ownedPrefixes = Array.isArray(phase?.ownedPathPrefixes) ? phase.ownedPathPrefixes.join(', ') : '';
+  const ownedPrefixes = resolveOwnedPathPrefixes(phase, job).join(', ');
+  const workItemRefs = Array.isArray(job?.launchSpec?.workItemRefs)
+    ? job.launchSpec.workItemRefs.map((item) => normalizeText(item)).filter(Boolean)
+    : [];
   lines.push('Runtime Notes');
   lines.push(`- jobId=${normalizeText(job?.jobId)}`);
   lines.push(`- taskTitle=${normalizeText(plan?.taskTitle)}`);
   if (normalizeText(plan?.contextSummary)) {
     lines.push(`- contextSummary=${normalizeText(plan?.contextSummary)}`);
+  }
+  if (workItemRefs.length > 0) {
+    lines.push(`- workItemRefs=${workItemRefs.join(', ')}`);
   }
   if (normalizeText(ownedPrefixes)) {
     lines.push(`- ownedPathPrefixes=${ownedPrefixes}`);
@@ -323,7 +408,7 @@ function buildUserPrompt({ plan, job, phase, dependencyRuns }) {
 
     lines.push('## File Policy');
     lines.push(`canEditFiles: ${phase.canEditFiles === true ? 'true' : 'false'}`);
-    lines.push(`ownedPathPrefixes: ${Array.isArray(phase.ownedPathPrefixes) ? JSON.stringify(phase.ownedPathPrefixes) : '[]'}`);
+    lines.push(`ownedPathPrefixes: ${JSON.stringify(resolveOwnedPathPrefixes(phase, job))}`);
     lines.push('');
   }
 
@@ -331,11 +416,36 @@ function buildUserPrompt({ plan, job, phase, dependencyRuns }) {
   lines.push(renderDependencyContext(dependencyRuns));
   lines.push('');
 
+  const workItemRefs = Array.isArray(job?.launchSpec?.workItemRefs)
+    ? job.launchSpec.workItemRefs.map((item) => normalizeText(item)).filter(Boolean)
+    : [];
+  if (workItemRefs.length > 0) {
+    lines.push('## Decomposed Work Items');
+    const workItemMap = new Map(
+      (Array.isArray(plan?.workItems) ? plan.workItems : [])
+        .map((item) => [normalizeText(item?.itemId), item])
+        .filter(([id]) => id)
+    );
+    for (const itemId of workItemRefs) {
+      const item = workItemMap.get(itemId);
+      if (!item) {
+        lines.push(`- ${itemId}`);
+        continue;
+      }
+      const summary = normalizeText(item.summary) || normalizeText(item.title);
+      lines.push(`- [${normalizeText(item.type) || 'general'}] ${itemId}: ${summary}`);
+    }
+    lines.push('');
+  }
+
   lines.push('## Deliverable');
   lines.push('- Summarize concrete findings.');
   lines.push('- If you touched files, list them in `filesTouched` (relative paths).');
   lines.push('- If blocked or need input, set `status` to `blocked` or `needs-input` and explain in `openQuestions`.');
   lines.push('- Otherwise set `status` to `completed`.');
+  lines.push('- If upstream handoffs do not clearly require code changes, return a no-op handoff instead of exploring indefinitely.');
+  lines.push('- If the next step is manual, environment-specific, or external, report it in `openQuestions`/`recommendations` without waiting for it to happen.');
+  lines.push('- Do not run broad verification commands unless you actually changed owned files.');
   lines.push('');
   lines.push('Output ONLY the JSON object.');
   lines.push('');
@@ -620,7 +730,14 @@ async function runOneShot(clientId, { systemPrompt, userPrompt, timeoutMs, env, 
   return { exitCode, stdout: combinedStdout, stderr: combinedStderr, error: '' };
 }
 
-function buildBlockedJobRun(plan, job, dependencyRuns, { executorLabel, reason, elapsedMs = null, cost = null, rawOutput = '' }) {
+function buildBlockedJobRun(plan, job, dependencyRuns, {
+  executorLabel,
+  reason,
+  elapsedMs = null,
+  cost = null,
+  rawOutput = '',
+  attempts = 0,
+}) {
   const jobRun = {
     jobId: job.jobId,
     jobType: job.jobType,
@@ -644,6 +761,9 @@ function buildBlockedJobRun(plan, job, dependencyRuns, { executorLabel, reason, 
   }
   if (hasCostTelemetry(cost)) {
     jobRun.cost = normalizeCostTelemetry(cost);
+  }
+  if (Number.isFinite(attempts) && attempts > 0) {
+    jobRun.attempts = Math.max(0, Math.floor(attempts));
   }
   return jobRun;
 }
@@ -720,8 +840,11 @@ async function executePhaseJob(plan, job, phase, dependencyRuns, {
   }
   const rawJson = extractJsonCandidate(outputText);
   const costTelemetry = collectCostTelemetry({ rawText: rawCommandOutput, rawJson });
+  const allowTimedOutHandoff = result.exitCode !== 0
+    && /timed out/i.test(String(result.error || ''))
+    && Boolean(rawJson);
 
-  if (result.exitCode !== 0) {
+  if (result.exitCode !== 0 && !allowTimedOutHandoff) {
     const attemptCount = Number.isFinite(result.attempts) ? Math.max(1, Math.floor(result.attempts)) : 1;
     const failureReason = buildFailureReason({
       baseReason: result.error || `exit=${result.exitCode}${attemptCount > 1 ? ` after ${attemptCount} attempts` : ''}`,
@@ -735,7 +858,11 @@ async function executePhaseJob(plan, job, phase, dependencyRuns, {
       elapsedMs,
       cost: costTelemetry,
       rawOutput: clipText(rawCommandOutput),
+      attempts: attemptCount,
     });
+  }
+  if (allowTimedOutHandoff) {
+    io?.log?.(`[subagent-runtime] continuing ${job.jobId} with last-message payload after timeout`);
   }
 
   if (!rawJson) {
@@ -746,6 +873,7 @@ async function executePhaseJob(plan, job, phase, dependencyRuns, {
       elapsedMs,
       cost: costTelemetry,
       rawOutput: clipText(rawCommandOutput),
+      attempts: Number.isFinite(result.attempts) ? Math.max(1, Math.floor(result.attempts)) : 0,
     });
   }
 
@@ -766,6 +894,21 @@ async function executePhaseJob(plan, job, phase, dependencyRuns, {
       elapsedMs,
       cost: costTelemetry,
       rawOutput: clipText(outputText),
+      attempts: Number.isFinite(result.attempts) ? Math.max(1, Math.floor(result.attempts)) : 0,
+    });
+  }
+
+  const filePolicy = evaluatePhaseFilePolicy(validation.value, phase, job);
+  if (!filePolicy.ok) {
+    const reason = summarizeFilePolicyViolation(filePolicy.violations);
+    io?.log?.(`[subagent-runtime] blocked ${job.jobId} reason=${reason}`);
+    return buildBlockedJobRun(plan, job, dependencyRuns, {
+      executorLabel,
+      reason,
+      elapsedMs,
+      cost: costTelemetry,
+      rawOutput: clipText(outputText),
+      attempts: Number.isFinite(result.attempts) ? Math.max(1, Math.floor(result.attempts)) : 0,
     });
   }
 
@@ -789,6 +932,7 @@ async function executePhaseJob(plan, job, phase, dependencyRuns, {
     status: jobStatus,
     elapsedMs,
     ...(hasCostTelemetry(costTelemetry) ? { cost: costTelemetry } : {}),
+    ...(Number.isFinite(result.attempts) && result.attempts > 0 ? { attempts: Math.floor(result.attempts) } : {}),
     inputSummary: {
       dependencyCount: dependencyRuns.length,
       inputTypes: Array.isArray(job.launchSpec?.inputs) ? [...job.launchSpec.inputs] : [],

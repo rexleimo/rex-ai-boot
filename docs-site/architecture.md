@@ -52,10 +52,10 @@ AIOS adds an operator-facing harness on top of ContextDB:
 
 - `aios orchestrate` builds a local dispatch DAG from blueprints.
 - `dry-run` execution uses `local-dry-run` (token-free simulation).
-- `live` execution uses `subagent-runtime` and runs phase jobs via external CLIs (`codex/claude/gemini`).
+- `live` execution uses `subagent-runtime` and runs phase jobs via Codex CLI (`codex`) (currently codex-only).
 - When using `AIOS_SUBAGENT_CLIENT=codex-cli`, AIOS prefers `codex exec` structured outputs (`--output-schema`, `--output-last-message`, stdin) for stable JSON handoffs (falls back for older versions).
 
 Live execution is opt-in and gated by:
 
 - `AIOS_EXECUTE_LIVE=1`
-- `AIOS_SUBAGENT_CLIENT=codex-cli|claude-code|gemini-cli`
+- `AIOS_SUBAGENT_CLIENT=codex-cli`

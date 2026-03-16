@@ -46,6 +46,7 @@ async function writeDispatchEvidence(rootDir, sessionId, {
   blockedJobs = 0,
   finalOutputs = 2,
   artifactName = 'dispatch-run-20260309T010600Z.json',
+  workItemTelemetry = null,
 } = {}) {
   const artifactPath = path.join('memory', 'context-db', 'sessions', sessionId, 'artifacts', artifactName);
   const artifactAbsPath = path.join(rootDir, artifactPath);
@@ -67,6 +68,7 @@ async function writeDispatchEvidence(rootDir, sessionId, {
         ],
         finalOutputs: Array.from({ length: finalOutputs }, (_, index) => ({ jobId: `job-${index + 1}`, outputType: 'handoff' })),
       },
+      ...(workItemTelemetry && typeof workItemTelemetry === 'object' ? { workItemTelemetry } : {}),
     }, null, 2)}\n`,
     'utf8'
   );
@@ -516,6 +518,67 @@ test('buildLearnEvalReport surfaces dispatch evidence signals from artifacts and
   const rendered = renderLearnEvalReport(report);
   assert.match(rendered, /dispatch runs=1 ok=1 blocked=0/);
   assert.match(rendered, /dispatch latestArtifact=/);
+});
+
+test('buildLearnEvalReport aggregates work-item blocked ratios by item type from dispatch telemetry', async () => {
+  const rootDir = await makeRootDir();
+  const sessionId = 'dispatch-work-items';
+  const dispatch = await writeDispatchEvidence(rootDir, sessionId, {
+    seq: 1,
+    ts: '2026-03-09T01:06:00.000Z',
+    ok: false,
+    executors: ['local-phase', 'local-merge-gate'],
+    blockedJobs: 2,
+    workItemTelemetry: {
+      schemaVersion: 1,
+      generatedAt: '2026-03-09T01:06:00.000Z',
+      totals: { total: 4, queued: 0, running: 0, blocked: 2, done: 2 },
+      items: [
+        { itemId: 'phase.plan', itemType: 'phase', role: 'planner', status: 'done', failureClass: 'none', retryClass: 'none' },
+        { itemId: 'phase.implement', itemType: 'phase', role: 'implementer', status: 'blocked', failureClass: 'ownership-policy', retryClass: 'same-hypothesis' },
+        { itemId: 'phase.review', itemType: 'phase', role: 'reviewer', status: 'blocked', failureClass: 'timeout', retryClass: 'none' },
+        { itemId: 'merge.final-checks', itemType: 'merge-gate', role: 'merge-gate', status: 'done', failureClass: 'none', retryClass: 'none' },
+      ],
+    },
+  });
+  await writeSession(
+    rootDir,
+    sessionId,
+    { updatedAt: '2026-03-09T02:00:00.000Z' },
+    [
+      {
+        seq: 1,
+        ts: '2026-03-09T01:00:00.000Z',
+        status: 'blocked',
+        summary: 'Dispatch blocked',
+        nextActions: [],
+        artifacts: [dispatch.artifactPath],
+        telemetry: {
+          verification: { result: 'failed', evidence: `event=${dispatch.eventId}; artifact=${dispatch.artifactPath}` },
+          retryCount: 1,
+          failureCategory: 'merge-gate-blocked',
+          elapsedMs: 900,
+        },
+      },
+    ]
+  );
+
+  const report = await buildLearnEvalReport({ sessionId, limit: 5 }, { rootDir });
+  assert.equal(report.signals.dispatch.workItems.total, 4);
+  assert.equal(report.signals.dispatch.workItems.blocked, 2);
+  assert.equal(report.signals.dispatch.workItems.done, 2);
+  assert.equal(report.signals.dispatch.workItems.blockedRate, 0.5);
+  assert.equal(report.signals.dispatch.workItems.byType.some((item) => item.itemType === 'phase' && item.total === 3 && item.blocked === 2), true);
+  assert.equal(report.signals.dispatch.workItems.byType.some((item) => item.itemType === 'merge-gate' && item.total === 1 && item.blocked === 0), true);
+  assert.equal(report.signals.dispatch.workItems.failureClasses.some((item) => item.failureClass === 'ownership-policy' && item.count === 1), true);
+  assert.equal(report.signals.dispatch.workItems.failureClasses.some((item) => item.failureClass === 'timeout' && item.count === 1), true);
+  assert.equal(report.signals.dispatch.workItems.retryClasses.some((item) => item.retryClass === 'same-hypothesis' && item.count === 1), true);
+
+  const rendered = renderLearnEvalReport(report);
+  assert.match(rendered, /dispatch workItems total=4 blocked=2 done=2 blockedRate=0\.5/);
+  assert.match(rendered, /phase=2\/3\(0\.67\)/);
+  assert.match(rendered, /dispatch workItemFailures .*ownership-policy=1/);
+  assert.match(rendered, /dispatch workItemRetries .*same-hypothesis=1/);
 });
 
 test('buildLearnEvalReport routes blocked dispatch evidence to merge triage', async () => {

@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
 import { runContextDbCli } from '../contextdb-cli.mjs';
+import { withWorkItemArtifactRef } from './work-item-telemetry.mjs';
 
 export const ORCHESTRATION_DISPATCH_EVENT_KIND = 'orchestration.dispatch-run';
 
@@ -138,9 +139,11 @@ export async function persistDispatchEvidence({ rootDir, sessionId, report, elap
     blueprint: report.blueprint,
     taskTitle: report.taskTitle,
     contextSummary: report.contextSummary,
+    workItems: Array.isArray(report.workItems) ? report.workItems.map((item) => ({ ...item })) : [],
     learnEvalOverlay: report.learnEvalOverlay || null,
     dispatchPlan: report.dispatchPlan || null,
     dispatchRun: report.dispatchRun || null,
+    workItemTelemetry: withWorkItemArtifactRef(report.workItemTelemetry || null, artifactPath),
   };
 
   await writeArtifact(artifactAbsPath, artifactPayload);

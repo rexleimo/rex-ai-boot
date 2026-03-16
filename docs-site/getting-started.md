@@ -242,7 +242,7 @@ Execute live via CLI subagents (token cost, opt-in):
 
 ```bash
 export AIOS_EXECUTE_LIVE=1
-export AIOS_SUBAGENT_CLIENT=codex-cli  # or claude-code, gemini-cli
+export AIOS_SUBAGENT_CLIENT=codex-cli  # required (codex-only live runtime)
 aios orchestrate --session <session-id> --dispatch local --execute live --format json
 ```
 

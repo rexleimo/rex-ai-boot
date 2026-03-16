@@ -10,6 +10,8 @@ export const ORCHESTRATOR_DISPATCH_MODE_NAMES = ['none', 'local'];
 export const ORCHESTRATOR_EXECUTION_MODE_NAMES = ['none', 'dry-run', 'live'];
 export const ORCHESTRATOR_PREFLIGHT_MODE_NAMES = ['none', 'auto'];
 export const LEARN_EVAL_FORMAT_NAMES = ['text', 'json'];
+export const ENTROPY_GC_MODE_NAMES = ['dry-run', 'auto', 'off'];
+export const ENTROPY_GC_FORMAT_NAMES = ['text', 'json'];
 
 export function normalizeWrapMode(raw = 'opt-in') {
   const value = String(raw || 'opt-in').trim().toLowerCase();
@@ -39,6 +41,22 @@ export function normalizeLearnEvalFormat(raw = 'text') {
   const value = String(raw || 'text').trim().toLowerCase();
   if (!LEARN_EVAL_FORMAT_NAMES.includes(value)) {
     throw new Error(`learn-eval format must be one of: ${LEARN_EVAL_FORMAT_NAMES.join(', ')}`);
+  }
+  return value;
+}
+
+export function normalizeEntropyGcMode(raw = 'auto') {
+  const value = String(raw || 'auto').trim().toLowerCase();
+  if (!ENTROPY_GC_MODE_NAMES.includes(value)) {
+    throw new Error(`entropy-gc mode must be one of: ${ENTROPY_GC_MODE_NAMES.join(', ')}`);
+  }
+  return value;
+}
+
+export function normalizeEntropyGcFormat(raw = 'text') {
+  const value = String(raw || 'text').trim().toLowerCase();
+  if (!ENTROPY_GC_FORMAT_NAMES.includes(value)) {
+    throw new Error(`entropy-gc format must be one of: ${ENTROPY_GC_FORMAT_NAMES.join(', ')}`);
   }
   return value;
 }
@@ -171,6 +189,16 @@ export function createDefaultLearnEvalOptions() {
   return {
     sessionId: '',
     limit: 10,
+    format: 'text',
+  };
+}
+
+export function createDefaultEntropyGcOptions() {
+  return {
+    sessionId: '',
+    mode: 'auto',
+    retain: 5,
+    minAgeHours: 24,
     format: 'text',
   };
 }

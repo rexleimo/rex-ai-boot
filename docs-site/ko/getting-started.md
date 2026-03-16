@@ -207,7 +207,7 @@ CLI 서브에이전트로 live 실행 (토큰 비용, opt-in):
 
 ```bash
 export AIOS_EXECUTE_LIVE=1
-export AIOS_SUBAGENT_CLIENT=codex-cli  # 또는 claude-code, gemini-cli
+export AIOS_SUBAGENT_CLIENT=codex-cli  # 필수 (live는 현재 codex-cli만 지원)
 aios orchestrate --session <session-id> --dispatch local --execute live --format json
 ```
 

@@ -170,6 +170,16 @@ async function main() {
     if (result.exitCode !== 0) {
       process.exitCode = result.exitCode;
     }
+    return;
+  }
+
+  if (parsed.command === 'entropy-gc') {
+    const { runEntropyGc } = await import('./lib/lifecycle/entropy-gc.mjs');
+    const result = await runEntropyGc(parsed.options, { rootDir });
+    if (result.exitCode !== 0) {
+      process.exitCode = result.exitCode;
+    }
+    return;
   }
 
   if (parsed.command === 'memo') {

@@ -29,6 +29,20 @@ export CTXDB_PACK_STRICT=1
 export CTXDB_PACK_STRICT_INTERACTIVE=1
 ```
 
+## `/new`(Codex) / `/clear`(Claude/Gemini) 후 컨텍스트가 사라짐
+
+이 명령들은 **CLI 내부 대화 상태** 를 리셋합니다. ContextDB 데이터는 디스크에 남아 있지만, 래퍼는 **CLI 프로세스 시작 시** 에만 컨텍스트 패킷을 주입합니다.
+
+복구 방법:
+
+- 권장: CLI를 종료한 뒤 셸에서 `codex` / `claude` / `gemini`를 다시 실행(다시 `context:pack` 후 주입)
+- 같은 프로세스에서 계속해야 한다면: 새 대화 첫 메시지에서 최신 스냅샷을 읽도록 요청:
+  - `@memory/context-db/exports/latest-codex-cli-context.md`
+  - `@memory/context-db/exports/latest-claude-code-context.md`
+  - `@memory/context-db/exports/latest-gemini-cli-context.md`
+
+클라이언트가 `@file` 참조를 지원하지 않으면, 파일 내용을 첫 프롬프트로 붙여넣으세요.
+
 ## 예시
 
 ```bash

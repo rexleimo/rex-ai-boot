@@ -1,5 +1,6 @@
 import {
   createDefaultDoctorOptions,
+  createDefaultEntropyGcOptions,
   createDefaultLearnEvalOptions,
   createDefaultOrchestrateOptions,
   createDefaultQualityGateOptions,
@@ -8,6 +9,8 @@ import {
   createDefaultUpdateOptions,
   normalizeClient,
   normalizeComponents,
+  normalizeEntropyGcFormat,
+  normalizeEntropyGcMode,
   normalizeHarnessProfile,
   normalizeLearnEvalFormat,
   normalizeOrchestrateDispatchMode,
@@ -154,6 +157,7 @@ function getCommandDefaults(command) {
   if (command === 'doctor') return createDefaultDoctorOptions();
   if (command === 'quality-gate') return createDefaultQualityGateOptions();
   if (command === 'orchestrate') return createDefaultOrchestrateOptions();
+  if (command === 'entropy-gc') return createDefaultEntropyGcOptions();
   return createDefaultLearnEvalOptions();
 }
 
@@ -178,6 +182,11 @@ function parseTopLevelArgs(command, argv) {
 
     if (command === 'orchestrate' && !arg.startsWith('-') && index === 0) {
       options.blueprint = normalizeOrchestratorBlueprint(arg);
+      continue;
+    }
+
+    if (command === 'entropy-gc' && !arg.startsWith('-') && index === 0) {
+      options.mode = normalizeEntropyGcMode(arg);
       continue;
     }
 
@@ -222,7 +231,7 @@ function parseTopLevelArgs(command, argv) {
         index += 1;
         break;
       case '--session':
-        if (command !== 'learn-eval' && command !== 'orchestrate' && command !== 'quality-gate') {
+        if (command !== 'learn-eval' && command !== 'orchestrate' && command !== 'quality-gate' && command !== 'entropy-gc') {
           throw new Error(`Unknown option: ${arg}`);
         }
         options.sessionId = takeValue(rest, index, '--session');
@@ -269,12 +278,28 @@ function parseTopLevelArgs(command, argv) {
           options.format = normalizeOrchestratorFormat(value);
         } else if (command === 'learn-eval') {
           options.format = normalizeLearnEvalFormat(value);
+        } else if (command === 'entropy-gc') {
+          options.format = normalizeEntropyGcFormat(value);
         } else {
           throw new Error(`Unknown option: ${arg}`);
         }
         index += 1;
         break;
       }
+      case '--retain':
+        if (command !== 'entropy-gc') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.retain = parsePositiveInteger(takeValue(rest, index, '--retain'), '--retain');
+        index += 1;
+        break;
+      case '--min-age-hours':
+        if (command !== 'entropy-gc') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.minAgeHours = parsePositiveInteger(takeValue(rest, index, '--min-age-hours'), '--min-age-hours');
+        index += 1;
+        break;
       default:
         throw new Error(`Unknown option: ${arg}`);
     }
@@ -320,9 +345,11 @@ export function parseArgs(argv = []) {
     ? 'doctor'
     : first === 'quality' || first === 'quality-gate'
       ? 'quality-gate'
+      : first === 'entropy'
+        ? 'entropy-gc'
       : first;
 
-  if (!['setup', 'update', 'uninstall', 'doctor', 'quality-gate', 'orchestrate', 'learn-eval'].includes(command)) {
+  if (!['setup', 'update', 'uninstall', 'doctor', 'quality-gate', 'orchestrate', 'learn-eval', 'entropy-gc'].includes(command)) {
     throw new Error(`Unknown command: ${argv[0]}`);
   }
 

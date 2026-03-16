@@ -207,7 +207,7 @@ CLI サブエージェント経由で live 実行 (トークン消費あり、op
 
 ```bash
 export AIOS_EXECUTE_LIVE=1
-export AIOS_SUBAGENT_CLIENT=codex-cli  # または claude-code, gemini-cli
+export AIOS_SUBAGENT_CLIENT=codex-cli  # 必須（live は現状 codex-cli のみ）
 aios orchestrate --session <session-id> --dispatch local --execute live --format json
 ```
 

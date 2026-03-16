@@ -36,10 +36,10 @@ AIOS 在 ContextDB 之上提供面向运营的 harness：
 
 - `aios orchestrate` 基于蓝图生成本地调度 DAG。
 - `dry-run` 使用 `local-dry-run`（免 token，本地模拟）。
-- `live` 使用 `subagent-runtime`，通过外部 CLI（`codex/claude/gemini`）执行各阶段任务。
+- `live` 使用 `subagent-runtime`，通过外部 CLI（`codex`）执行各阶段任务（当前仅支持 codex-cli）。
 - 当 `AIOS_SUBAGENT_CLIENT=codex-cli` 时，AIOS 会优先使用 `codex exec` 的结构化输出（`--output-schema`、`--output-last-message`、stdin）生成稳定的 JSON handoff（旧版本自动降级）。
 
 `live` 默认关闭，需要显式打开：
 
 - `AIOS_EXECUTE_LIVE=1`
-- `AIOS_SUBAGENT_CLIENT=codex-cli|claude-code|gemini-cli`
+- `AIOS_SUBAGENT_CLIENT=codex-cli`

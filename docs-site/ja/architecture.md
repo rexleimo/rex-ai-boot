@@ -20,10 +20,10 @@ AIOS は ContextDB の上にオペレータ向け harness を提供します:
 
 - `aios orchestrate` は blueprints からローカル dispatch DAG を生成
 - `dry-run` は `local-dry-run` を使用 (トークン消費なし)
-- `live` は `subagent-runtime` を使用し、外部 CLI (`codex/claude/gemini`) でフェーズを実行
+- `live` は `subagent-runtime` を使用し、外部 CLI (`codex`) でフェーズを実行 (現状 codex-cli のみ)
 - `AIOS_SUBAGENT_CLIENT=codex-cli` の場合、AIOS は `codex exec` の構造化出力 (`--output-schema`, `--output-last-message`, stdin) を優先して JSON handoff を安定化します (旧版はフォールバック)。
 
 `live` はデフォルトで無効です。以下が必要です:
 
 - `AIOS_EXECUTE_LIVE=1`
-- `AIOS_SUBAGENT_CLIENT=codex-cli|claude-code|gemini-cli`
+- `AIOS_SUBAGENT_CLIENT=codex-cli`

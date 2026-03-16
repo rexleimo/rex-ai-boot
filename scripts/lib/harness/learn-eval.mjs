@@ -286,6 +286,7 @@ async function collectDispatchEvidence(rootDir, sessionId, checkpoints = [], eve
     const dispatchRun = artifact?.dispatchRun;
     const jobRuns = Array.isArray(dispatchRun?.jobRuns) ? dispatchRun.jobRuns : [];
     const blockedJobs = jobRuns.filter((jobRun) => jobRun.status === 'blocked').length;
+    const workItems = extractWorkItemEvidence(artifact);
     records.push({
       artifactPath: candidate.artifactPath,
       eventId: candidate.eventId || null,
@@ -296,6 +297,7 @@ async function collectDispatchEvidence(rootDir, sessionId, checkpoints = [], eve
       jobCount: jobRuns.length,
       executors: Array.isArray(dispatchRun?.executorRegistry) ? [...dispatchRun.executorRegistry] : [],
       finalOutputs: Array.isArray(dispatchRun?.finalOutputs) ? dispatchRun.finalOutputs.length : 0,
+      workItems,
     });
   }
 
@@ -327,6 +329,63 @@ function formatCost(cost) {
   if (cost.totalTokens > 0) parts.push(`totalTokens=${cost.totalTokens}`);
   if (cost.usd > 0) parts.push(`usd=${formatNumber(cost.usd, 3)}`);
   return parts.length > 0 ? parts.join(' ') : '(none)';
+}
+
+function normalizeWorkItemStatus(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'done' || normalized === 'completed' || normalized === 'simulated') return 'done';
+  if (normalized === 'running') return 'running';
+  if (normalized === 'blocked' || normalized === 'needs-input') return 'blocked';
+  if (normalized === 'queued' || normalized === 'pending') return 'queued';
+  return 'queued';
+}
+
+function extractWorkItemEvidence(artifact = null) {
+  const items = Array.isArray(artifact?.workItemTelemetry?.items)
+    ? artifact.workItemTelemetry.items
+    : [];
+  const byTypeCounts = new Map();
+  const failureCounts = new Map();
+  const retryCounts = new Map();
+  let done = 0;
+  let blocked = 0;
+
+  for (const item of items) {
+    const itemType = String(item?.itemType || 'unknown').trim() || 'unknown';
+    const status = normalizeWorkItemStatus(item?.status);
+    const byType = byTypeCounts.get(itemType) || { total: 0, blocked: 0 };
+    byType.total += 1;
+    if (status === 'blocked') {
+      byType.blocked += 1;
+      blocked += 1;
+      const failureClass = String(item?.failureClass || 'none').trim();
+      if (failureClass && failureClass !== 'none') {
+        failureCounts.set(failureClass, (failureCounts.get(failureClass) || 0) + 1);
+      }
+    }
+    if (status === 'done') {
+      done += 1;
+    }
+    byTypeCounts.set(itemType, byType);
+
+    const retryClass = String(item?.retryClass || 'none').trim();
+    if (retryClass && retryClass !== 'none') {
+      retryCounts.set(retryClass, (retryCounts.get(retryClass) || 0) + 1);
+    }
+  }
+
+  return {
+    total: items.length,
+    blocked,
+    done,
+    byType: Array.from(byTypeCounts.entries()).map(([itemType, counts]) => ({
+      itemType,
+      total: counts.total,
+      blocked: counts.blocked,
+    })),
+    failureCounts: Array.from(failureCounts.entries()).map(([failureClass, count]) => ({ failureClass, count })),
+    retryCounts: Array.from(retryCounts.entries()).map(([retryClass, count]) => ({ retryClass, count })),
+  };
 }
 
 function getEvidenceStrength(item) {
@@ -683,14 +742,63 @@ export async function buildLearnEvalReport(rawOptions = {}, { rootDir } = {}) {
   const verificationKnownDenominator = Math.max(knownVerificationCount, 1);
   const verificationSampleDenominator = Math.max(selected.length, 1);
   const dispatchExecutorCounts = new Map();
+  const dispatchWorkItemTypeCounts = new Map();
+  const dispatchWorkItemFailureCounts = new Map();
+  const dispatchWorkItemRetryCounts = new Map();
   let dispatchBlockedJobs = 0;
+  let dispatchWorkItemTotal = 0;
+  let dispatchWorkItemBlocked = 0;
+  let dispatchWorkItemDone = 0;
 
   for (const item of dispatchEvidence) {
     dispatchBlockedJobs += item.blockedJobs;
     for (const executor of item.executors) {
       dispatchExecutorCounts.set(executor, (dispatchExecutorCounts.get(executor) ?? 0) + 1);
     }
+
+    const workItems = item.workItems && typeof item.workItems === 'object' ? item.workItems : {};
+    dispatchWorkItemTotal += Number.isFinite(workItems.total) ? Math.max(0, Math.floor(workItems.total)) : 0;
+    dispatchWorkItemBlocked += Number.isFinite(workItems.blocked) ? Math.max(0, Math.floor(workItems.blocked)) : 0;
+    dispatchWorkItemDone += Number.isFinite(workItems.done) ? Math.max(0, Math.floor(workItems.done)) : 0;
+
+    for (const typeRecord of Array.isArray(workItems.byType) ? workItems.byType : []) {
+      const itemType = String(typeRecord?.itemType || '').trim();
+      if (!itemType) continue;
+      const existing = dispatchWorkItemTypeCounts.get(itemType) || { total: 0, blocked: 0 };
+      existing.total += Number.isFinite(typeRecord?.total) ? Math.max(0, Math.floor(typeRecord.total)) : 0;
+      existing.blocked += Number.isFinite(typeRecord?.blocked) ? Math.max(0, Math.floor(typeRecord.blocked)) : 0;
+      dispatchWorkItemTypeCounts.set(itemType, existing);
+    }
+
+    for (const failureRecord of Array.isArray(workItems.failureCounts) ? workItems.failureCounts : []) {
+      const failureClass = String(failureRecord?.failureClass || '').trim();
+      if (!failureClass) continue;
+      const count = Number.isFinite(failureRecord?.count) ? Math.max(0, Math.floor(failureRecord.count)) : 0;
+      dispatchWorkItemFailureCounts.set(failureClass, (dispatchWorkItemFailureCounts.get(failureClass) || 0) + count);
+    }
+
+    for (const retryRecord of Array.isArray(workItems.retryCounts) ? workItems.retryCounts : []) {
+      const retryClass = String(retryRecord?.retryClass || '').trim();
+      if (!retryClass) continue;
+      const count = Number.isFinite(retryRecord?.count) ? Math.max(0, Math.floor(retryRecord.count)) : 0;
+      dispatchWorkItemRetryCounts.set(retryClass, (dispatchWorkItemRetryCounts.get(retryClass) || 0) + count);
+    }
   }
+
+  const dispatchWorkItemsByType = Array.from(dispatchWorkItemTypeCounts.entries())
+    .map(([itemType, counts]) => ({
+      itemType,
+      total: counts.total,
+      blocked: counts.blocked,
+      blockedRate: formatNumber(counts.total > 0 ? counts.blocked / counts.total : 0, 2),
+    }))
+    .sort((left, right) => right.blockedRate - left.blockedRate || right.blocked - left.blocked || left.itemType.localeCompare(right.itemType));
+  const dispatchWorkItemFailureTop = Array.from(dispatchWorkItemFailureCounts.entries())
+    .map(([failureClass, count]) => ({ failureClass, count }))
+    .sort((left, right) => right.count - left.count || left.failureClass.localeCompare(right.failureClass));
+  const dispatchWorkItemRetrySummary = Array.from(dispatchWorkItemRetryCounts.entries())
+    .map(([retryClass, count]) => ({ retryClass, count }))
+    .sort((left, right) => right.count - left.count || left.retryClass.localeCompare(right.retryClass));
 
   const summary = {
     session: {
@@ -742,6 +850,15 @@ export async function buildLearnEvalReport(rawOptions = {}, { rootDir } = {}) {
         executorUsage: Array.from(dispatchExecutorCounts.entries())
           .map(([executor, count]) => ({ executor, count }))
           .sort((left, right) => right.count - left.count || left.executor.localeCompare(right.executor)),
+        workItems: {
+          total: dispatchWorkItemTotal,
+          blocked: dispatchWorkItemBlocked,
+          done: dispatchWorkItemDone,
+          blockedRate: formatNumber(dispatchWorkItemTotal > 0 ? dispatchWorkItemBlocked / dispatchWorkItemTotal : 0, 2),
+          byType: dispatchWorkItemsByType,
+          failureClasses: dispatchWorkItemFailureTop,
+          retryClasses: dispatchWorkItemRetrySummary,
+        },
         latestArtifactPath: dispatchEvidence[0]?.artifactPath || null,
         latestEventId: dispatchEvidence[0]?.eventId || null,
       },
@@ -760,6 +877,24 @@ export function renderLearnEvalReport(report) {
     : '(none)';
   const dispatchExecutors = report.signals.dispatch.executorUsage.length > 0
     ? report.signals.dispatch.executorUsage.map((item) => `${item.executor}=${item.count}`).join(', ')
+    : '(none)';
+  const dispatchWorkItems = report.signals.dispatch.workItems || {
+    total: 0,
+    blocked: 0,
+    done: 0,
+    blockedRate: 0,
+    byType: [],
+    failureClasses: [],
+    retryClasses: [],
+  };
+  const dispatchWorkItemsByType = Array.isArray(dispatchWorkItems.byType) && dispatchWorkItems.byType.length > 0
+    ? dispatchWorkItems.byType.map((item) => `${item.itemType}=${item.blocked}/${item.total}(${item.blockedRate})`).join(', ')
+    : '(none)';
+  const dispatchWorkItemFailures = Array.isArray(dispatchWorkItems.failureClasses) && dispatchWorkItems.failureClasses.length > 0
+    ? dispatchWorkItems.failureClasses.map((item) => `${item.failureClass}=${item.count}`).join(', ')
+    : '(none)';
+  const dispatchWorkItemRetries = Array.isArray(dispatchWorkItems.retryClasses) && dispatchWorkItems.retryClasses.length > 0
+    ? dispatchWorkItems.retryClasses.map((item) => `${item.retryClass}=${item.count}`).join(', ')
     : '(none)';
 
   const sections = RECOMMENDATION_KIND_ORDER.flatMap((kind) => [
@@ -789,6 +924,9 @@ export function renderLearnEvalReport(report) {
     `- failures ${failureSummary}`,
     `- cost ${formatCost(report.signals.cost)}`,
     `- dispatch runs=${report.signals.dispatch.runs} ok=${report.signals.dispatch.successfulRuns} blocked=${report.signals.dispatch.blockedRuns} blockedJobs=${report.signals.dispatch.blockedJobs} executors=${dispatchExecutors}`,
+    `- dispatch workItems total=${dispatchWorkItems.total} blocked=${dispatchWorkItems.blocked} done=${dispatchWorkItems.done} blockedRate=${dispatchWorkItems.blockedRate} byType=${dispatchWorkItemsByType}`,
+    `- dispatch workItemFailures ${dispatchWorkItemFailures}`,
+    `- dispatch workItemRetries ${dispatchWorkItemRetries}`,
     ...(report.signals.dispatch.latestArtifactPath ? [`- dispatch latestArtifact=${report.signals.dispatch.latestArtifactPath}`] : []),
     '',
     ...sections,

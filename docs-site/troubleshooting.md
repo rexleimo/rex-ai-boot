@@ -75,6 +75,20 @@ If this keeps happening, run the quality gate (includes ContextDB regression che
 aios quality-gate pre-pr --profile strict
 ```
 
+## Context disappears after `/new` (Codex) or `/clear` (Claude/Gemini)
+
+`/new` and `/clear` reset the **in-CLI conversation state**. ContextDB is still stored on disk, but the wrapper only injects a context packet when the CLI process starts.
+
+Fix:
+
+1. Preferred: exit the CLI and re-run `codex` / `claude` / `gemini` from your shell.
+2. If you must stay in the same process: in the new conversation, ask the agent to read:
+   - `@memory/context-db/exports/latest-codex-cli-context.md`
+   - `@memory/context-db/exports/latest-claude-code-context.md`
+   - `@memory/context-db/exports/latest-gemini-cli-context.md`
+
+If `@file` mentions are not supported, paste the file contents as your first prompt.
+
 ## `aios orchestrate --execute live` is blocked or fails
 
 Live orchestration is opt-in.
@@ -85,17 +99,39 @@ Live orchestration is opt-in.
 export AIOS_EXECUTE_LIVE=1
 ```
 
-2. Choose which CLI runs the subagent phases:
+2. Set the codex-only subagent client (required):
 
 ```bash
-export AIOS_SUBAGENT_CLIENT=codex-cli  # or claude-code, gemini-cli
+export AIOS_SUBAGENT_CLIENT=codex-cli
 ```
 
-3. Ensure the selected CLI exists on `PATH` and is authenticated (for example, `codex --version`, `claude --version`).
+3. Ensure `codex` exists on `PATH` and is authenticated (for example, `codex --version`).
+
+Windows quick check (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-shell.ps1
+codex --version
+codex
+```
+
+Expected: no TTY errors like `stdout is not a terminal`, and the interactive `codex` session attaches to the terminal correctly.
 
 Tip (codex-cli): Codex CLI v0.114+ supports `codex exec` structured outputs (`--output-schema`, `--output-last-message`, stdin). AIOS uses them when available for more reliable JSON handoffs.
 
 Tip: to validate the DAG without any model calls, use `--execute dry-run` (or set `AIOS_SUBAGENT_SIMULATE=1` for the live runtime adapter simulation).
+
+Common failure signatures:
+
+- `type: upstream_error` / `server_error`: upstream instability. Retry later (AIOS retries a couple times automatically).
+- `Timed out after 600000 ms`: increase `AIOS_SUBAGENT_TIMEOUT_MS` (for example `900000`) or shrink the context packet via `AIOS_SUBAGENT_CONTEXT_LIMIT` / `AIOS_SUBAGENT_CONTEXT_TOKEN_BUDGET`.
+- `invalid_json_schema` (`param: text.format.schema`): the backend rejected the structured output schema. Pull latest `main` and retry; AIOS will also retry without `--output-schema` when it detects schema rejection.
+
+Minimal structured-output smoke check (macOS/Linux):
+
+```bash
+printf '%s' 'Return a JSON object matching the schema.' | codex exec --output-schema memory/specs/agent-handoff.schema.json -
+```
 
 ## Commands not wrapped
 

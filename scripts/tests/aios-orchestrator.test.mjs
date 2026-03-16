@@ -12,6 +12,7 @@ import {
   selectLocalDispatchExecutor,
 } from '../lib/harness/orchestrator-executors.mjs';
 import {
+  buildDecomposedWorkItems,
   buildLocalDispatchPlan,
   buildOrchestrationPlan,
   executeLocalDispatchPlan,
@@ -19,6 +20,8 @@ import {
   mergeParallelHandoffs,
   renderOrchestrationReport,
 } from '../lib/harness/orchestrator.mjs';
+import { evaluateClarityGate } from '../lib/harness/clarity-gate.mjs';
+import { buildWorkItemTelemetry } from '../lib/harness/work-item-telemetry.mjs';
 import { planOrchestrate, runOrchestrate } from '../lib/lifecycle/orchestrate.mjs';
 
 async function importDispatchRuntimes() {
@@ -37,11 +40,22 @@ async function importDispatchRuntimeSpec() {
   }
 }
 
+async function importWorkItemTelemetrySpec() {
+  try {
+    return await import('../../memory/specs/orchestrator-work-item-telemetry.schema.json', { with: { type: 'json' } });
+  } catch {
+    return null;
+  }
+}
+
 async function makeRootDir() {
   return await fs.mkdtemp(path.join(os.tmpdir(), 'aios-orchestrator-'));
 }
 
-async function createFakeCodexCommand(payload = null, { usageLog = '', failOnOutputSchema = false, upstreamFailAttempts = 0 } = {}) {
+async function createFakeCodexCommand(
+  payload = null,
+  { usageLog = '', failOnOutputSchema = false, upstreamFailAttempts = 0, captureInputPath = '', hangAfterOutput = false } = {}
+) {
   const binDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-orchestrator-bin-'));
   const json = payload || {
     status: 'completed',
@@ -65,10 +79,25 @@ async function createFakeCodexCommand(payload = null, { usageLog = '', failOnOut
   const upstreamFailureLimit = Number.parseInt(String(upstreamFailAttempts ?? 0), 10);
   const upstreamFailureLimitLiteral = Number.isFinite(upstreamFailureLimit) && upstreamFailureLimit > 0 ? String(upstreamFailureLimit) : '0';
   const attemptStatePathLiteral = JSON.stringify(path.join(binDir, 'codex-fake-attempt-count.txt'));
+  const captureInputPathLiteral = JSON.stringify(String(captureInputPath || '').trim());
   const scriptBody = [
     "import fs from 'node:fs';",
     "const args = process.argv.slice(2);",
     `const attemptStatePath = ${attemptStatePathLiteral};`,
+    `const captureInputPath = ${captureInputPathLiteral};`,
+    "let stdinText = '';",
+    'try {',
+    "  stdinText = fs.readFileSync(0, 'utf8');",
+    '} catch {',
+    "  stdinText = '';",
+    '}',
+    'if (captureInputPath) {',
+    '  try {',
+    "    fs.appendFileSync(captureInputPath, `===PROMPT===\\n${stdinText}\\n`, 'utf8');",
+    '  } catch {',
+    '    // ignore capture failures in test fixture',
+    '  }',
+    '}',
     'let attempt = 0;',
     'try {',
     "  attempt = Number.parseInt(fs.readFileSync(attemptStatePath, 'utf8'), 10) || 0;",
@@ -100,6 +129,7 @@ async function createFakeCodexCommand(payload = null, { usageLog = '', failOnOut
     '}',
     `process.stdout.write(${jsTextLiteral});`,
     usageWrite.trimEnd(),
+    hangAfterOutput ? "setInterval(() => {}, 1000);" : '',
   ].filter(Boolean).join('\n');
   const script = path.join(binDir, 'codex-fake.mjs');
   await fs.writeFile(script, `${scriptBody}\n`, 'utf8');
@@ -111,7 +141,7 @@ async function createFakeCodexCommand(payload = null, { usageLog = '', failOnOut
   }
 
   const file = path.join(binDir, 'codex');
-  await fs.writeFile(file, `#!/usr/bin/env bash\nnode "${script}" "$@"\n`, 'utf8');
+  await fs.writeFile(file, `#!/usr/bin/env bash\nexec node "${script}" "$@"\n`, 'utf8');
   await fs.chmod(file, 0o755);
   return binDir;
 }
@@ -304,6 +334,10 @@ test('getOrchestratorBlueprint expands role cards', () => {
   assert.equal(blueprint.phases.length, 4);
   assert.equal(blueprint.phases[0].roleCard.label, 'Planner');
   assert.equal(blueprint.phases[2].group, 'final-checks');
+  const implementPhase = blueprint.phases.find((phase) => phase.role === 'implementer');
+  assert.ok(implementPhase, 'expected implementer phase');
+  assert.equal(Array.isArray(implementPhase.ownedPathPrefixes), true);
+  assert.equal(implementPhase.ownedPathPrefixes.includes(''), false);
 });
 
 test('buildOrchestrationPlan creates ordered phases', () => {
@@ -311,6 +345,25 @@ test('buildOrchestrationPlan creates ordered phases', () => {
   assert.equal(plan.blueprint, 'bugfix');
   assert.equal(plan.phases[0].role, 'planner');
   assert.equal(plan.phases[1].role, 'implementer');
+  assert.equal(Array.isArray(plan.workItems), true);
+  assert.equal(plan.workItems.length >= 1, true);
+});
+
+test('buildDecomposedWorkItems extracts context candidates and infers item types', () => {
+  const items = buildDecomposedWorkItems({
+    taskTitle: 'Harden checkout flow',
+    contextSummary: '- add auth preflight check\n- update billing retry logic\n- add regression tests\n- update docs/README.md',
+  });
+
+  assert.equal(items.length, 4);
+  assert.equal(items[0].itemId, 'wi.1');
+  assert.equal(items[0].type, 'auth');
+  assert.equal(items[1].type, 'payment');
+  assert.equal(items[2].type, 'testing');
+  assert.equal(items[2].ownedPathHints.includes('scripts/tests/'), true);
+  assert.equal(items[3].type, 'docs');
+  assert.equal(items[3].ownedPathHints.includes('docs/README.md'), true);
+  assert.equal(items.every((item) => item.status === 'queued'), true);
 });
 
 test('selectLocalDispatchExecutor resolves supported local job types', () => {
@@ -327,6 +380,116 @@ test('dispatch runtime manifest spec defines the local dry-run runtime', async (
   assert.equal(runtimeSpec.default.runtimes['local-dry-run']?.requiresModel, false);
   assert.equal(runtimeSpec.default.runtimes['subagent-runtime']?.requiresModel, true);
   assert.equal(runtimeSpec.default.runtimes['subagent-runtime']?.executionModes?.includes('live'), true);
+});
+
+test('work-item telemetry schema exists and pins schemaVersion=1', async () => {
+  const telemetrySpec = await importWorkItemTelemetrySpec();
+  assert.ok(telemetrySpec, 'expected work-item telemetry schema');
+  assert.equal(telemetrySpec.default.properties.schemaVersion.const, 1);
+});
+
+test('buildWorkItemTelemetry maps blocked retries to failure and retry classes', () => {
+  const telemetry = buildWorkItemTelemetry({
+    dispatchRun: {
+      jobRuns: [
+        {
+          jobId: 'phase.plan',
+          jobType: 'phase',
+          role: 'planner',
+          status: 'completed',
+          dependsOn: [],
+          elapsedMs: 1200,
+          output: { outputType: 'handoff' },
+        },
+        {
+          jobId: 'phase.implement',
+          jobType: 'phase',
+          role: 'implementer',
+          status: 'blocked',
+          attempts: 2,
+          dependsOn: ['phase.plan'],
+          output: { outputType: 'handoff', error: 'Timed out after 600000 ms' },
+        },
+      ],
+    },
+    artifactRefs: ['memory/context-db/sessions/s/artifacts/dispatch-run-x.json'],
+  });
+
+  assert.equal(telemetry.schemaVersion, 1);
+  assert.equal(telemetry.totals.total, 2);
+  assert.equal(telemetry.totals.done, 1);
+  assert.equal(telemetry.totals.blocked, 1);
+  const blocked = telemetry.items.find((item) => item.itemId === 'phase.implement');
+  assert.ok(blocked, 'expected blocked work item');
+  assert.equal(blocked.failureClass, 'timeout');
+  assert.equal(blocked.retryClass, 'same-hypothesis');
+  assert.equal(blocked.attempts, 2);
+  assert.equal(blocked.artifactRefs.length, 1);
+});
+
+test('evaluateClarityGate flags sensitive command and boundary-crossing signals', () => {
+  const gate = evaluateClarityGate({
+    sessionId: 'risk-session',
+    learnEvalReport: {
+      status: { counts: { blocked: 0 } },
+      recommendations: { fix: [], promote: [] },
+    },
+    dispatchRun: {
+      jobRuns: [
+        {
+          output: {
+            payload: {
+              taskTitle: 'Rotate auth token safely',
+              contextSummary: 'Need policy and compliance review before billing workflow changes.',
+              recommendations: [
+                'Run: sudo chmod 600 ~/.ssh/id_rsa',
+              ],
+              findings: [],
+              openQuestions: [],
+              filesTouched: [],
+            },
+          },
+        },
+      ],
+    },
+  });
+
+  assert.equal(gate.needsHuman, true);
+  assert.equal(gate.reasons.some((item) => /sensitive command signals/i.test(item)), true);
+  assert.equal(gate.reasons.some((item) => /auth\/payment\/policy boundary signals/i.test(item)), true);
+  assert.equal(gate.metrics.sensitiveCommandSignals.length > 0, true);
+  assert.equal(gate.metrics.boundaryCrossingSignals.length > 0, true);
+  assert.equal(gate.metrics.externalWriteSignals.length, 0);
+});
+
+test('evaluateClarityGate flags external write targets outside repo scope', () => {
+  const gate = evaluateClarityGate({
+    sessionId: 'risk-session',
+    learnEvalReport: {
+      status: { counts: { blocked: 0 } },
+      recommendations: { fix: [], promote: [] },
+    },
+    dispatchRun: {
+      jobRuns: [
+        {
+          output: {
+            payload: {
+              taskTitle: 'Update deployment config',
+              contextSummary: 'write system config',
+              recommendations: [],
+              findings: [],
+              openQuestions: [],
+              filesTouched: ['/etc/hosts', '../outside-repo.txt', 'C:\\Windows\\System32\\drivers\\etc\\hosts'],
+            },
+          },
+        },
+      ],
+    },
+  });
+
+  assert.equal(gate.needsHuman, true);
+  assert.equal(gate.reasons.some((item) => /external write signals/i.test(item)), true);
+  assert.equal(gate.metrics.externalWriteSignals.length >= 2, true);
 });
 
 test('dispatch runtime registry lists the local dry-run runtime', async () => {
@@ -510,6 +673,43 @@ test('dispatch runtime registry retries codex execution when output schema is re
   assert.equal((result.cost?.usd || 0) > 0, true);
 });
 
+test('dispatch runtime registry accepts a valid codex handoff that arrives before process exit', async () => {
+  const runtimes = await importDispatchRuntimes();
+  assert.ok(runtimes, 'expected runtime registry module');
+
+  const fakeBin = await createFakeCodexCommand(null, {
+    usageLog: 'inputTokens=30 outputTokens=10 totalTokens=40 usd=0.04',
+    hangAfterOutput: true,
+  });
+  const registry = runtimes.createDispatchRuntimeRegistry({ executeDryRunPlan: () => ({ mode: 'dry-run', ok: true, jobRuns: [] }) });
+  const runtime = runtimes.resolveDispatchRuntime({ runtimeId: 'subagent-runtime', executionMode: 'live' }, registry);
+
+  const plan = buildOrchestrationPlan({ blueprint: 'feature', taskTitle: 'Accept early handoff output' });
+  const dispatchPlan = buildLocalDispatchPlan(plan);
+
+  const result = await runtime.execute({
+    plan,
+    dispatchPlan,
+    dispatchPolicy: null,
+    env: {
+      ...process.env,
+      AIOS_EXECUTE_LIVE: '1',
+      AIOS_SUBAGENT_CLIENT: 'codex-cli',
+      AIOS_SUBAGENT_CONCURRENCY: '1',
+      AIOS_SUBAGENT_TIMEOUT_MS: '600',
+      PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
+    },
+    io: { log() {} },
+  });
+
+  assert.equal(result.mode, 'live');
+  assert.equal(result.ok, true);
+  assert.equal(result.runtime?.id, 'subagent-runtime');
+  assert.equal(result.jobRuns.some((jobRun) => jobRun.status === 'blocked'), false);
+  assert.equal((result.cost?.totalTokens || 0) > 0, true);
+  assert.equal((result.cost?.usd || 0) > 0, true);
+});
+
 test('dispatch runtime registry retries codex upstream errors with backoff before succeeding', async () => {
   const runtimes = await importDispatchRuntimes();
   assert.ok(runtimes, 'expected runtime registry module');
@@ -548,6 +748,181 @@ test('dispatch runtime registry retries codex upstream errors with backoff befor
   assert.equal((result.cost?.totalTokens || 0) > 0, true);
   assert.equal((result.cost?.usd || 0) > 0, true);
   assert.equal(logs.some((line) => line.includes('codex upstream_error retry attempt')), true);
+});
+
+test('subagent runtime prompt tells implementer to return no-op handoffs instead of waiting on non-code work', async () => {
+  const runtimes = await importDispatchRuntimes();
+  assert.ok(runtimes, 'expected runtime registry module');
+
+  const captureDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-orchestrator-prompt-'));
+  const capturePath = path.join(captureDir, 'stdin.log');
+  const fakeBin = await createFakeCodexCommand(null, { captureInputPath: capturePath });
+  const registry = runtimes.createDispatchRuntimeRegistry({ executeDryRunPlan: () => ({ mode: 'dry-run', ok: true, jobRuns: [] }) });
+  const runtime = runtimes.resolveDispatchRuntime({ runtimeId: 'subagent-runtime', executionMode: 'live' }, registry);
+
+  const plan = buildOrchestrationPlan({ blueprint: 'feature', taskTitle: 'Prompt guidance capture' });
+  const dispatchPlan = buildLocalDispatchPlan(plan);
+
+  const result = await runtime.execute({
+    plan,
+    dispatchPlan,
+    dispatchPolicy: null,
+    env: {
+      ...process.env,
+      AIOS_EXECUTE_LIVE: '1',
+      AIOS_SUBAGENT_CLIENT: 'codex-cli',
+      AIOS_SUBAGENT_CONCURRENCY: '1',
+      PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
+    },
+    io: { log() {} },
+  });
+
+  assert.equal(result.ok, true);
+  const captured = await fs.readFile(capturePath, 'utf8');
+  assert.match(captured, /role: implementer/);
+  assert.match(captured, /## Decomposed Work Items/);
+  assert.match(captured, /wi\.1/);
+  assert.match(captured, /If upstream handoffs do not clearly require code changes, return a no-op handoff instead of exploring indefinitely\./);
+  assert.match(captured, /Do not run broad verification commands unless you actually changed owned files\./);
+});
+
+test('subagent runtime blocks file touches outside phase ownedPathPrefixes', async () => {
+  const runtimes = await importDispatchRuntimes();
+  assert.ok(runtimes, 'expected runtime registry module');
+
+  const fakeBin = await createFakeCodexCommand({
+    status: 'completed',
+    fromRole: 'implementer',
+    toRole: 'next-phase',
+    taskTitle: 'Scoped edit',
+    contextSummary: 'Attempted edit',
+    findings: [],
+    filesTouched: ['AGENTS.md'],
+    openQuestions: [],
+    recommendations: [],
+  });
+
+  const registry = runtimes.createDispatchRuntimeRegistry({
+    executeDryRunPlan: () => ({ mode: 'dry-run', ok: true, jobRuns: [] }),
+  });
+  const runtime = runtimes.resolveDispatchRuntime({ runtimeId: 'subagent-runtime', executionMode: 'live' }, registry);
+
+  const plan = {
+    blueprint: 'feature',
+    description: 'file policy test',
+    taskTitle: 'Ownership hardening',
+    contextSummary: '',
+    phases: [
+      {
+        step: 1,
+        id: 'implement',
+        role: 'implementer',
+        mode: 'sequential',
+        group: null,
+        label: 'Implementer',
+        responsibility: 'Implement scoped change',
+        ownership: 'Production code',
+        canEditFiles: true,
+        ownedPathPrefixes: ['scripts/'],
+      },
+    ],
+  };
+  const dispatchPlan = buildLocalDispatchPlan(plan);
+
+  const result = await runtime.execute({
+    plan,
+    dispatchPlan,
+    dispatchPolicy: null,
+    env: {
+      ...process.env,
+      AIOS_EXECUTE_LIVE: '1',
+      AIOS_SUBAGENT_CLIENT: 'codex-cli',
+      AIOS_SUBAGENT_CONCURRENCY: '1',
+      PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
+    },
+    io: { log() {} },
+  });
+
+  assert.equal(result.ok, false);
+  const implementRun = result.jobRuns.find((jobRun) => jobRun.jobId === 'phase.implement');
+  assert.ok(implementRun, 'expected implement job run');
+  assert.equal(implementRun.status, 'blocked');
+  assert.match(String(implementRun.output?.error || ''), /File policy violation/i);
+});
+
+test('subagent runtime honors work-item ownedPathHints for file policy', async () => {
+  const runtimes = await importDispatchRuntimes();
+  assert.ok(runtimes, 'expected runtime registry module');
+
+  const fakeBin = await createFakeCodexCommand({
+    status: 'completed',
+    fromRole: 'implementer',
+    toRole: 'next-phase',
+    taskTitle: 'Scoped edit',
+    contextSummary: 'Applied scoped update',
+    findings: [],
+    filesTouched: ['scripts/ok.txt'],
+    openQuestions: [],
+    recommendations: [],
+  });
+
+  const registry = runtimes.createDispatchRuntimeRegistry({
+    executeDryRunPlan: () => ({ mode: 'dry-run', ok: true, jobRuns: [] }),
+  });
+  const runtime = runtimes.resolveDispatchRuntime({ runtimeId: 'subagent-runtime', executionMode: 'live' }, registry);
+
+  const plan = {
+    blueprint: 'feature',
+    description: 'work-item ownership hints',
+    taskTitle: 'Ownership from work item',
+    contextSummary: '',
+    workItems: [
+      {
+        itemId: 'wi.1',
+        title: 'Update scripts',
+        summary: 'Update scripts/ok.txt',
+        type: 'general',
+        source: 'planner-context',
+        status: 'queued',
+        dependsOn: [],
+        ownedPathHints: ['scripts/'],
+      },
+    ],
+    phases: [
+      {
+        step: 1,
+        id: 'implement',
+        role: 'implementer',
+        mode: 'sequential',
+        group: null,
+        label: 'Implementer',
+        responsibility: 'Implement scoped change',
+        ownership: 'Production code',
+        canEditFiles: true,
+        ownedPathPrefixes: [],
+      },
+    ],
+  };
+  const dispatchPlan = buildLocalDispatchPlan(plan);
+
+  const result = await runtime.execute({
+    plan,
+    dispatchPlan,
+    dispatchPolicy: null,
+    env: {
+      ...process.env,
+      AIOS_EXECUTE_LIVE: '1',
+      AIOS_SUBAGENT_CLIENT: 'codex-cli',
+      AIOS_SUBAGENT_CONCURRENCY: '1',
+      PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
+    },
+    io: { log() {} },
+  });
+
+  assert.equal(result.ok, true);
+  const implementRun = result.jobRuns.find((jobRun) => jobRun.jobId.startsWith('phase.implement'));
+  assert.ok(implementRun, 'expected implement job run');
+  assert.equal(implementRun.status, 'completed');
 });
 
 test('dispatch runtime registry keeps blocked workflow results as structured runtime output', async () => {
@@ -620,38 +995,54 @@ test('createLocalDispatchExecutorRegistry exposes executor metadata and resoluti
 });
 
 test('buildLocalDispatchPlan creates job dependencies and a merge gate for parallel groups', () => {
-  const orchestration = buildOrchestrationPlan({ blueprint: 'feature', taskTitle: 'Ship blueprints' });
+  const orchestration = buildOrchestrationPlan({
+    blueprint: 'feature',
+    taskTitle: 'Ship blueprints',
+    contextSummary: '- implement core behavior\n- add tests',
+  });
   const dispatch = buildLocalDispatchPlan(orchestration);
 
   assert.equal(dispatch.mode, 'local');
-  assert.equal(dispatch.jobs.length, 5);
+  assert.equal(dispatch.jobs.length, 6);
   assert.deepEqual(dispatch.jobs.map((job) => job.jobId), [
     'phase.plan',
-    'phase.implement',
+    'phase.implement.wi.1',
+    'phase.implement.wi.2',
     'phase.review',
     'phase.security',
     'merge.final-checks',
   ]);
 
   const planJob = dispatch.jobs.find((job) => job.jobId === 'phase.plan');
-  const implementJob = dispatch.jobs.find((job) => job.jobId === 'phase.implement');
+  const implementJob1 = dispatch.jobs.find((job) => job.jobId === 'phase.implement.wi.1');
+  const implementJob2 = dispatch.jobs.find((job) => job.jobId === 'phase.implement.wi.2');
   const reviewJob = dispatch.jobs.find((job) => job.jobId === 'phase.review');
   const securityJob = dispatch.jobs.find((job) => job.jobId === 'phase.security');
   const mergeJob = dispatch.jobs.find((job) => job.jobId === 'merge.final-checks');
 
   assert.deepEqual(planJob?.dependsOn, []);
-  assert.deepEqual(implementJob?.dependsOn, ['phase.plan']);
-  assert.deepEqual(reviewJob?.dependsOn, ['phase.implement']);
-  assert.deepEqual(securityJob?.dependsOn, ['phase.implement']);
+  assert.deepEqual(implementJob1?.dependsOn, ['phase.plan']);
+  assert.deepEqual(implementJob2?.dependsOn, ['phase.plan']);
+  assert.deepEqual(reviewJob?.dependsOn, ['phase.implement.wi.1', 'phase.implement.wi.2']);
+  assert.deepEqual(securityJob?.dependsOn, ['phase.implement.wi.1', 'phase.implement.wi.2']);
   assert.deepEqual(mergeJob?.dependsOn, ['phase.review', 'phase.security']);
   assert.equal(mergeJob?.jobType, 'merge-gate');
   assert.equal(reviewJob?.launchSpec.requiresModel, false);
   assert.equal(reviewJob?.launchSpec.executor, 'local-phase');
+  assert.equal(Array.isArray(reviewJob?.launchSpec.workItemRefs), true);
+  assert.equal((reviewJob?.launchSpec.workItemRefs || []).length >= 1, true);
   assert.equal(mergeJob?.launchSpec.executor, 'local-merge-gate');
+  assert.equal(Array.isArray(implementJob1?.launchSpec.ownedPathPrefixes), true);
+  assert.equal(implementJob1.launchSpec.ownedPathPrefixes.length > 0, true);
   assert.deepEqual(dispatch.executorRegistry, ['local-phase', 'local-merge-gate']);
   assert.equal(dispatch.executorDetails[0]?.requiresModel, false);
   assert.deepEqual(dispatch.executorDetails[0]?.jobTypes, ['phase']);
   assert.deepEqual(dispatch.executorDetails[1]?.jobTypes, ['merge-gate']);
+  assert.equal(Array.isArray(dispatch.workItems), true);
+  assert.equal(dispatch.workItems.length, 2);
+  assert.equal(dispatch.workItemQueue.enabled, true);
+  assert.equal(dispatch.workItemQueue.maxParallel, 2);
+  assert.equal(dispatch.workItemQueue.entries.length, 2);
 });
 
 test('buildLocalDispatchPlan serializes grouped phases when policy requires serial-only', () => {
@@ -680,6 +1071,71 @@ test('buildLocalDispatchPlan serializes grouped phases when policy requires seri
   ]);
   assert.equal(dispatch.jobs.some((job) => job.jobType === 'merge-gate'), false);
   assert.match(dispatch.notes.join(' '), /serial-only/i);
+});
+
+test('buildLocalDispatchPlan bounds implementer work-item queue parallelism by dependency window', () => {
+  const orchestration = buildOrchestrationPlan({
+    blueprint: 'feature',
+    taskTitle: 'Queue bounded work items',
+    contextSummary: '- item one\n- item two\n- item three\n- item four',
+  });
+  const dispatch = buildLocalDispatchPlan(orchestration);
+  const implementJobs = dispatch.jobs.filter((job) => job.jobId.startsWith('phase.implement.'));
+
+  assert.equal(implementJobs.length, 4);
+  assert.deepEqual(implementJobs.map((job) => job.jobId), [
+    'phase.implement.wi.1',
+    'phase.implement.wi.2',
+    'phase.implement.wi.3',
+    'phase.implement.wi.4',
+  ]);
+  assert.deepEqual(implementJobs[0].dependsOn, ['phase.plan']);
+  assert.deepEqual(implementJobs[1].dependsOn, ['phase.plan']);
+  assert.deepEqual(implementJobs[2].dependsOn, ['phase.implement.wi.1']);
+  assert.deepEqual(implementJobs[3].dependsOn, ['phase.implement.wi.2']);
+  assert.equal(dispatch.workItemQueue.enabled, true);
+  assert.equal(dispatch.workItemQueue.maxParallel, 2);
+  assert.equal(dispatch.workItemQueue.entries.length, 4);
+});
+
+test('buildLocalDispatchPlan rejects editable parallel phases without explicit ownership scopes', () => {
+  const orchestration = {
+    blueprint: 'feature',
+    description: 'test',
+    taskTitle: 'Scoped parallel edits',
+    contextSummary: '',
+    phases: [
+      {
+        step: 1,
+        id: 'implement-a',
+        role: 'implementer',
+        mode: 'parallel',
+        group: 'impl',
+        label: 'Implementer',
+        responsibility: 'Implement chunk A',
+        ownership: 'Production code',
+        canEditFiles: true,
+        ownedPathPrefixes: [],
+      },
+      {
+        step: 2,
+        id: 'implement-b',
+        role: 'implementer',
+        mode: 'parallel',
+        group: 'impl',
+        label: 'Implementer',
+        responsibility: 'Implement chunk B',
+        ownership: 'Production code',
+        canEditFiles: true,
+        ownedPathPrefixes: ['scripts/'],
+      },
+    ],
+  };
+
+  assert.throws(
+    () => buildLocalDispatchPlan(orchestration),
+    /requires explicit ownedPathPrefixes/i
+  );
 });
 
 test('executeLocalDispatchPlan simulates phase jobs and merge-gate outputs', () => {
@@ -802,6 +1258,8 @@ test('runOrchestrate defaults to local dry-run execution when dispatch/execute a
   assert.equal(report.dispatchPlan.mode, 'local');
   assert.equal(report.dispatchRun.mode, 'dry-run');
   assert.equal(report.dispatchRun.runtime?.id, 'local-dry-run');
+  assert.equal(Array.isArray(report.workItems), true);
+  assert.equal(report.workItems.length >= 1, true);
   assert.equal(report.dispatchEvidence.persisted, false);
   assert.equal(report.dispatchEvidence.reason, 'session-required');
 });
@@ -1065,6 +1523,11 @@ test('runOrchestrate persists live dispatch evidence with runtime cost telemetry
   assert.equal(report.dispatchRun.ok, true);
   assert.equal((report.dispatchRun.cost?.totalTokens || 0) > 0, true);
   assert.equal((report.dispatchRun.cost?.usd || 0) > 0, true);
+  assert.equal(report.workItemTelemetry.schemaVersion, 1);
+  assert.equal(report.workItemTelemetry.totals.total > 0, true);
+  assert.equal(report.workItemTelemetry.totals.done > 0, true);
+  assert.equal(report.entropyGc.mode, 'auto');
+  assert.equal(report.entropyGc.evidence?.persisted, true);
 
   assert.equal(report.dispatchEvidence.persisted, true);
   assert.equal(report.dispatchEvidence.eventKind, 'orchestration.dispatch-run');
@@ -1074,14 +1537,93 @@ test('runOrchestrate persists live dispatch evidence with runtime cost telemetry
   const artifact = JSON.parse(await fs.readFile(artifactPath, 'utf8'));
   assert.equal(artifact.dispatchRun.mode, 'live');
   assert.equal(artifact.dispatchRun.runtime?.id, 'subagent-runtime');
+  assert.equal(Array.isArray(artifact.workItems), true);
+  assert.equal(artifact.workItems.length >= 1, true);
   assert.equal((artifact.dispatchRun.cost?.totalTokens || 0) > 0, true);
   assert.equal((artifact.dispatchRun.cost?.usd || 0) > 0, true);
+  assert.equal(artifact.workItemTelemetry.schemaVersion, 1);
+  assert.equal(artifact.workItemTelemetry.totals.total > 0, true);
+  assert.equal(
+    artifact.workItemTelemetry.items.every((item) => item.artifactRefs.includes(report.dispatchEvidence.artifactPath)),
+    true
+  );
 
   const checkpointsRaw = await fs.readFile(path.join(rootDir, 'memory', 'context-db', 'sessions', 'live-cost-session', 'l1-checkpoints.jsonl'), 'utf8');
   const lastCheckpoint = JSON.parse(checkpointsRaw.trim().split('\n').at(-1));
   assert.match(lastCheckpoint.summary, /live/);
   assert.equal((lastCheckpoint.telemetry?.cost?.totalTokens || 0) > 0, true);
   assert.equal((lastCheckpoint.telemetry?.cost?.usd || 0) > 0, true);
+});
+
+test('runOrchestrate enables clarity human-gate and blocks entropy auto when signals are unclear', async () => {
+  const rootDir = await makeRootDir();
+  await writeSession(
+    rootDir,
+    'clarity-session',
+    { updatedAt: '2026-03-09T02:30:00.000Z', goal: 'Force clarity gate decision' },
+    [
+      {
+        seq: 1,
+        ts: '2026-03-09T02:00:00.000Z',
+        status: 'blocked',
+        summary: 'Blocked checkpoint 1',
+        nextActions: [],
+        artifacts: [],
+        telemetry: {
+          verification: { result: 'failed', evidence: 'dispatch blocked' },
+          retryCount: 0,
+          failureCategory: 'dispatch-runtime-blocked',
+          elapsedMs: 1200,
+        },
+      },
+      {
+        seq: 2,
+        ts: '2026-03-09T02:10:00.000Z',
+        status: 'blocked',
+        summary: 'Blocked checkpoint 2',
+        nextActions: [],
+        artifacts: [],
+        telemetry: {
+          verification: { result: 'failed', evidence: 'dispatch blocked' },
+          retryCount: 1,
+          failureCategory: 'dispatch-runtime-blocked',
+          elapsedMs: 1300,
+        },
+      },
+    ]
+  );
+
+  const logs = [];
+  await runOrchestrate(
+    { sessionId: 'clarity-session', dispatchMode: 'local', executionMode: 'live', format: 'json' },
+    {
+      rootDir,
+      io: { log: (line) => logs.push(line) },
+      env: {
+        ...process.env,
+        AIOS_EXECUTE_LIVE: '1',
+        AIOS_SUBAGENT_SIMULATE: '1',
+      },
+    }
+  );
+  const report = JSON.parse(logs.at(-1));
+
+  assert.equal(report.dispatchRun.mode, 'live');
+  assert.equal(report.dispatchRun.ok, true);
+  assert.equal(report.clarityGate.needsHuman, true);
+  assert.equal(report.effectiveDispatchPolicy.status, 'blocked');
+  assert.equal(report.effectiveDispatchPolicy.blockerIds.includes('gate.clarity-human'), true);
+  assert.equal(report.effectiveDispatchPolicy.requiredActions.some((item) => /entropy-gc dry-run/.test(item.action)), true);
+  assert.equal(report.entropyGc.mode, 'off');
+  assert.equal(report.entropyGc.evidence?.persisted, false);
+
+  const eventsRaw = await fs.readFile(path.join(rootDir, 'memory', 'context-db', 'sessions', 'clarity-session', 'l2-events.jsonl'), 'utf8');
+  const events = eventsRaw.trim().split('\n').filter(Boolean).map((line) => JSON.parse(line));
+  assert.equal(events.some((item) => item.kind === 'orchestration.human-gate'), true);
+
+  const checkpointsRaw = await fs.readFile(path.join(rootDir, 'memory', 'context-db', 'sessions', 'clarity-session', 'l1-checkpoints.jsonl'), 'utf8');
+  const checkpoints = checkpointsRaw.trim().split('\n').filter(Boolean).map((line) => JSON.parse(line));
+  assert.equal(checkpoints.some((item) => item.telemetry?.failureCategory === 'clarity-needs-input'), true);
 });
 
 test('runOrchestrate adds a dry-run dispatch run without invoking models', async () => {
@@ -1216,7 +1758,15 @@ test('runOrchestrate persists dry-run evidence into ContextDB JSONL and SQLite s
   const artifact = JSON.parse(await fs.readFile(artifactPath, 'utf8'));
   assert.equal(artifact.dispatchRun.mode, 'dry-run');
   assert.equal(artifact.dispatchRun.runtime?.id, 'local-dry-run');
+  assert.equal(Array.isArray(artifact.workItems), true);
+  assert.equal(artifact.workItems.length >= 1, true);
   assert.equal(artifact.dispatchRun.executorRegistry.includes('local-phase'), true);
+  assert.equal(artifact.workItemTelemetry.schemaVersion, 1);
+  assert.equal(artifact.workItemTelemetry.totals.total > 0, true);
+  assert.equal(
+    artifact.workItemTelemetry.items.every((item) => item.artifactRefs.includes(report.dispatchEvidence.artifactPath)),
+    true
+  );
 
   const eventsRaw = await fs.readFile(path.join(rootDir, 'memory', 'context-db', 'sessions', 'security-stable', 'l2-events.jsonl'), 'utf8');
   const checkpointsRaw = await fs.readFile(path.join(rootDir, 'memory', 'context-db', 'sessions', 'security-stable', 'l1-checkpoints.jsonl'), 'utf8');
@@ -1681,12 +2231,11 @@ test('runOrchestrate derives blocked dispatch policy from learn-eval and dispatc
   assert.equal(report.dispatchPolicy.requiredActions.some((item) => /quality-gate full/.test(item.action)), true);
   assert.equal(report.dispatchPolicy.requiredActions.some((item) => /--dispatch local --execute dry-run --format json/.test(item.action)), true);
   assert.equal(report.dispatchPlan.jobs.some((job) => job.jobType === 'merge-gate'), false);
-  assert.deepEqual(report.dispatchPlan.jobs.map((job) => job.jobId), [
-    'phase.plan',
-    'phase.implement',
-    'phase.review',
-    'phase.security',
-  ]);
+  const blockedJobIds = report.dispatchPlan.jobs.map((job) => job.jobId);
+  const blockedImplementJobIds = blockedJobIds.filter((jobId) => jobId.startsWith('phase.implement'));
+  assert.equal(blockedImplementJobIds.length >= 1, true);
+  assert.deepEqual(blockedJobIds, ['phase.plan', ...blockedImplementJobIds, 'phase.review', 'phase.security']);
+  assert.deepEqual(report.dispatchPlan.jobs.find((job) => job.jobId === 'phase.review')?.dependsOn, blockedImplementJobIds);
   assert.deepEqual(report.dispatchPlan.jobs.find((job) => job.jobId === 'phase.security')?.dependsOn, ['phase.review']);
   assert.deepEqual(report.dispatchPolicy.executorPreferences, []);
   assert.deepEqual(report.dispatchPlan.executorRegistry, ['local-phase']);
@@ -1759,7 +2308,12 @@ test('runOrchestrate derives ready dispatch policy when observed evidence is cle
   assert.equal(report.dispatchPolicy.parallelism, 'parallel-with-merge-gate');
   assert.deepEqual(report.dispatchPolicy.blockerIds, []);
   assert.equal(report.dispatchPlan.jobs.some((job) => job.jobType === 'merge-gate'), true);
-  assert.equal(report.dispatchPlan.jobs.find((job) => job.jobId === 'phase.security')?.dependsOn.includes('phase.implement'), true);
+  const readyImplementJobIds = report.dispatchPlan.jobs
+    .map((job) => job.jobId)
+    .filter((jobId) => jobId.startsWith('phase.implement'));
+  assert.equal(readyImplementJobIds.length >= 1, true);
+  assert.deepEqual(report.dispatchPlan.jobs.find((job) => job.jobId === 'phase.review')?.dependsOn, readyImplementJobIds);
+  assert.deepEqual(report.dispatchPlan.jobs.find((job) => job.jobId === 'phase.security')?.dependsOn, readyImplementJobIds);
   assert.equal(report.dispatchPolicy.executorPreferences.every((item) => item.confidence === 'observed'), true);
   assert.equal(report.dispatchPolicy.notes.some((note) => /observed dispatch evidence/i.test(note)), true);
 });
@@ -1769,6 +2323,17 @@ test('renderOrchestrationReport includes merge gate guidance', () => {
   assert.match(report, /ORCHESTRATION BLUEPRINT: feature/);
   assert.match(report, /Merge Gate:/);
   assert.match(report, /overlapping file ownership/);
+});
+
+test('renderOrchestrationReport includes decomposed work-item plan', () => {
+  const report = renderOrchestrationReport({
+    blueprint: 'feature',
+    taskTitle: 'Ship blueprints',
+    contextSummary: '- add auth checks\n- add regression tests',
+  });
+  assert.match(report, /Work-Item Plan:/);
+  assert.match(report, /\[auth\] wi\.1/);
+  assert.match(report, /\[testing\] wi\.2/);
 });
 
 test('renderOrchestrationReport includes learn-eval overlay summary', () => {
@@ -1885,6 +2450,35 @@ test('renderOrchestrationReport includes dispatch evidence reasons when present'
   assert.match(report, /reason=mode-unsupported/);
 });
 
+test('renderOrchestrationReport includes work-item telemetry summary', () => {
+  const report = renderOrchestrationReport({
+    blueprint: 'feature',
+    taskTitle: 'Ship blueprints',
+    workItemTelemetry: {
+      schemaVersion: 1,
+      generatedAt: '2026-03-16T03:00:00.000Z',
+      totals: {
+        total: 4,
+        queued: 0,
+        running: 0,
+        blocked: 2,
+        done: 2,
+      },
+      items: [
+        { itemId: 'phase.plan', itemType: 'phase', role: 'planner', status: 'done', failureClass: 'none', retryClass: 'none' },
+        { itemId: 'phase.implement', itemType: 'phase', role: 'implementer', status: 'blocked', failureClass: 'timeout', retryClass: 'same-hypothesis' },
+        { itemId: 'phase.review', itemType: 'phase', role: 'reviewer', status: 'blocked', failureClass: 'ownership-policy', retryClass: 'none' },
+        { itemId: 'merge.final-checks', itemType: 'merge-gate', role: 'merge-gate', status: 'done', failureClass: 'none', retryClass: 'none' },
+      ],
+    },
+  });
+  assert.match(report, /Work-Item Telemetry:/);
+  assert.match(report, /totals total=4 queued=0 running=0 blocked=2 done=2/);
+  assert.match(report, /blockedByType .*phase=2\/3/);
+  assert.match(report, /failureClasses/);
+  assert.match(report, /retryClasses same-hypothesis=1/);
+});
+
 test('renderOrchestrationReport includes local dispatch skeleton summary', () => {
   const report = renderOrchestrationReport({
     blueprint: 'feature',
@@ -1892,6 +2486,13 @@ test('renderOrchestrationReport includes local dispatch skeleton summary', () =>
     dispatchPlan: {
       mode: 'local',
       readyForExecution: false,
+      workItemQueue: {
+        enabled: true,
+        maxParallel: 2,
+        entries: [
+          { queueId: 'implement.wi.1', phaseId: 'implement', role: 'implementer', itemId: 'wi.1', jobId: 'phase.implement.wi.1', dependsOn: ['phase.plan'], status: 'queued' },
+        ],
+      },
       executorRegistry: ['local-phase', 'local-merge-gate'],
       executorDetails: [
         { id: 'local-phase', label: 'Local Phase Executor', jobTypes: ['phase'], supportedRoles: ['planner', 'implementer', 'reviewer', 'security-reviewer'], outputTypes: ['handoff'], executionModes: ['dry-run'], concurrencyMode: 'parallel-safe', requiresModel: false },
@@ -1904,6 +2505,7 @@ test('renderOrchestrationReport includes local dispatch skeleton summary', () =>
     },
   });
   assert.match(report, /Local Dispatch Skeleton:/);
+  assert.match(report, /workItemQueue maxParallel=2 entries=1/);
   assert.match(report, /phase\.plan/);
   assert.match(report, /merge\.final-checks/);
 });

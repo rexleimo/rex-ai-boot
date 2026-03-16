@@ -148,11 +148,11 @@ aios orchestrate --session <session-id> --format json
 aios orchestrate --session <session-id> --preflight auto --format json
 ```
 
-Execute live via CLI subagents (token cost, opt-in):
+Execute live via CLI subagents (token cost, opt-in; currently codex-only):
 
 ```bash
 export AIOS_EXECUTE_LIVE=1
-export AIOS_SUBAGENT_CLIENT=codex-cli  # or claude-code, gemini-cli
+export AIOS_SUBAGENT_CLIENT=codex-cli  # required (codex-only live runtime)
 aios orchestrate --session <session-id> --dispatch local --execute live --format json
 ```
 
@@ -416,6 +416,7 @@ After setup, the same behavior works in other git repositories too (they write t
 - Automatically performs: `init`, `session:latest/new`, `context:pack`
 - Scope: current git project root (`--workspace <git-root>`)
 - Best for normal interactive work with startup context resume
+- Note: in-CLI reset commands like `/new` (Codex) or `/clear` (Claude/Gemini) reset the conversation state. Exit and re-run the CLI to re-inject, or attach `memory/context-db/exports/latest-<agent>-context.md` as the first prompt.
 - Limitation: does not auto-write checkpoint after every turn
 
 ### B) One-shot mode (full automation recommended)

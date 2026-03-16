@@ -14,6 +14,7 @@ Commands:
   quality-gate  Run repo quality checks with harness profiles
   orchestrate   Preview reusable subagent workflow blueprints
   learn-eval    Turn checkpoint telemetry into operator recommendations
+  entropy-gc    Auto-archive stale ContextDB artifacts with rollback manifests
 
 Examples:
   node scripts/aios.mjs setup --components all --mode opt-in --client all
@@ -25,6 +26,7 @@ Examples:
   node scripts/aios.mjs orchestrate feature --task "Ship orchestrator blueprints"
   node scripts/aios.mjs orchestrate --session codex-cli-20260303T080437-065e16c0 --format json
   node scripts/aios.mjs learn-eval --limit 5
+  node scripts/aios.mjs entropy-gc auto --session codex-cli-20260303T080437-065e16c0
 `;
 }
 
@@ -125,6 +127,17 @@ Options:
 Options:
   --session <id>
   --limit <n>
+  --format <text|json>
+  -h, --help
+`;
+    case 'entropy-gc':
+      return `Usage:
+  node scripts/aios.mjs entropy-gc [dry-run|auto|off] [options]
+
+Options:
+  --session <id>                 Required session id to clean
+  --retain <n>                   Keep latest n dispatch artifacts (default: 5)
+  --min-age-hours <n>            Only archive files older than n hours (default: 24)
   --format <text|json>
   -h, --help
 `;

@@ -126,6 +126,20 @@ This keeps chronology obvious and avoids collisions.
 
 No. It uses local filesystem storage under the workspace.
 
+### Why does context disappear after `/new` (Codex) or `/clear` (Claude/Gemini)?
+
+Those commands reset the **in-CLI conversation state**. ContextDB is still on disk, but the wrapper only injects the context packet **when the CLI process starts**.
+
+Recovery options:
+
+- Preferred: exit the CLI and re-run `codex` / `claude` / `gemini` from your shell (wrapper runs `context:pack` again and re-injects).
+- If you must stay in the same process: in the new conversation, ask the agent to read the latest snapshot:
+  - `@memory/context-db/exports/latest-codex-cli-context.md`
+  - `@memory/context-db/exports/latest-claude-code-context.md`
+  - `@memory/context-db/exports/latest-gemini-cli-context.md`
+
+If your client does not support `@file` mentions, paste the file contents as the first prompt.
+
 ### Do Codex, Claude, and Gemini share the same context?
 
 Yes. If they run inside the same wrapped workspace (same git root when available, otherwise the same current directory), they use the same `memory/context-db/`.

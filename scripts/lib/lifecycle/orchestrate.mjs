@@ -14,9 +14,12 @@ import {
 } from '../harness/orchestrator-runtimes.mjs';
 import { persistDispatchEvidence } from '../harness/orchestrator-evidence.mjs';
 import { buildLearnEvalReport } from '../harness/learn-eval.mjs';
+import { buildWorkItemTelemetry } from '../harness/work-item-telemetry.mjs';
 import { parseArgs } from '../cli/parse-args.mjs';
 import { runDoctor } from './doctor.mjs';
+import { executeEntropyGc } from './entropy-gc.mjs';
 import { runQualityGate } from './quality-gate.mjs';
+import { evaluateClarityGate, persistClarityGateDecision } from '../harness/clarity-gate.mjs';
 import {
   normalizeOrchestrateDispatchMode,
   normalizeOrchestrateExecutionMode,
@@ -32,6 +35,14 @@ const DEFAULT_PREFLIGHT_ADAPTERS = {
 function normalizePositiveInteger(rawValue, fallback) {
   const value = Number.parseInt(String(rawValue ?? '').trim(), 10);
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function parseBooleanEnv(rawValue, fallback = false) {
+  const value = String(rawValue ?? '').trim().toLowerCase();
+  if (!value) return fallback;
+  if (['1', 'true', 'yes', 'on'].includes(value)) return true;
+  if (['0', 'false', 'no', 'off'].includes(value)) return false;
+  return fallback;
 }
 
 function extractBlueprintFromTargetId(targetId) {
@@ -484,7 +495,81 @@ export async function runOrchestrate(
     dispatchPreflight,
     learnEvalReport: effectiveLearnEvalReport,
   }) || effectiveDispatchPolicy || postDispatchPolicy;
+  const clarityGate = options.executionMode === 'live' && dispatchRun
+    ? evaluateClarityGate(
+      {
+        sessionId: options.sessionId,
+        learnEvalReport: effectiveLearnEvalReport,
+        dispatchRun,
+      },
+      {
+        blockedCheckpointThreshold: normalizePositiveInteger(env?.AIOS_HUMAN_GATE_BLOCKED_THRESHOLD, 2),
+        maxFilesTouched: normalizePositiveInteger(env?.AIOS_HUMAN_GATE_MAX_FILES, 25),
+      }
+    )
+    : null;
+  const clarityGateEvidence = clarityGate?.needsHuman
+    ? persistClarityGateDecision({
+      rootDir,
+      sessionId: options.sessionId,
+      gate: clarityGate,
+    })
+    : null;
+  const resolvedClarityGate = clarityGate
+    ? {
+      ...clarityGate,
+      ...(clarityGateEvidence ? { evidence: clarityGateEvidence } : {}),
+    }
+    : null;
+  const clarityAdjustedPolicy = resolvedClarityGate?.needsHuman
+    ? {
+      ...finalEffectiveDispatchPolicy,
+      status: 'blocked',
+      parallelism: 'serial-only',
+      blockerIds: [...new Set([...(finalEffectiveDispatchPolicy?.blockerIds || []), 'gate.clarity-human'])],
+      requiredActions: [
+        ...(Array.isArray(finalEffectiveDispatchPolicy?.requiredActions) ? finalEffectiveDispatchPolicy.requiredActions : []),
+        {
+          type: 'command',
+          action: `node scripts/aios.mjs entropy-gc dry-run --session ${options.sessionId} --format json`,
+          sourceId: 'gate.clarity-human',
+        },
+        {
+          type: 'command',
+          action: `node scripts/aios.mjs orchestrate --session ${options.sessionId} --dispatch local --execute live --format json`,
+          sourceId: 'gate.clarity-human',
+        },
+      ],
+      notes: [
+        ...(Array.isArray(finalEffectiveDispatchPolicy?.notes) ? finalEffectiveDispatchPolicy.notes : []),
+        'Clarity gate required human input before continuing automation.',
+      ],
+    }
+    : finalEffectiveDispatchPolicy;
+  const entropyGc = options.executionMode === 'live'
+    && dispatchRun
+    && dispatchRun.ok === true
+    && options.sessionId
+    && parseBooleanEnv(env?.AIOS_ENTROPY_AUTO, true)
+    ? await executeEntropyGc(
+      {
+        sessionId: options.sessionId,
+        mode: resolvedClarityGate?.needsHuman ? 'off' : 'auto',
+        retain: normalizePositiveInteger(env?.AIOS_ENTROPY_RETAIN, 5),
+        minAgeHours: normalizePositiveInteger(env?.AIOS_ENTROPY_MIN_AGE_HOURS, 24),
+        format: 'json',
+      },
+      {
+        rootDir,
+        persistEvidence: true,
+      }
+    )
+    : null;
   const dispatchPolicy = rawDispatchPolicy;
+  const workItemTelemetry = buildWorkItemTelemetry({
+    dispatchPlan,
+    dispatchRun,
+  });
 
   const reportBasePlan = buildOrchestrationPlan({
     blueprint,
@@ -493,7 +578,7 @@ export async function runOrchestrate(
     learnEvalOverlay,
     dispatchPolicy,
     dispatchPreflight,
-    effectiveDispatchPolicy: finalEffectiveDispatchPolicy,
+    effectiveDispatchPolicy: clarityAdjustedPolicy,
   });
   const dispatchEvidence = dispatchRun
     ? await persistDispatchEvidence({
@@ -505,7 +590,10 @@ export async function runOrchestrate(
         ...(dispatchRun ? { dispatchRun } : {}),
         ...(dispatchPolicy ? { dispatchPolicy } : {}),
         ...(dispatchPreflight ? { dispatchPreflight } : {}),
-        ...(finalEffectiveDispatchPolicy ? { effectiveDispatchPolicy: finalEffectiveDispatchPolicy } : {}),
+        ...(clarityAdjustedPolicy ? { effectiveDispatchPolicy: clarityAdjustedPolicy } : {}),
+        ...(resolvedClarityGate ? { clarityGate: resolvedClarityGate } : {}),
+        ...(entropyGc ? { entropyGc } : {}),
+        ...(workItemTelemetry ? { workItemTelemetry } : {}),
       },
       elapsedMs: Date.now() - dispatchRunStartedAt,
     })
@@ -517,7 +605,10 @@ export async function runOrchestrate(
     ...(dispatchRun ? { dispatchRun } : {}),
     ...(dispatchPolicy ? { dispatchPolicy } : {}),
     ...(dispatchPreflight ? { dispatchPreflight } : {}),
-    ...(finalEffectiveDispatchPolicy ? { effectiveDispatchPolicy: finalEffectiveDispatchPolicy } : {}),
+    ...(clarityAdjustedPolicy ? { effectiveDispatchPolicy: clarityAdjustedPolicy } : {}),
+    ...(resolvedClarityGate ? { clarityGate: resolvedClarityGate } : {}),
+    ...(entropyGc ? { entropyGc } : {}),
+    ...(workItemTelemetry ? { workItemTelemetry } : {}),
     ...(dispatchEvidence ? { dispatchEvidence } : {}),
   };
 

@@ -29,6 +29,20 @@ export CTXDB_PACK_STRICT=1
 export CTXDB_PACK_STRICT_INTERACTIVE=1
 ```
 
+## `/new` (Codex) / `/clear` (Claude/Gemini) 後にコンテキストが消える
+
+これらのコマンドは **CLI 内の会話状態** をリセットします。ContextDB はディスク上に残りますが、ラッパーがコンテキストパケットを注入するのは **CLI 起動時のみ** です。
+
+復帰方法:
+
+- 推奨: CLI を終了して、シェルから `codex` / `claude` / `gemini` を再起動（再度 `context:pack` して注入）
+- 同一プロセスで続けたい場合: 新しい会話の最初に最新スナップショットを読ませる:
+  - `@memory/context-db/exports/latest-codex-cli-context.md`
+  - `@memory/context-db/exports/latest-claude-code-context.md`
+  - `@memory/context-db/exports/latest-gemini-cli-context.md`
+
+クライアントが `@file` 参照をサポートしない場合は、ファイル内容を最初のプロンプトとして貼り付けてください。
+
 ## 例
 
 ```bash

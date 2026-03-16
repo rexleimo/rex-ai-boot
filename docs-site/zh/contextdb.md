@@ -105,6 +105,20 @@ memory/context-db/
 
 不是。它默认写入当前工作区下的本地文件系统。
 
+### 为什么我在 `codex /new` 或 `claude/gemini /clear` 后“记忆没了”？
+
+这些命令会重置 **CLI 内部的对话状态**。ContextDB 的数据仍然在磁盘上，但包装层只会在 **启动 CLI 进程时** 注入一次 context packet。
+
+恢复方式：
+
+- 推荐：退出 CLI，然后在 shell 里重新执行 `codex` / `claude` / `gemini`（包装会重新 `context:pack` 并注入）。
+- 如果必须在同一进程里继续：在新对话第一句让模型先读取最新快照：
+  - `@memory/context-db/exports/latest-codex-cli-context.md`
+  - `@memory/context-db/exports/latest-claude-code-context.md`
+  - `@memory/context-db/exports/latest-gemini-cli-context.md`
+
+如果客户端不支持 `@file` 引用，请把文件内容粘贴为首条消息。
+
 ### Codex、Claude、Gemini 会共享上下文吗？
 
 会。只要它们运行在同一个已包裹工作区（优先使用同一个 git 根目录；没有 git 根目录时则使用同一个当前目录），就会共享同一份 `memory/context-db/`。

@@ -3,7 +3,18 @@
   "$id": "rex-ai-boot/agent-handoff.schema.json",
   "title": "Agent Handoff",
   "type": "object",
-  "required": ["fromRole", "toRole", "taskTitle", "contextSummary"],
+  "required": [
+    "schemaVersion",
+    "status",
+    "fromRole",
+    "toRole",
+    "taskTitle",
+    "contextSummary",
+    "findings",
+    "filesTouched",
+    "openQuestions",
+    "recommendations"
+  ],
   "properties": {
     "schemaVersion": {
       "type": "integer",
@@ -46,5 +57,5 @@
       "items": { "type": "string" }
     }
   },
-  "additionalProperties": true
+  "additionalProperties": false
 }
