@@ -307,3 +307,14 @@ For `rex-ai-boot`, the best path is:
 1. Validate Windows PowerShell wrapper behavior on a real Windows host.
 2. Continue live sampling and monitor `sample.latency-watch` before reducing live subagent timeout budgets.
 3. Refresh `learn-eval` after more successful live samples to dilute historical blocked runs.
+
+### 2026-03-16 Live Sample Observation
+
+1. Preflight auto + dry-run resolved policy blockers and produced a ready artifact:
+- `memory/context-db/sessions/codex-cli-20260303T080437-065e16c0/artifacts/dispatch-run-20260316T084621Z.json`.
+
+2. Preflight auto + live advanced further, but wi.3 timed out:
+- `memory/context-db/sessions/codex-cli-20260303T080437-065e16c0/artifacts/dispatch-run-20260316T085836Z.json`.
+- `phase.plan`, `wi.1`, `wi.2` completed; `wi.3` timed out at 600000ms; review/security/merge blocked by dependency.
+
+3. Conclusion: hold timeout budgets steady until wi.3 has a concrete docs scope or is temporarily excluded from the live run.
