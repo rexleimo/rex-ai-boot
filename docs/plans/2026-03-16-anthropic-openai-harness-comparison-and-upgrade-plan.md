@@ -318,3 +318,43 @@ For `rex-ai-boot`, the best path is:
 - `phase.plan`, `wi.1`, `wi.2` completed; `wi.3` timed out at 600000ms; review/security/merge blocked by dependency.
 
 3. Conclusion: hold timeout budgets steady until wi.3 has a concrete docs scope or is temporarily excluded from the live run.
+
+## 13) Checkpoint (2026-03-16, Push + Live Sample Refresh)
+
+### Completed
+
+1. Pushed latest local commits to `origin/main`:
+- range: `eca3069..356289b`.
+- included:
+  - `ee1c4c0` (`docs: record live sample observation`)
+  - `356289b` (`fix(harness): auto-complete no-op review and security phases`)
+
+2. Ran one new live sample on the same session:
+- command:
+  - `AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=codex-cli node scripts/aios.mjs orchestrate --session codex-cli-20260303T080437-065e16c0 --dispatch local --execute live --format json`
+- result:
+  - `dispatchRun.ok=true`
+  - artifact: `memory/context-db/sessions/codex-cli-20260303T080437-065e16c0/artifacts/dispatch-run-20260316T102658Z.json`
+  - `phase.review` / `phase.security` stayed auto-completed (0ms) under no-upstream-file-change path.
+
+3. Refreshed learn-eval after this live sample:
+- command:
+  - `node scripts/aios.mjs learn-eval --session codex-cli-20260303T080437-065e16c0 --format json`
+- latest artifact pointer updated to:
+  - `memory/context-db/sessions/codex-cli-20260303T080437-065e16c0/artifacts/dispatch-run-20260316T102658Z.json`
+- recommendation remains:
+  - `[fix] runbook.failure-triage` (`clarity-needs-input=4`)
+  - `[observe] sample.latency-watch` (`avgElapsedMs=243398`)
+
+### Verification Evidence
+
+- `git push origin main` succeeded.
+- live orchestrate artifact persisted:
+  - `memory/context-db/sessions/codex-cli-20260303T080437-065e16c0/artifacts/dispatch-run-20260316T102658Z.json`
+- `learn-eval` refreshed with updated session timestamp (`2026-03-16T10:26:58.828Z`).
+
+### Updated Next Actions
+
+1. Continue live sampling and watch `sample.latency-watch` trend until average runtime stabilizes downward.
+2. Keep timeout budgets unchanged for now (`avgElapsedMs` rose to `243398` in the latest sample).
+3. Maintain runbook-first flow (`node scripts/aios.mjs doctor`) when `runbook.failure-triage` remains active.
