@@ -1,3 +1,9 @@
+import {
+  getOrderedVisibleSkillNames,
+  getSkillPickerPageSize,
+  syncSkillPickerScroll,
+} from './skill-picker.mjs';
+
 const MODE_OPTIONS = ['all', 'repo-only', 'opt-in', 'off'];
 const CLIENT_OPTIONS = ['all', 'codex', 'claude', 'gemini', 'opencode'];
 const SCOPE_OPTIONS = ['global', 'project'];
@@ -46,19 +52,8 @@ function buildRunRequest(state, action) {
   };
 }
 
-function skillMatchesClient(skill, client) {
-  if (client === 'all') {
-    return Array.isArray(skill.clients) && skill.clients.length > 0;
-  }
-  return Array.isArray(skill.clients) && skill.clients.includes(client);
-}
-
 function visibleSkillNames(catalogSkills, client, scope) {
-  return catalogSkills
-    .filter((skill) => Array.isArray(skill.scopes) && skill.scopes.includes(scope))
-    .filter((skill) => skillMatchesClient(skill, client))
-    .map((skill) => skill.name)
-    .filter(Boolean);
+  return getOrderedVisibleSkillNames(catalogSkills, client, scope);
 }
 
 function installedSkillNames(installedSkills, client, scope) {
@@ -70,9 +65,9 @@ function installedSkillNames(installedSkills, client, scope) {
 }
 
 function defaultSelectedSkills(catalogSkills, client, scope) {
-  return catalogSkills
-    .filter((skill) => Array.isArray(skill.scopes) && skill.scopes.includes(scope))
-    .filter((skill) => skillMatchesClient(skill, client))
+  return getOrderedVisibleSkillNames(catalogSkills, client, scope)
+    .map((name) => catalogSkills.find((skill) => skill.name === name))
+    .filter(Boolean)
     .filter((skill) => Boolean(skill.defaultInstall?.[scope]))
     .map((skill) => skill.name);
 }
@@ -103,14 +98,15 @@ function getSkillPickerActionState(state) {
   }
   const option = state.options[action];
   const visible = visibleSkillNames(state.catalogSkills, option.client, option.scope);
-  const installedVisible = defaultUninstallSelectedSkills(state.catalogSkills, state.installedSkills, option.client, option.scope);
+  const installed = new Set(defaultUninstallSelectedSkills(state.catalogSkills, state.installedSkills, option.client, option.scope));
+  const installedVisible = visible.filter((name) => installed.has(name));
   return {
     action,
     skills: action === 'uninstall' ? installedVisible : visible,
   };
 }
 
-export function createInitialState({ catalogSkills = [], installedSkills = {} } = {}) {
+export function createInitialState({ catalogSkills = [], installedSkills = {}, viewportRows = 24 } = {}) {
   const setup = {
     components: {
       browser: true,
@@ -154,6 +150,8 @@ export function createInitialState({ catalogSkills = [], installedSkills = {} } 
   return {
     screen: 'main',
     cursor: 0,
+    scrollOffset: 0,
+    viewportRows,
     confirmAction: '',
     skillPickerAction: '',
     exitRequested: false,
@@ -240,7 +238,7 @@ export function reduceState(state, action) {
       }
       if (action === 'enter') {
         if (next.cursor === 9) {
-          return { ...next, screen: 'skill-picker', skillPickerAction: 'setup', cursor: 0 };
+          return { ...next, screen: 'skill-picker', skillPickerAction: 'setup', cursor: 0, scrollOffset: 0 };
         }
         if (next.cursor === 10) {
           return { ...next, screen: 'confirm', cursor: 0, confirmAction: 'setup' };
@@ -294,7 +292,7 @@ export function reduceState(state, action) {
       }
       if (action === 'enter') {
         if (next.cursor === 9) {
-          return { ...next, screen: 'skill-picker', skillPickerAction: 'update', cursor: 0 };
+          return { ...next, screen: 'skill-picker', skillPickerAction: 'update', cursor: 0, scrollOffset: 0 };
         }
         if (next.cursor === 10) {
           return { ...next, screen: 'confirm', cursor: 0, confirmAction: 'update' };
@@ -339,7 +337,7 @@ export function reduceState(state, action) {
       }
       if (action === 'enter') {
         if (next.cursor === 6) {
-          return { ...next, screen: 'skill-picker', skillPickerAction: 'uninstall', cursor: 0 };
+          return { ...next, screen: 'skill-picker', skillPickerAction: 'uninstall', cursor: 0, scrollOffset: 0 };
         }
         if (next.cursor === 7) {
           return { ...next, screen: 'confirm', cursor: 0, confirmAction: 'uninstall' };
@@ -371,18 +369,34 @@ export function reduceState(state, action) {
     }
     case 'skill-picker': {
       const picker = getSkillPickerActionState(next);
-      const maxCursor = picker.skills.length;
+      const pageSize = getSkillPickerPageSize({ viewportRows: next.viewportRows, owner: next.skillPickerAction });
+      const selectAllCursor = picker.skills.length;
+      const clearAllCursor = picker.skills.length + 1;
+      const doneCursor = picker.skills.length + 2;
+      const maxCursor = doneCursor;
       if (action === 'back') {
-        return { ...next, screen: next.skillPickerAction, cursor: 0 };
+        return { ...next, screen: next.skillPickerAction, cursor: 0, scrollOffset: 0 };
       }
-      if (action === 'up') return withCursor({ ...next, cursor: next.cursor - 1 }, maxCursor);
-      if (action === 'down') return withCursor({ ...next, cursor: next.cursor + 1 }, maxCursor);
+      if (action === 'up' || action === 'down') {
+        const moved = withCursor({ ...next, cursor: next.cursor + (action === 'up' ? -1 : 1) }, maxCursor);
+        moved.scrollOffset = syncSkillPickerScroll(moved.cursor, moved.scrollOffset, picker.skills.length, pageSize);
+        return moved;
+      }
       if (action === 'space' || action === 'right' || action === 'enter') {
-        if (next.cursor === maxCursor) {
-          return { ...next, screen: next.skillPickerAction, cursor: 0 };
+        if (next.cursor === doneCursor) {
+          return { ...next, screen: next.skillPickerAction, cursor: 0, scrollOffset: 0 };
         }
 
         const option = next.options[next.skillPickerAction];
+        if (next.cursor === selectAllCursor) {
+          option.selectedSkills = [...picker.skills];
+          return next;
+        }
+        if (next.cursor === clearAllCursor) {
+          option.selectedSkills = [];
+          return next;
+        }
+
         const skillName = picker.skills[next.cursor];
         const selected = new Set(option.selectedSkills || []);
         if (selected.has(skillName)) {

@@ -237,8 +237,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\aios.ps1
 
 1. 选择 `Setup`
 2. 选择 `all`、`shell,skills,superpowers` 或 `browser`
-3. 等安装跑完后，再执行一次 `Doctor`
-4. 如果装了 shell 包装层，记得重新加载终端配置
+3. 如果启用了 `Skills`，需要时可以进入 skill picker：
+   setup/update 里已安装项会带 `(installed)` 标记
+   uninstall 只显示已安装项，支持滚动，并提供 `Select all` / `Clear all`
+4. 等安装跑完后，再执行一次 `Doctor`
+5. 如果装了 shell 包装层，记得重新加载终端配置
 
 这是本次迭代最清晰的首次安装路径。下面仍保留脚本命令，方便自动化或非交互场景。
 

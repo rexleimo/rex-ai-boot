@@ -65,6 +65,18 @@ tags: [RexCli, Skills, TUI, Onboarding, AI Development]
 
 这让卸载动作更符合直觉，也更接近“面向真实状态操作”的产品方式。
 
+这一轮还继续把 TUI 细节补齐了：
+
+- 小终端里，卸载列表会按可用高度滚动，而不是把内容一次性铺满
+- `Select all`、`Clear all`、`Done` 固定在底部，更容易反复操作
+- 卸载列表内部的光标和实际勾选项现在严格一一对应，不再出现“光标在 A，实际勾到 B”的错位
+
+同时，安装和更新场景也补了一个更直接的状态提示：
+
+- 在 `setup` / `update` 的 skill picker 中，已经安装过的 skill 会显示 `(installed)`
+
+这样用户在做增量安装或整理全局环境时，不需要先退出 TUI 再查一次状态。
+
 ## 覆盖关系也会在 doctor 中提示
 
 如果同一个 skill 同时存在于 `project` 和 `global`，`doctor` 现在会给出覆盖提示，明确告诉用户：

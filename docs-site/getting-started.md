@@ -75,8 +75,11 @@ After install, use the TUI as the main onboarding path for this release:
    - `all` for the full stack
    - `shell,skills,superpowers` for shared memory + skills first
    - `browser` for Browser MCP only
-4. When setup finishes, run **Doctor** in the same TUI
-5. Reload your shell if you installed shell wrappers:
+4. If you enable **Skills**, the picker now helps distinguish states:
+   - setup/update mark already-installed skills with `(installed)`
+   - uninstall shows only installed skills, supports scrolling, and offers **Select all** / **Clear all**
+5. When setup finishes, run **Doctor** in the same TUI
+6. Reload your shell if you installed shell wrappers:
    - macOS / Linux: `source ~/.zshrc`
    - Windows PowerShell: `. $PROFILE`
 

@@ -24,6 +24,13 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - docs(blog): add a release note post for subagent runtime
 - docs(blog): add a release note post for scope-aware skills install UX
 
+## [0.17.0] - 2026-03-17
+
+- feat(tui): add uninstall picker scrolling, bottom-anchored bulk actions, and installed markers in setup/update pickers
+- fix(tui): keep uninstall picker cursor selection aligned with the rendered grouped order
+- docs: update README and docs-site onboarding copy for the improved skills picker UX
+- docs(blog): extend the skills install experience post with the latest TUI uninstall and installed-marker improvements
+
 ## [0.16.0] - 2026-03-10
 
 - feat(aios): add orchestrator agent catalog and generators

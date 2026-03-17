@@ -170,3 +170,152 @@ test('uninstall picker renders only installed skills for current scope and clien
   assert.doesNotMatch(output, /xhs-ops-methods/);
   assert.match(output, /\[ \] find-skills/);
 });
+
+test('skill picker renders a windowed list with bulk action rows', () => {
+  const state = createInitialState({
+    viewportRows: 18,
+    catalogSkills: Array.from({ length: 10 }, (_, index) => ({
+      name: `skill-${index + 1}`,
+      description: `Description ${index + 1}`,
+      clients: ['codex'],
+      scopes: ['global'],
+      defaultInstall: { global: false, project: false },
+    })),
+    installedSkills: {
+      global: {
+        codex: Array.from({ length: 10 }, (_, index) => `skill-${index + 1}`),
+      },
+    },
+  });
+
+  let next = reduceState(state, 'down');
+  next = reduceState(next, 'down');
+  next = reduceState(next, 'enter');
+  for (let index = 0; index < 5; index += 1) {
+    next = reduceState(next, 'down');
+  }
+  next = reduceState(next, 'space');
+  next = reduceState(next, 'down');
+  next = reduceState(next, 'enter');
+
+  const output = renderState(next, '/tmp/project');
+  assert.match(output, /Showing 1-5 of 10/);
+  assert.match(output, /skill-1/);
+  assert.match(output, /skill-5/);
+  assert.doesNotMatch(output, /Description 1/);
+  assert.doesNotMatch(output, /skill-7/);
+  assert.match(output, /Select all/);
+  assert.match(output, /Clear all/);
+  assert.match(output, /Done/);
+});
+
+test('skill picker keeps bulk action rows anchored at the bottom of the viewport', () => {
+  const state = createInitialState({
+    viewportRows: 18,
+    catalogSkills: [
+      {
+        name: 'skill-1',
+        description: 'Description 1',
+        clients: ['codex'],
+        scopes: ['global'],
+        defaultInstall: { global: false, project: false },
+      },
+      {
+        name: 'skill-2',
+        description: 'Description 2',
+        clients: ['codex'],
+        scopes: ['global'],
+        defaultInstall: { global: false, project: false },
+      },
+    ],
+    installedSkills: {
+      global: {
+        codex: ['skill-1', 'skill-2'],
+      },
+    },
+  });
+
+  let next = reduceState(state, 'down');
+  next = reduceState(next, 'down');
+  next = reduceState(next, 'enter');
+  for (let index = 0; index < 5; index += 1) {
+    next = reduceState(next, 'down');
+  }
+  next = reduceState(next, 'space');
+  next = reduceState(next, 'down');
+  next = reduceState(next, 'enter');
+
+  const lines = renderState(next, '/tmp/project').trimEnd().split('\n');
+  assert.equal(lines.at(-1), '  Done');
+  assert.equal(lines.at(-2), '  Clear all');
+  assert.equal(lines.at(-3), '  Select all');
+  assert.equal(lines.at(-4), '');
+});
+
+test('setup skill picker marks already installed skills', () => {
+  const state = createInitialState({
+    catalogSkills: [
+      {
+        name: 'find-skills',
+        description: 'Discover installable skills.',
+        clients: ['codex'],
+        scopes: ['global', 'project'],
+        defaultInstall: { global: true, project: false },
+      },
+      {
+        name: 'seo-geo-page-optimization',
+        description: 'Optimize a page for SEO and GEO.',
+        clients: ['codex'],
+        scopes: ['global', 'project'],
+        defaultInstall: { global: false, project: false },
+      },
+    ],
+    installedSkills: {
+      global: {
+        codex: ['find-skills'],
+      },
+    },
+  });
+
+  let next = reduceState(state, 'enter');
+  for (let index = 0; index < 9; index += 1) {
+    next = reduceState(next, 'down');
+  }
+  next = reduceState(next, 'enter');
+
+  const output = renderState(next, '/tmp/project');
+  assert.match(output, /find-skills \(installed\)/);
+  assert.doesNotMatch(output, /seo-geo-page-optimization \(installed\)/);
+});
+
+test('uninstall skill picker does not duplicate installed markers', () => {
+  const state = createInitialState({
+    catalogSkills: [
+      {
+        name: 'find-skills',
+        description: 'Discover installable skills.',
+        clients: ['codex'],
+        scopes: ['global', 'project'],
+        defaultInstall: { global: true, project: false },
+      },
+    ],
+    installedSkills: {
+      global: {
+        codex: ['find-skills'],
+      },
+    },
+  });
+
+  let next = reduceState(state, 'down');
+  next = reduceState(next, 'down');
+  next = reduceState(next, 'enter');
+  for (let index = 0; index < 5; index += 1) {
+    next = reduceState(next, 'down');
+  }
+  next = reduceState(next, 'space');
+  next = reduceState(next, 'down');
+  next = reduceState(next, 'enter');
+
+  const output = renderState(next, '/tmp/project');
+  assert.doesNotMatch(output, /\(installed\)/);
+});

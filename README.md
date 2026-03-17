@@ -237,8 +237,11 @@ Inside the TUI:
 
 1. Choose `Setup`
 2. Pick `all`, `shell,skills,superpowers`, or `browser`
-3. Let the install finish, then run `Doctor`
-4. Reload your shell if wrappers were installed
+3. If you enable `Skills`, open the skill picker when needed:
+   setup/update now mark already-installed skills with `(installed)`
+   uninstall shows only installed skills, supports scrolling, and includes `Select all` / `Clear all`
+4. Let the install finish, then run `Doctor`
+5. Reload your shell if wrappers were installed
 
 This is the clearest path for first-time setup in this iteration. Direct script commands remain available below for automation and non-interactive use.
 

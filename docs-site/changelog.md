@@ -23,6 +23,10 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
   - catalog-driven skill picker with core defaults, optional business skills, and uninstall showing installed items only
   - TUI skill picker groups entries into `Core` and `Optional` with truncated descriptions for terminal readability
   - `doctor` now warns when a project skill overrides a global install of the same name
+- `0.17.0` (2026-03-17):
+  - TUI uninstall picker now scrolls in smaller terminals and keeps `Select all` / `Clear all` / `Done` anchored at the bottom
+  - uninstall cursor selection now stays aligned with the rendered grouped list
+  - setup/update skill pickers now label already-installed skills with `(installed)`
 - `0.16.0` (2026-03-10): add orchestrator agent catalog and generators
 - `0.15.0` (2026-03-10): gate live orchestrate execution behind `AIOS_EXECUTE_LIVE`
 - `0.14.0` (2026-03-10): add `subagent-runtime` runtime adapter (stub)

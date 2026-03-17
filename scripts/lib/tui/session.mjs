@@ -69,7 +69,7 @@ export async function runInteractiveSession({ rootDir, onRun }) {
     catalogSkills = [];
   }
   const installedSkills = collectInstalledSkills({ rootDir, projectRoot: process.cwd(), catalogSkills });
-  const stateRef = { current: createInitialState({ catalogSkills, installedSkills }) };
+  const stateRef = { current: createInitialState({ catalogSkills, installedSkills, viewportRows: process.stdout.rows || 24 }) };
 
   readline.emitKeypressEvents(process.stdin);
   process.stdin.setRawMode(true);

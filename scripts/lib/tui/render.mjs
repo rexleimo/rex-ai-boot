@@ -1,3 +1,10 @@
+import {
+  getOrderedVisibleSkills,
+  getSkillPickerPageSize,
+  getSkillWindow,
+  shouldShowSkillDescriptions,
+} from './skill-picker.mjs';
+
 function renderCheckbox(label, checked, active) {
   const prefix = active ? '▸' : ' ';
   const mark = checked ? '[x]' : '[ ]';
@@ -32,6 +39,21 @@ function installedSkillNames(installedSkills, client, scope) {
   return Array.isArray(scopeMap[client]) ? scopeMap[client] : [];
 }
 
+function shouldShowInstalledMarker(owner) {
+  return owner === 'setup' || owner === 'update';
+}
+
+function formatSkillLabel(skill, { owner = '', installed = false } = {}) {
+  const name = skill?.name || '';
+  if (!name) {
+    return '';
+  }
+  if (installed && shouldShowInstalledMarker(owner)) {
+    return `${name} (installed)`;
+  }
+  return name;
+}
+
 function renderSelectedSkills(selectedSkills) {
   if (!Array.isArray(selectedSkills) || selectedSkills.length === 0) {
     return '<none>';
@@ -62,20 +84,32 @@ function splitSkillGroups(skills) {
   return { core, optional };
 }
 
-function renderSkillSection(lines, skills, options, stateCursor, startIndex, title) {
+function renderSkillSection(lines, skills, options, stateCursor, startIndex, title, cursorBase = 0, showDescriptions = true, owner = '', installedSet = new Set()) {
   if (skills.length === 0) {
     return startIndex;
   }
   lines.push(title);
   let cursorIndex = startIndex;
   for (const skill of skills) {
-    lines.push(renderCheckbox(skill.name, Array.isArray(options?.selectedSkills) && options.selectedSkills.includes(skill.name), stateCursor === cursorIndex));
-    if (skill.description) {
+    lines.push(renderCheckbox(
+      formatSkillLabel(skill, { owner, installed: installedSet.has(skill.name) }),
+      Array.isArray(options?.selectedSkills) && options.selectedSkills.includes(skill.name),
+      stateCursor === cursorBase + cursorIndex
+    ));
+    if (showDescriptions && skill.description) {
       lines.push(renderDescription(truncateDescription(skill.description)));
     }
     cursorIndex += 1;
   }
   return cursorIndex;
+}
+
+function padLinesBeforeFooter(lines, viewportRows, footerRows) {
+  const safeViewportRows = Math.max(12, Number(viewportRows) || 24);
+  const targetContentRows = Math.max(0, safeViewportRows - footerRows);
+  while (lines.length < targetContentRows) {
+    lines.push('');
+  }
 }
 
 export function renderState(state, rootDir) {
@@ -185,24 +219,32 @@ export function renderState(state, rootDir) {
   if (state.screen === 'skill-picker') {
     const owner = state.skillPickerAction;
     const options = owner ? state.options[owner] : null;
+    const pageSize = getSkillPickerPageSize({ viewportRows: state.viewportRows, owner });
+    const showDescriptions = shouldShowSkillDescriptions(owner);
+    const installedSet = new Set(owner && options ? installedSkillNames(state.installedSkills, options.client, options.scope) : []);
     const skills = owner && options
-      ? state.catalogSkills
-        .filter((skill) => Array.isArray(skill.scopes) && skill.scopes.includes(options.scope))
-        .filter((skill) => options.client === 'all' || (Array.isArray(skill.clients) && skill.clients.includes(options.client)))
+      ? getOrderedVisibleSkills(state.catalogSkills, options.client, options.scope)
         .filter((skill) => owner !== 'uninstall' || installedSkillNames(state.installedSkills, options.client, options.scope).includes(skill.name))
       : [];
+    const window = getSkillWindow(skills, state.scrollOffset, pageSize);
     lines.push(`Select skills for ${owner || 'unknown'}`, '');
     if (skills.length === 0 && owner === 'uninstall') {
       lines.push('No installed skills for current scope/client');
     }
-    const groups = splitSkillGroups(skills);
+    if (skills.length > 0) {
+      lines.push(`Showing ${window.start}-${window.end} of ${window.total}`);
+    }
+    const groups = splitSkillGroups(window.visibleSkills);
     let cursorIndex = 0;
-    cursorIndex = renderSkillSection(lines, groups.core, options, state.cursor, cursorIndex, 'Core');
-    cursorIndex = renderSkillSection(lines, groups.optional, options, state.cursor, cursorIndex, 'Optional');
+    cursorIndex = renderSkillSection(lines, groups.core, options, state.cursor, cursorIndex, 'Core', window.offset, showDescriptions, owner, installedSet);
+    cursorIndex = renderSkillSection(lines, groups.optional, options, state.cursor, cursorIndex, 'Optional', window.offset, showDescriptions, owner, installedSet);
     if (skills.length === 0 && owner !== 'uninstall') {
       lines.push('No skills available for current scope/client');
     }
-    lines.push(renderItem('Done', state.cursor === skills.length));
+    padLinesBeforeFooter(lines, state.viewportRows, 3);
+    lines.push(renderItem('Select all', state.cursor === skills.length));
+    lines.push(renderItem('Clear all', state.cursor === skills.length + 1));
+    lines.push(renderItem('Done', state.cursor === skills.length + 2));
     return `${lines.join('\n')}\n`;
   }
 
