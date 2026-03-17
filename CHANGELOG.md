@@ -10,6 +10,11 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - feat(orchestrate): derive blueprint phases from orchestrator-blueprints spec
 - feat(harness): implement `subagent-runtime` live execution via CLI subagents (`AIOS_SUBAGENT_CLIENT=codex-cli|claude-code|gemini-cli`)
 - feat(harness): prefer codex-cli v0.114+ structured exec outputs (`--output-schema`, `--output-last-message`, stdin) for stable JSON handoffs (falls back for older versions)
+- feat(skills): add scope-aware catalog-driven installation flow for `global` and `project`
+- feat(skills): expose project-oriented skills in both scope pickers without default selection
+- feat(skills): include `skill-constraints`, `aios-project-system`, `aios-long-running-harness`, and `contextdb-autopilot` in the default core set
+- feat(tui): show skill descriptions, group skills into `Core` / `Optional`, and show only installed skills during uninstall
+- fix(skills): warn when project installs override global installs during doctor checks
 - fix(learn-eval): route ContextDB quality failures to a concrete gate target
 - fix(ctx-agent): fail-open when context:pack fails (set CTXDB_PACK_STRICT=1 to make it fatal)
 - fix(ctx-agent): honor cmd-backed CLI wrappers by using shell-aware spawn specs (prevents Windows wrapper regressions)
@@ -17,6 +22,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - test(contextdb): add ContextDB quality gate to prevent context:pack regressions
 - docs: document orchestrate live execution + subagent runtime env controls
 - docs(blog): add a release note post for subagent runtime
+- docs(blog): add a release note post for scope-aware skills install UX
 
 ## [0.16.0] - 2026-03-10
 

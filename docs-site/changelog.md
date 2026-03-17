@@ -19,6 +19,10 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
   - bounded work-item queue scheduling with ownership hints
   - no-op fast path: auto-complete `reviewer` / `security-reviewer` when upstream handoffs touched no files
   - Windows PowerShell shell-smoke workflow on each push to `main` (`.github/workflows/windows-shell-smoke.yml`)
+  - scope-aware `skills` install flow with `global` / `project` target selection
+  - catalog-driven skill picker with core defaults, optional business skills, and uninstall showing installed items only
+  - TUI skill picker groups entries into `Core` and `Optional` with truncated descriptions for terminal readability
+  - `doctor` now warns when a project skill overrides a global install of the same name
 - `0.16.0` (2026-03-10): add orchestrator agent catalog and generators
 - `0.15.0` (2026-03-10): gate live orchestrate execution behind `AIOS_EXECUTE_LIVE`
 - `0.14.0` (2026-03-10): add `subagent-runtime` runtime adapter (stub)
@@ -41,6 +45,7 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
 
 ## Related Reading
 
+- [Blog: Skills install experience update](blog/2026-03-rexcli-skills-install-experience.md)
 - [Quick Start](getting-started.md)
 - [ContextDB](contextdb.md)
 - [Troubleshooting](troubleshooting.md)
