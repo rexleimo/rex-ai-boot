@@ -40,6 +40,8 @@ source ~/.zshrc
 aios
 ```
 
+The command above is the stable release install path. If you want unreleased `main` behavior, use the dev-friendly `git clone` flow from [Quick Start](getting-started.md) instead.
+
 Launch `aios` to open the full-screen setup TUI, choose **Setup**, and run **Doctor** before you leave.
 Windows PowerShell commands are listed on the [Quick Start](getting-started.md) page.
 

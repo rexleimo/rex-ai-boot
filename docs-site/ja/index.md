@@ -38,6 +38,8 @@ source ~/.zshrc
 aios
 ```
 
+上のコマンドは stable release 用インストール経路です。未リリースの `main` を使いたい場合は、[クイックスタート](getting-started.md) にある開発用 `git clone` 経路を使ってください。
+
 まず `aios` を起動して全画面 TUI を開き、**Setup** を選んで、最後に **Doctor** を実行してください。
 Windows PowerShell の手順は [クイックスタート](getting-started.md) にあります。
 

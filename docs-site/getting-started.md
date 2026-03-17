@@ -26,6 +26,8 @@ This repo installs to `~/.rexcil/rex-cli`. The unified entry is `aios`:
 
 ### Option C: One-liner installer (GitHub Releases)
 
+This is the stable installation path and depends on published GitHub Release assets.
+
 === "macOS / Linux"
 
     ```bash
@@ -43,6 +45,8 @@ This repo installs to `~/.rexcil/rex-cli`. The unified entry is `aios`:
     ```
 
 ### Option A: git clone (dev-friendly)
+
+Use this only when you explicitly want unreleased `main` branch behavior. This is the supported development install path, not the stable release path.
 
 === "macOS / Linux"
 

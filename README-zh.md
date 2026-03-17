@@ -510,6 +510,15 @@ scripts/release-version.sh major "breaking: 不兼容行为变更"
 scripts/release-version.sh --dry-run patch "示例说明"
 ```
 
+从已经提交的版本 bump 提交创建并发布稳定版 GitHub Release tag：
+
+```bash
+scripts/release-stable.sh --dry-run
+scripts/release-stable.sh
+```
+
+稳定安装走 GitHub Releases；开发安装只保留 `git clone main`，它不等同于带版本保证的 stable release。
+
 版本判断技能文件：
 
 - `.codex/skills/versioning-by-impact/SKILL.md`

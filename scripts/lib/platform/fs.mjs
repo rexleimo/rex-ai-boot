@@ -44,12 +44,15 @@ export function stripManagedBlock(content, beginMark, endMark) {
   const output = [];
   let skip = false;
 
+  const normalizeMarkerLine = (line) => line.replace(/^\uFEFF/u, '').trim();
+
   for (const line of lines) {
-    if (line === beginMark) {
+    const normalizedLine = normalizeMarkerLine(line);
+    if (normalizedLine === beginMark) {
       skip = true;
       continue;
     }
-    if (line === endMark) {
+    if (normalizedLine === endMark) {
       skip = false;
       continue;
     }

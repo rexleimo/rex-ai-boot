@@ -510,6 +510,15 @@ Preview without changing files:
 scripts/release-version.sh --dry-run patch "example summary"
 ```
 
+Create and publish the stable GitHub Release tag from the committed version-bump commit:
+
+```bash
+scripts/release-stable.sh --dry-run
+scripts/release-stable.sh
+```
+
+Stable install uses GitHub Releases. Development install uses `git clone` from `main` and is not a substitute for a versioned stable release.
+
 Versioning skill files:
 
 - `.codex/skills/versioning-by-impact/SKILL.md`

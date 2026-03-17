@@ -22,6 +22,8 @@ description: macOS, Linux, Windows를 하나의 절차로 통합하고 OS 탭으
 
 ### 방법 C: 원라이너 (GitHub Releases)
 
+이 경로는 stable 설치 경로이며, 게시된 GitHub Release asset 이 있어야 합니다.
+
 === "macOS / Linux"
 
     ```bash
@@ -39,6 +41,8 @@ description: macOS, Linux, Windows를 하나의 절차로 통합하고 OS 탭으
     ```
 
 ### 방법 A: git clone (개발용)
+
+미출시 `main` 브랜치 동작을 명시적으로 쓰고 싶을 때만 이 경로를 사용하세요. 이것은 개발용 설치 경로이며 stable release 경로가 아닙니다.
 
 === "macOS / Linux"
 

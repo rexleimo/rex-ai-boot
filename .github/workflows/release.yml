@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -40,6 +39,10 @@ jobs:
           cd mcp-server
           npm run typecheck
           npm run build
+
+      - name: Release preflight
+        run: |
+          scripts/release-preflight.sh --tag "${GITHUB_REF_NAME}"
 
       - name: Package release assets
         run: |

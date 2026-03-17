@@ -38,6 +38,8 @@ source ~/.zshrc
 aios
 ```
 
+위 명령은 stable release 설치 경로입니다. 미출시 `main` 동작을 쓰고 싶다면 [빠른 시작](getting-started.md)의 개발용 `git clone` 경로를 사용하세요.
+
 먼저 `aios`를 실행해 전체 화면 TUI를 열고 **Setup**을 선택한 뒤, 마지막에 **Doctor**를 실행하세요.
 Windows PowerShell 절차는 [빠른 시작](getting-started.md)에 있습니다.
 

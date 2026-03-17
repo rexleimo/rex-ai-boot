@@ -38,6 +38,8 @@ source ~/.zshrc
 aios
 ```
 
+上面这条命令是稳定版安装路径。如果你要使用未发布的 `main` 分支行为，请改走 [快速开始](getting-started.md) 里的开发用 `git clone` 路径。
+
 先运行 `aios` 打开全屏安装 TUI，选择 **Setup**，安装完成后再跑一次 **Doctor**。
 Windows PowerShell 命令请看 [快速开始](getting-started.md)。
 

@@ -132,6 +132,35 @@ test('windows shell install writes managed block to both PowerShell profiles', a
   assert.doesNotMatch(await readFile(winPsProfile, 'utf8'), /# >>> contextdb-shell >>>/);
 });
 
+test('windows shell uninstall removes managed block from BOM-prefixed PowerShell profiles', async () => {
+  const homeDir = await makeTemp('aios-shell-win-bom-home-');
+  const pwshProfile = path.join(homeDir, 'Documents', 'PowerShell', 'Microsoft.PowerShell_profile.ps1');
+  const winPsProfile = path.join(homeDir, 'Documents', 'WindowsPowerShell', 'Microsoft.PowerShell_profile.ps1');
+  const managedBlock = [
+    '\uFEFF# >>> contextdb-shell >>>',
+    '# ContextDB transparent CLI wrappers (codex/claude/gemini/opencode, PowerShell)',
+    'if (-not $env:ROOTPATH) { $env:ROOTPATH = "C:\\repo" }',
+    '$ctxShell = Join-Path $env:ROOTPATH "scripts/contextdb-shell.ps1"',
+    'if (Test-Path $ctxShell) {',
+    '  . $ctxShell',
+    '}',
+    '# <<< contextdb-shell <<<',
+    '',
+  ].join('\r\n');
+
+  await mkdir(path.dirname(pwshProfile), { recursive: true });
+  await mkdir(path.dirname(winPsProfile), { recursive: true });
+  await writeFile(pwshProfile, managedBlock, 'utf8');
+  await writeFile(winPsProfile, `${managedBlock}Write-Host "keep"\r\n`, 'utf8');
+
+  await uninstallContextDbShell({ platform: 'win32', homeDir });
+
+  assert.doesNotMatch(await readFile(pwshProfile, 'utf8'), /# >>> contextdb-shell >>>/);
+  assert.equal(await readFile(pwshProfile, 'utf8'), '');
+  assert.doesNotMatch(await readFile(winPsProfile, 'utf8'), /# >>> contextdb-shell >>>/);
+  assert.equal(await readFile(winPsProfile, 'utf8'), 'Write-Host "keep"\n');
+});
+
 test('shell install reuses existing ContextDB runtime without reinstall', async () => {
   const rootDir = await makeTemp('aios-shell-runtime-root-');
   const rcFile = path.join(rootDir, '.zshrc');
