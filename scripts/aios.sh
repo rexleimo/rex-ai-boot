@@ -2,13 +2,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NODE_MIN_MAJOR=20
+NODE_MIN_MAJOR=22
 
 print_node_help() {
   cat <<'EOF' >&2
 AIOS now uses Node.js as the unified lifecycle runtime.
 
-Install Node.js 20+ (recommended: 22 LTS), then rerun this command.
+Install Node.js 22 LTS, then rerun this command.
 
 macOS:
   brew install node
@@ -41,7 +41,7 @@ if ! command -v node >/dev/null 2>&1; then
     shift
     install_node
   elif [[ -t 0 && -t 1 ]]; then
-    printf 'Node.js 20+ is required. Install now? [y/N] ' >&2
+    printf 'Node.js 22+ is required. Install now? [y/N] ' >&2
     read -r answer
     if [[ "$answer" =~ ^[Yy]$ ]]; then
       install_node

@@ -11,6 +11,16 @@ function clearScreen() {
   process.stdout.write('\x1Bc');
 }
 
+function normalizePathForCompare(inputPath) {
+  let output = path.resolve(inputPath);
+  try {
+    output = fs.realpathSync(output);
+  } catch {
+    // Keep resolved path when the target does not exist yet.
+  }
+  return process.platform === 'win32' ? output.toLowerCase() : output;
+}
+
 function toAction(str, key) {
   if (key?.name === 'up') return 'up';
   if (key?.name === 'down') return 'down';
@@ -39,6 +49,7 @@ function collectInstalledSkills({ rootDir, projectRoot, catalogSkills }) {
     global: {},
     project: {},
   };
+  const allowProjectInstallMarkers = normalizePathForCompare(projectRoot) !== normalizePathForCompare(rootDir);
 
   for (const skill of catalogSkills) {
     for (const client of Array.isArray(skill.clients) ? skill.clients : []) {
@@ -51,7 +62,7 @@ function collectInstalledSkills({ rootDir, projectRoot, catalogSkills }) {
         installedSkills.global[client] = installedSkills.global[client] || [];
         installedSkills.global[client].push(skill.name);
       }
-      if (fs.existsSync(projectPath)) {
+      if (allowProjectInstallMarkers && fs.existsSync(projectPath)) {
         installedSkills.project[client] = installedSkills.project[client] || [];
         installedSkills.project[client].push(skill.name);
       }

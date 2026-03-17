@@ -20,9 +20,13 @@ description: 版本历史、升级说明与文档变更入口。
   - 新增 no-op 快路径：上游 `filesTouched=[]` 时自动完成 `reviewer` / `security-reviewer`
   - 新增 Windows PowerShell 冒烟工作流：每次 push `main` 触发（`.github/workflows/windows-shell-smoke.yml`）
   - `skills` 安装支持 `global` / `project` 两种范围选择
+  - 仓库内 canonical skill authoring tree 收口到 `skill-sources/`，repo-local client roots 改为 `node scripts/sync-skills.mjs` 生成
+  - `skills` 默认安装模式改为可移植的 `copy`，保留显式 `--install-mode link` 作为本地开发选项
+  - release 打包与 preflight 会通过 `check-skills-sync` 校验生成目录没有漂移
   - skill 选择器改为 catalog 驱动，区分核心默认项与按需业务项；卸载时只显示已安装技能
   - TUI skill picker 新增 `Core` / `Optional` 分组，并对长描述做终端友好截断
   - `doctor` 会提示同名 skill 的 `project` 安装覆盖 `global` 安装
+  - Node 运行时口径统一到 22 LTS
 - `0.16.0`（2026-03-10）：新增 orchestrator agent catalog 与生成器
 - `0.15.0`（2026-03-10）：`orchestrate live` 默认门禁（`AIOS_EXECUTE_LIVE`）
 - `0.14.0`（2026-03-10）：新增 `subagent-runtime` 运行时适配器（stub）

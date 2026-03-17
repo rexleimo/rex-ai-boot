@@ -20,9 +20,13 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
   - no-op fast path: auto-complete `reviewer` / `security-reviewer` when upstream handoffs touched no files
   - Windows PowerShell shell-smoke workflow on each push to `main` (`.github/workflows/windows-shell-smoke.yml`)
   - scope-aware `skills` install flow with `global` / `project` target selection
+  - canonical skill authoring now lives in `skill-sources/`, with repo-local client roots generated via `node scripts/sync-skills.mjs`
+  - default skills install mode is now portable `copy`; explicit `--install-mode link` remains available for local development
+  - release packaging/preflight now validates generated skill roots with `check-skills-sync`
   - catalog-driven skill picker with core defaults, optional business skills, and uninstall showing installed items only
   - TUI skill picker groups entries into `Core` and `Optional` with truncated descriptions for terminal readability
   - `doctor` now warns when a project skill overrides a global install of the same name
+  - Node runtime guidance is now explicitly aligned on Node 22 LTS
 - `0.17.0` (2026-03-17):
   - TUI uninstall picker now scrolls in smaller terminals and keeps `Select all` / `Clear all` / `Done` anchored at the bottom
   - uninstall cursor selection now stays aligned with the rendered grouped list

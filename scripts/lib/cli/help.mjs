@@ -41,6 +41,7 @@ Options:
   --mode <all|repo-only|opt-in|off>
   --client <all|codex|claude|gemini|opencode>
   --scope <global|project>       Skills install scope (default: global)
+  --install-mode <copy|link>     Skills install mode (default: copy)
   --skills <list>                Comma list of skill names to install
   --skip-playwright-install
   --skip-doctor
@@ -55,6 +56,7 @@ Options:
   --mode <all|repo-only|opt-in|off>
   --client <all|codex|claude|gemini|opencode>
   --scope <global|project>       Skills install scope (default: global)
+  --install-mode <copy|link>     Skills install mode (default: copy)
   --skills <list>                Comma list of skill names to install
   --with-playwright-install
   --skip-doctor
@@ -173,7 +175,7 @@ export function getInternalHelpText(target, action) {
 
   if (target === 'skills' && (action === 'install' || action === 'update')) {
     return `Usage:
-  node scripts/aios.mjs internal skills ${action} [--client <all|codex|claude|gemini|opencode>] [--scope <global|project>] [--skills <list>] [--force]
+  node scripts/aios.mjs internal skills ${action} [--client <all|codex|claude|gemini|opencode>] [--scope <global|project>] [--install-mode <copy|link>] [--skills <list>] [--force]
 `;
   }
 

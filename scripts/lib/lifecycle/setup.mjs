@@ -3,6 +3,7 @@ import {
   hasComponent,
   normalizeClient,
   normalizeComponents,
+  normalizeSkillInstallMode,
   normalizeSkillNames,
   normalizeSkillScope,
   normalizeWrapMode,
@@ -21,6 +22,7 @@ export function normalizeSetupOptions(rawOptions = {}) {
     wrapMode: normalizeWrapMode(rawOptions.wrapMode ?? defaults.wrapMode),
     client: normalizeClient(rawOptions.client ?? defaults.client),
     scope: normalizeSkillScope(rawOptions.scope ?? defaults.scope),
+    installMode: normalizeSkillInstallMode(rawOptions.installMode ?? defaults.installMode),
     skills: normalizeSkillNames(rawOptions.skills ?? defaults.skills),
     skipPlaywrightInstall: Boolean(rawOptions.skipPlaywrightInstall ?? defaults.skipPlaywrightInstall),
     skipDoctor: Boolean(rawOptions.skipDoctor ?? defaults.skipDoctor),
@@ -35,6 +37,7 @@ export function planSetup(rawOptions = {}) {
     '--mode', options.wrapMode,
     '--client', options.client,
     '--scope', options.scope,
+    '--install-mode', options.installMode,
   ];
   if (options.skills.length > 0) args.push('--skills', options.skills.join(','));
   if (options.skipPlaywrightInstall) args.push('--skip-playwright-install');
@@ -66,7 +69,15 @@ export async function runSetup(rawOptions = {}, { rootDir, projectRoot = rootDir
   }
 
   if (hasComponent(options.components, 'skills')) {
-    await installContextDbSkills({ rootDir, projectRoot, client: options.client, scope: options.scope, selectedSkills: options.skills, io });
+    await installContextDbSkills({
+      rootDir,
+      projectRoot,
+      client: options.client,
+      scope: options.scope,
+      installMode: options.installMode,
+      selectedSkills: options.skills,
+      io,
+    });
     if (!options.skipDoctor) {
       await doctorContextDbSkills({ rootDir, projectRoot, client: options.client, scope: options.scope, selectedSkills: options.skills, io });
     }

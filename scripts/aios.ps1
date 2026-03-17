@@ -24,7 +24,7 @@ function Install-NodeNow {
     return
   }
 
-  throw 'Node.js 20+ is required. Install it manually or use winget.'
+  throw 'Node.js 22+ is required. Install it manually or use winget.'
 }
 
 $nodePath = Get-NodePath
@@ -33,7 +33,7 @@ if (-not $nodePath) {
     Install-NodeNow
     $nodePath = Get-NodePath
   } elseif ($Host.Name -and $Host.UI) {
-    $reply = Read-Host 'Node.js 20+ is required. Install now with winget? [y/N]'
+    $reply = Read-Host 'Node.js 22+ is required. Install now with winget? [y/N]'
     if ($reply -match '^(y|yes)$') {
       Install-NodeNow
       $nodePath = Get-NodePath
@@ -42,12 +42,12 @@ if (-not $nodePath) {
 }
 
 if (-not $nodePath) {
-  throw 'AIOS now uses Node.js as the unified lifecycle runtime. Install Node.js 20+ (recommended: 22 LTS) and rerun.'
+  throw 'AIOS now uses Node.js as the unified lifecycle runtime. Install Node.js 22 LTS and rerun.'
 }
 
 $nodeMajor = (& $nodePath -p "process.versions.node.split('.')[0]")
-if ([int]$nodeMajor -lt 20) {
-  throw "Node.js 20+ is required (found $(& $nodePath -v))."
+if ([int]$nodeMajor -lt 22) {
+  throw "Node.js 22+ is required (found $(& $nodePath -v))."
 }
 
 $forward = @()

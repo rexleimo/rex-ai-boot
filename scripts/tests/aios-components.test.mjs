@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { lstat, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -178,16 +178,16 @@ test('shell install reuses existing ContextDB runtime without reinstall', async 
   assert.equal(called, false);
 });
 
-test('skills install links repo-managed skills and uninstall removes them', async () => {
+test('skills install copies repo-managed skills by default and uninstall removes them', async () => {
   const rootDir = await makeTemp('aios-skills-root-');
-  const codexSkillDir = path.join(rootDir, '.codex', 'skills', 'sample-skill');
+  const codexSkillDir = path.join(rootDir, 'skill-sources', 'sample-skill');
   await mkdir(codexSkillDir, { recursive: true });
   await writeFile(path.join(codexSkillDir, 'SKILL.md'), '# sample\n', 'utf8');
   await writeSkillsCatalog(rootDir, [
     {
       name: 'sample-skill',
       description: 'sample',
-      source: '.codex/skills/sample-skill',
+      source: 'skill-sources/sample-skill',
       clients: ['codex'],
       scopes: ['global'],
       defaultInstall: { global: true, project: false },
@@ -202,9 +202,11 @@ test('skills install links repo-managed skills and uninstall removes them', asyn
     homeMap: { codex: codexHome },
   });
 
-  const linkPath = path.join(codexHome, 'skills', 'sample-skill');
-  const stat = await readFile(path.join(linkPath, 'SKILL.md'), 'utf8');
-  assert.match(stat, /sample/);
+  const installPath = path.join(codexHome, 'skills', 'sample-skill');
+  const body = await readFile(path.join(installPath, 'SKILL.md'), 'utf8');
+  assert.match(body, /sample/);
+  assert.equal((await lstat(installPath)).isSymbolicLink(), false);
+  assert.match(await readFile(path.join(installPath, '.aios-skill-install.json'), 'utf8'), /"installMode": "copy"/);
 
   await uninstallContextDbSkills({
     rootDir,
@@ -214,7 +216,7 @@ test('skills install links repo-managed skills and uninstall removes them', asyn
 
   let missing = false;
   try {
-    await readFile(path.join(linkPath, 'SKILL.md'), 'utf8');
+    await readFile(path.join(installPath, 'SKILL.md'), 'utf8');
   } catch {
     missing = true;
   }

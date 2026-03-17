@@ -199,7 +199,7 @@ User -> codex/claude/gemini
 ## 前置条件
 
 - Git
-- Node.js **20+**（推荐：**22 LTS**）并带 `npm`
+- Node.js **22 LTS** 并带 `npm`
 - Windows：PowerShell（Windows PowerShell 5.x 或 PowerShell 7）
 - 可选（仅文档站点）：Python 3.10+（`pip install -r docs-requirements.txt`）
 
@@ -367,15 +367,18 @@ ContextDB 包装和 CLI 的 Skills 加载是两层机制：
 
 - 包装范围由上面的 `CTXDB_WRAP_MODE` 控制。
 - 使用上面的 skills 生命周期脚本完成安装/更新/卸载/诊断。
-- `aios` 的 skills 安装由 `config/skills-catalog.json` 驱动，不再是“扫描到什么就全装什么”。
-- skills 安装脚本默认会跳过同名已有目录；只有你明确要替换时再使用 `--force` / `-Force`。
-- 用 `--scope global` 把通用技能安装到用户 home；用 `--scope project` 把技能安装到当前仓库。
+- 仓库内 skills 的 canonical 源文件现在统一放在 `skill-sources/`；repo-local 的 `.codex/skills`、`.claude/skills`、`.agents/skills` 是由 `node scripts/sync-skills.mjs` 生成的兼容输出。
+- `aios` 的 skills 安装由 `config/skills-catalog.json` 驱动，catalog 里的 `source` 现在指向 `skill-sources/<skill>`。
+- skills 安装默认使用可移植的 copy 模式；`--install-mode link` 只适合明确要回链到当前仓库的本地开发场景。
+- skills 安装脚本默认会跳过同名但未受管的已有目录；只有你明确要替换已受管安装时再使用 `--force`。
+- 用 `--scope global` 把通用技能安装到用户 home；用 `--scope project` 把技能安装到另一个工作区。当前 source repo 自己的 repo-local skill roots 由 sync 管理，所以当 `projectRoot === rootDir` 时请改用 `node scripts/sync-skills.mjs`。
 - 用 `--skills <name1,name2>` 只安装或卸载你明确选中的技能。
 - skills doctor 无论当前选择的是哪个 scope，都会报告同名技能的 project 覆盖 global 冲突。
-- 安装在 `~/.codex/skills`、`~/.claude/skills`、`~/.gemini/skills`、`~/.config/opencode/skills` 的技能是全局可见。
-- 仅项目可见的技能应放在 `<repo>/.codex/skills`、`<repo>/.claude/skills`。
+- 安装在 `~/.codex/skills`、`~/.claude/skills`、`~/.gemini/skills`、`~/.config/opencode/skills` 的技能是全局安装目标。
+- 项目级技能会安装到 `<repo>/.codex/skills`、`<repo>/.claude/skills`、`<repo>/.gemini/skills`、`<repo>/.opencode/skills`；但本仓库的 canonical authoring tree 仍然是 `skill-sources/`。
 - 即梦、小红书这类强业务工作流技能通常应保持为项目级，而不是默认全局安装。
-- 不要把带 `SKILL.md` 的可发现技能放进 `.baoyu-skills/` 之类的平行目录；这类目录不会被 Codex/Claude 当作 repo-local skills 发现。`.baoyu-skills/` 只适合放 `EXTEND.md` 这类扩展配置。
+- 在发版前运行 `node scripts/check-skills-sync.mjs`，确认生成目录仍与 `skill-sources/` 保持一致。
+- 不要把带 `SKILL.md` 的可发现技能放进 `.baoyu-skills/` 之类的平行目录；这类目录不会被 Codex/Claude 当作 repo-local skills 发现。本仓库唯一受支持的 canonical skills authoring root 是 `skill-sources/`。
 - `CODEX_HOME` 可以使用相对路径（包装器会在运行时按当前工作目录解析），但全局场景仍推荐绝对路径以减少歧义。
 
 如果你不希望跨项目复用技能，请把自定义技能放在仓库本地目录，而不是 `~` 下的全局目录。
@@ -388,6 +391,9 @@ node scripts/aios.mjs setup --components skills --client codex --scope global --
 
 # 把仓库专用工作流技能安装到当前项目
 node scripts/aios.mjs setup --components skills --client codex --scope project --skills xhs-ops-methods,aios-jimeng-image-ops
+
+# 仅本地开发使用：保持技能安装回链到当前仓库
+node scripts/aios.mjs setup --components skills --client codex --scope global --install-mode link --skills find-skills
 ```
 
 ### 3.3 Privacy Guard（默认严格）
@@ -521,8 +527,8 @@ scripts/release-stable.sh
 
 版本判断技能文件：
 
-- `.codex/skills/versioning-by-impact/SKILL.md`
-- `.claude/skills/versioning-by-impact/SKILL.md`
+- `skill-sources/versioning-by-impact/SKILL.md`
+- 生成后的镜像会同步到 `.codex/skills/versioning-by-impact/` 和 `.claude/skills/versioning-by-impact/`
 
 ## 开发验证
 

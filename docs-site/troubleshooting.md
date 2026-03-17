@@ -9,6 +9,24 @@ description: Common setup/runtime issues and direct fixes.
 
 Most failures are setup-scope issues (missing MCP runtime, wrapper not loaded, or wrong wrap mode). Start with doctor scripts, then check wrapper scope.
 
+## `better-sqlite3` / ContextDB fails after switching Node
+
+RexCLI now targets **Node 22 LTS**. If your shell is still running Node 25 or an older ABI-incompatible install, ContextDB-related commands can fail even when the repo code is correct.
+
+Quick fix:
+
+```bash
+node -v
+source ~/.nvm/nvm.sh && nvm use 22
+cd mcp-server && npm rebuild better-sqlite3
+```
+
+Then retry:
+
+```bash
+npm run test:scripts
+```
+
 ## Browser MCP tools unavailable
 
 Run (macOS / Linux):
@@ -181,6 +199,23 @@ Skill loading scope is separate from ContextDB wrapping:
 
 If you need isolation, keep custom skills in repo-local folders.
 
+## `--scope project` fails inside the RexCLI source repo
+
+This is expected after the canonical skill-source migration.
+
+- `skill-sources/` is the authoring tree
+- repo-local `.codex/skills` / `.claude/skills` / `.agents/skills` are sync-owned generated outputs
+- installing `--scope project` into the source repo is blocked on purpose
+
+Use this instead:
+
+```bash
+node scripts/sync-skills.mjs
+node scripts/check-skills-sync.mjs
+```
+
+If you want to install skills into some other repo, run `aios ... --scope project` from that target workspace.
+
 ## Repo skills are not available globally
 
 Wrappers and skills are separate by design. Install skills explicitly:
@@ -218,7 +253,11 @@ Usually because the wrapper is not loaded, wrapper scope (`CTXDB_WRAP_MODE`) exc
 
 ## Skills were saved into the wrong repo directory
 
-Repo-local discoverable skills should only live in:
+Canonical repo skill sources now live in:
+
+- `<repo>/skill-sources`
+
+Generated repo-local discoverable outputs live in:
 
 - `<repo>/.codex/skills`
 - `<repo>/.claude/skills`
@@ -226,5 +265,6 @@ Repo-local discoverable skills should only live in:
 If you save a `SKILL.md` under a parallel directory such as `.baoyu-skills/`, Codex / Claude will not discover it as a repo-local skill.
 
 - Use `.baoyu-skills/` only for extension config such as `EXTEND.md`
-- Move real skills to `.codex/skills/<name>/SKILL.md` or `.claude/skills/<name>/SKILL.md`
+- Move real canonical skill source files to `skill-sources/<name>/SKILL.md`
+- Rebuild generated client roots with `node scripts/sync-skills.mjs`
 - Run `scripts/doctor-contextdb-skills.sh --client all` to detect unsupported repo skill roots

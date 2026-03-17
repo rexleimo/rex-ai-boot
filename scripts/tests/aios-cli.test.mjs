@@ -37,6 +37,49 @@ test('parseArgs accepts skills scope and selected skill names', () => {
   assert.deepEqual(result.options.skills, ['find-skills', 'xhs-ops-methods']);
 });
 
+test('parseArgs accepts install mode for skills workflows', () => {
+  const setupResult = parseArgs([
+    'setup',
+    '--components',
+    'skills',
+    '--client',
+    'codex',
+    '--install-mode',
+    'link',
+  ]);
+  assert.equal(setupResult.command, 'setup');
+  assert.equal(setupResult.options.installMode, 'link');
+
+  const updateResult = parseArgs([
+    'update',
+    '--components',
+    'skills',
+    '--client',
+    'codex',
+    '--install-mode',
+    'copy',
+  ]);
+  assert.equal(updateResult.command, 'update');
+  assert.equal(updateResult.options.installMode, 'copy');
+
+  const internalResult = parseArgs([
+    'internal',
+    'skills',
+    'install',
+    '--client',
+    'codex',
+    '--install-mode',
+    'link',
+  ]);
+  assert.equal(internalResult.command, 'internal');
+  assert.equal(internalResult.options.target, 'skills');
+  assert.equal(internalResult.options.installMode, 'link');
+});
+
+test('parseArgs rejects invalid install mode', () => {
+  assert.throws(() => parseArgs(['setup', '--install-mode', 'portable']), /--install-mode must be one of/);
+});
+
 test('parseArgs rejects invalid skills scope', () => {
   assert.throws(() => parseArgs(['setup', '--scope', 'workspace']), /--scope must be one of/);
 });

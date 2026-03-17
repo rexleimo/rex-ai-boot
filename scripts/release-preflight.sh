@@ -14,6 +14,7 @@ Validates:
   - tag format is vX.Y.Z
   - VERSION matches X.Y.Z
   - CHANGELOG.md contains ## [X.Y.Z] - YYYY-MM-DD
+  - generated skill roots match skill-sources via scripts/check-skills-sync.mjs
 EOF
 }
 
@@ -69,6 +70,17 @@ if ! grep -Eq "^## \\[$EXPECTED_VERSION\\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$" "$CHAN
   exit 1
 fi
 
+if ! command -v node >/dev/null 2>&1; then
+  echo "missing required command: node" >&2
+  exit 1
+fi
+
+if ! node "$ROOT_DIR/scripts/check-skills-sync.mjs" >/dev/null; then
+  echo "skills sync drift detected; run: node scripts/sync-skills.mjs" >&2
+  exit 1
+fi
+
 echo "[ok] release preflight passed for $TAG"
 echo "  VERSION:   $VERSION"
 echo "  CHANGELOG: has ## [$EXPECTED_VERSION] - YYYY-MM-DD"
+echo "  SKILLS:    generated roots match skill-sources/"

@@ -199,7 +199,7 @@ User -> codex/claude/gemini
 ## Prerequisites
 
 - Git
-- Node.js **20+** (recommended: **22 LTS**) with `npm`
+- Node.js **22 LTS** with `npm`
 - Windows: PowerShell (Windows PowerShell 5.x or PowerShell 7)
 - Optional (docs only): Python 3.10+ for MkDocs (`pip install -r docs-requirements.txt`)
 
@@ -367,15 +367,18 @@ ContextDB wrapping and CLI skill loading are different layers:
 
 - Wrapping scope is controlled by `CTXDB_WRAP_MODE` above.
 - Use skill lifecycle scripts above for install/update/uninstall/doctor.
-- `aios` skill installs are catalog-driven via `config/skills-catalog.json`, not "install everything found in the repo".
-- Skill installers skip existing same-name targets by default; use `--force` / `-Force` only when you intentionally replace them.
-- Use `--scope global` to install reusable skills into home directories, or `--scope project` to install them into the current repo.
+- Canonical repo skill sources now live under `skill-sources/`; repo-local `.codex/skills`, `.claude/skills`, and `.agents/skills` are generated compatibility outputs owned by `node scripts/sync-skills.mjs`.
+- `aios` skill installs are catalog-driven via `config/skills-catalog.json`, and catalog `source` paths now point at `skill-sources/<skill>`.
+- Skill installers default to portable copy installs; use `--install-mode link` only for local authoring/dev flows that intentionally point back to this repo.
+- Skill installers skip existing same-name unmanaged targets by default; use `--force` only when you intentionally replace an already managed install.
+- Use `--scope global` to install reusable skills into home directories, or `--scope project` to install them into another workspace. The source repo itself is sync-owned, so use `node scripts/sync-skills.mjs` instead of `--scope project` when `projectRoot === rootDir`.
 - Use `--skills <name1,name2>` to install or remove only the skills you selected.
 - Skills doctor always reports project-overrides-global collisions for the same skill name, regardless of the selected scope.
-- Skills installed in `~/.codex/skills`, `~/.claude/skills`, `~/.gemini/skills`, or `~/.config/opencode/skills` are global.
-- Project-only skills should live in `<repo>/.codex/skills` or `<repo>/.claude/skills`.
+- Skills installed in `~/.codex/skills`, `~/.claude/skills`, `~/.gemini/skills`, or `~/.config/opencode/skills` are global install targets.
+- Project-only skills install into `<repo>/.codex/skills`, `<repo>/.claude/skills`, `<repo>/.gemini/skills`, or `<repo>/.opencode/skills`; the canonical authoring tree in this repo is still `skill-sources/`.
 - Business-specific skills such as Jimeng or Xiaohongshu workflows should usually stay project-scoped instead of global.
-- Do not place discoverable `SKILL.md` files inside parallel folders such as `.baoyu-skills/`; Codex/Claude will not treat them as repo-local skills. Use `.baoyu-skills/` only for extension config such as `EXTEND.md`.
+- Run `node scripts/check-skills-sync.mjs` before release work to verify generated skill roots still match `skill-sources/`.
+- Do not place discoverable `SKILL.md` files inside parallel folders such as `.baoyu-skills/`; Codex/Claude will not treat them as repo-local skills. In this repo, `skill-sources/` is the only supported authoring root for canonical skills.
 - `CODEX_HOME` can be relative (wrappers resolve it against current working directory at runtime), but absolute paths are more predictable for global setups.
 
 If you don't want cross-project skill reuse, keep custom skills in repo-local folders instead of global home directories.
@@ -388,6 +391,9 @@ node scripts/aios.mjs setup --components skills --client codex --scope global --
 
 # install repo-specific workflow skills into the current project
 node scripts/aios.mjs setup --components skills --client codex --scope project --skills xhs-ops-methods,aios-jimeng-image-ops
+
+# local-dev-only: keep installs linked back to this repo
+node scripts/aios.mjs setup --components skills --client codex --scope global --install-mode link --skills find-skills
 ```
 
 ### 3.3 Privacy Guard (strict by default)
@@ -521,8 +527,8 @@ Stable install uses GitHub Releases. Development install uses `git clone` from `
 
 Versioning skill files:
 
-- `.codex/skills/versioning-by-impact/SKILL.md`
-- `.claude/skills/versioning-by-impact/SKILL.md`
+- `skill-sources/versioning-by-impact/SKILL.md`
+- Generated mirrors are synced into `.codex/skills/versioning-by-impact/` and `.claude/skills/versioning-by-impact/`
 
 ## Verification
 

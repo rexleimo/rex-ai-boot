@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "generatedRoots": {
+    "codex": ".codex/skills",
+    "claude": ".claude/skills",
+    "gemini": ".gemini/skills",
+    "opencode": ".opencode/skills",
+    "agents": ".agents/skills"
+  },
+  "skills": [
+    {
+      "relativeSkillPath": "find-skills",
+      "installCatalogName": "find-skills",
+      "repoTargets": ["codex", "claude", "gemini", "opencode", "agents"]
+    },
+    {
+      "relativeSkillPath": "search-first",
+      "installCatalogName": "search-first",
+      "repoTargets": ["codex", "claude", "gemini", "opencode"]
+    },
+    {
+      "relativeSkillPath": "security-scan",
+      "installCatalogName": "security-scan",
+      "repoTargets": ["codex", "claude", "gemini", "opencode"]
+    },
+    {
+      "relativeSkillPath": "verification-loop",
+      "installCatalogName": "verification-loop",
+      "repoTargets": ["codex", "claude", "gemini", "opencode"]
+    },
+    {
+      "relativeSkillPath": "versioning-by-impact",
+      "installCatalogName": "versioning-by-impact",
+      "repoTargets": ["codex", "claude", "gemini", "opencode"]
+    },
+    {
+      "relativeSkillPath": "seo-geo-page-optimization",
+      "installCatalogName": "seo-geo-page-optimization",
+      "repoTargets": ["codex", "claude"]
+    },
+    {
+      "relativeSkillPath": "skill-constraints",
+      "installCatalogName": "skill-constraints",
+      "repoTargets": ["codex", "claude", "gemini", "opencode"]
+    },
+    {
+      "relativeSkillPath": "aios-project-system",
+      "installCatalogName": "aios-project-system",
+      "repoTargets": ["codex", "claude"]
+    },
+    {
+      "relativeSkillPath": "aios-long-running-harness",
+      "installCatalogName": "aios-long-running-harness",
+      "repoTargets": ["codex", "claude"]
+    },
+    {
+      "relativeSkillPath": "contextdb-autopilot",
+      "installCatalogName": "contextdb-autopilot",
+      "repoTargets": ["codex", "claude"]
+    },
+    {
+      "relativeSkillPath": "cap-commit-push",
+      "installCatalogName": "cap-commit-push",
+      "repoTargets": ["codex", "claude"]
+    },
+    {
+      "relativeSkillPath": "aios-jimeng-image-ops",
+      "installCatalogName": "aios-jimeng-image-ops",
+      "repoTargets": ["codex", "claude"]
+    },
+    {
+      "relativeSkillPath": "seed2-manga-drama",
+      "installCatalogName": "seed2-manga-drama",
+      "repoTargets": ["codex", "claude"]
+    },
+    {
+      "relativeSkillPath": "xhs-ops-methods",
+      "installCatalogName": "xhs-ops-methods",
+      "repoTargets": ["codex", "claude"]
+    },
+    {
+      "relativeSkillPath": ".system/skill-creator",
+      "installCatalogName": null,
+      "repoTargets": ["codex", "claude"],
+      "targetRelativePathBySurface": {
+        "codex": ".system/skill-creator",
+        "claude": "skill-creator"
+      }
+    },
+    {
+      "relativeSkillPath": ".system/skill-installer",
+      "installCatalogName": null,
+      "repoTargets": ["codex"],
+      "targetRelativePathBySurface": {
+        "codex": ".system/skill-installer"
+      }
+    }
+  ],
+  "legacyReplaceable": [
+    ".claude/skills/skill-creator"
+  ],
+  "legacyUnmanaged": [
+    ".claude/skills/baoyu-xhs-images"
+  ]
+}

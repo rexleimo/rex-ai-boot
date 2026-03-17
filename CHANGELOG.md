@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-03-17
+
+- feat(skills): adopt canonical skill source tree and standardize on node 22
+
 - feat(aios): wire orchestrator agents into lifecycle components
 - feat(orchestrate): derive blueprint phases from orchestrator-blueprints spec
 - feat(harness): implement `subagent-runtime` live execution via CLI subagents (`AIOS_SUBAGENT_CLIENT=codex-cli|claude-code|gemini-cli`)

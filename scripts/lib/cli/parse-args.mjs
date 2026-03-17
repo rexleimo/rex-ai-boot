@@ -17,6 +17,7 @@ import {
   normalizeOrchestrateExecutionMode,
   normalizeOrchestratePreflightMode,
   normalizeQualityGateMode,
+  normalizeSkillInstallMode,
   normalizeSkillNames,
   normalizeSkillScope,
   normalizeWrapMode,
@@ -91,6 +92,13 @@ function parseInternalArgs(argv) {
         break;
       case '--skills':
         options.skills = normalizeSkillNames(takeValue(rest, index, '--skills'));
+        index += 1;
+        break;
+      case '--install-mode':
+        if (target !== 'skills') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.installMode = normalizeSkillInstallMode(takeValue(rest, index, '--install-mode'));
         index += 1;
         break;
       case '--rc-file':
@@ -225,6 +233,13 @@ function parseTopLevelArgs(command, argv) {
           throw new Error(`Unknown option: ${arg}`);
         }
         options.skills = normalizeSkillNames(takeValue(rest, index, '--skills'));
+        index += 1;
+        break;
+      case '--install-mode':
+        if (command !== 'setup' && command !== 'update') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.installMode = normalizeSkillInstallMode(takeValue(rest, index, '--install-mode'));
         index += 1;
         break;
       case '--skip-playwright-install':

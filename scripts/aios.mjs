@@ -35,8 +35,28 @@ async function runInternal(options) {
 
   if (target === 'skills') {
     const module = await import('./lib/components/skills.mjs');
-    if (action === 'install') return module.installContextDbSkills({ rootDir, projectRoot, client: options.client ?? 'all', scope: options.scope ?? 'global', selectedSkills: options.skills ?? [], force: Boolean(options.force) });
-    if (action === 'update') return module.installContextDbSkills({ rootDir, projectRoot, client: options.client ?? 'all', scope: options.scope ?? 'global', selectedSkills: options.skills ?? [], force: true });
+    if (action === 'install') {
+      return module.installContextDbSkills({
+        rootDir,
+        projectRoot,
+        client: options.client ?? 'all',
+        scope: options.scope ?? 'global',
+        installMode: options.installMode ?? 'copy',
+        selectedSkills: options.skills ?? [],
+        force: Boolean(options.force),
+      });
+    }
+    if (action === 'update') {
+      return module.installContextDbSkills({
+        rootDir,
+        projectRoot,
+        client: options.client ?? 'all',
+        scope: options.scope ?? 'global',
+        installMode: options.installMode ?? 'copy',
+        selectedSkills: options.skills ?? [],
+        force: true,
+      });
+    }
     if (action === 'uninstall') return module.uninstallContextDbSkills({ rootDir, projectRoot, client: options.client ?? 'all', scope: options.scope ?? 'global', selectedSkills: options.skills ?? [] });
     if (action === 'doctor') return module.doctorContextDbSkills({ rootDir, projectRoot, client: options.client ?? 'all', scope: options.scope ?? 'global', selectedSkills: options.skills ?? [] });
   }

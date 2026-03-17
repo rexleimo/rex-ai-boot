@@ -83,6 +83,7 @@ paths=(
   "README.md"
   "README-zh.md"
   "skills-lock.json"
+  "skill-sources"
   "config"
   "scripts"
   "mcp-server"

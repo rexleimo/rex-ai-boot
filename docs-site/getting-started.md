@@ -13,7 +13,7 @@ This page combines macOS, Linux, and Windows setup into one flow. Use the OS tab
 
 ## Prerequisites
 
-- Node.js **20+** (recommended: **22 LTS**) and `npm`
+- Node.js **22 LTS** and `npm`
 - At least one CLI installed: `codex`, `claude`, or `gemini`
 - A project/workspace directory where you want project-scoped ContextDB memory
 
@@ -82,10 +82,24 @@ After install, use the TUI as the main onboarding path for this release:
 4. If you enable **Skills**, the picker now helps distinguish states:
    - setup/update mark already-installed skills with `(installed)`
    - uninstall shows only installed skills, supports scrolling, and offers **Select all** / **Clear all**
+   - installs default to portable `copy` mode; use `--install-mode link` only when you intentionally want a local-dev link back to this repo
 5. When setup finishes, run **Doctor** in the same TUI
 6. Reload your shell if you installed shell wrappers:
    - macOS / Linux: `source ~/.zshrc`
    - Windows PowerShell: `. $PROFILE`
+
+### Repo contributors: skills now come from `skill-sources/`
+
+If you are editing this repo itself rather than just installing it:
+
+- canonical skill source files live under `skill-sources/`
+- repo-local `.codex/skills`, `.claude/skills`, `.agents/skills`, `.gemini/skills`, and `.opencode/skills` are generated compatibility outputs
+- regenerate them with:
+
+```bash
+node scripts/sync-skills.mjs
+node scripts/check-skills-sync.mjs
+```
 
 ### 0.1 Privacy Guard Strict Read (enabled by default)
 

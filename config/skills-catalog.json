@@ -4,7 +4,7 @@
     {
       "name": "find-skills",
       "description": "Discover installable skills.",
-      "source": ".codex/skills/find-skills",
+      "source": "skill-sources/find-skills",
       "clients": ["codex", "claude", "gemini", "opencode"],
       "scopes": ["global", "project"],
       "defaultInstall": {
@@ -16,7 +16,7 @@
     {
       "name": "search-first",
       "description": "Research-before-building workflow.",
-      "source": ".codex/skills/search-first",
+      "source": "skill-sources/search-first",
       "clients": ["codex", "claude", "gemini", "opencode"],
       "scopes": ["global", "project"],
       "defaultInstall": {
@@ -28,7 +28,7 @@
     {
       "name": "security-scan",
       "description": "Lightweight security hygiene for agent configs.",
-      "source": ".codex/skills/security-scan",
+      "source": "skill-sources/security-scan",
       "clients": ["codex", "claude", "gemini", "opencode"],
       "scopes": ["global", "project"],
       "defaultInstall": {
@@ -40,7 +40,7 @@
     {
       "name": "verification-loop",
       "description": "Evidence-before-assertions workflow.",
-      "source": ".codex/skills/verification-loop",
+      "source": "skill-sources/verification-loop",
       "clients": ["codex", "claude", "gemini", "opencode"],
       "scopes": ["global", "project"],
       "defaultInstall": {
@@ -52,7 +52,7 @@
     {
       "name": "versioning-by-impact",
       "description": "Decide semantic versioning impact before release.",
-      "source": ".codex/skills/versioning-by-impact",
+      "source": "skill-sources/versioning-by-impact",
       "clients": ["codex", "claude", "gemini", "opencode"],
       "scopes": ["global", "project"],
       "defaultInstall": {
@@ -64,7 +64,7 @@
     {
       "name": "seo-geo-page-optimization",
       "description": "Optimize a page for SEO and GEO.",
-      "source": ".codex/skills/seo-geo-page-optimization",
+      "source": "skill-sources/seo-geo-page-optimization",
       "clients": ["codex", "claude"],
       "scopes": ["global", "project"],
       "defaultInstall": {
@@ -76,7 +76,7 @@
     {
       "name": "skill-constraints",
       "description": "Operational constraints and best practices for skill execution.",
-      "source": ".codex/skills/skill-constraints",
+      "source": "skill-sources/skill-constraints",
       "clients": ["codex", "claude", "gemini", "opencode"],
       "scopes": ["global", "project"],
       "defaultInstall": {
@@ -88,7 +88,7 @@
     {
       "name": "aios-project-system",
       "description": "Canonical architecture and operating constraints for aios.",
-      "source": ".codex/skills/aios-project-system",
+      "source": "skill-sources/aios-project-system",
       "clients": ["codex", "claude"],
       "scopes": ["global", "project"],
       "defaultInstall": {
@@ -100,7 +100,7 @@
     {
       "name": "aios-long-running-harness",
       "description": "Harness controls for long-running AIOS jobs.",
-      "source": ".codex/skills/aios-long-running-harness",
+      "source": "skill-sources/aios-long-running-harness",
       "clients": ["codex", "claude"],
       "scopes": ["global", "project"],
       "defaultInstall": {
@@ -112,7 +112,7 @@
     {
       "name": "contextdb-autopilot",
       "description": "Automatic ContextDB persistence workflow.",
-      "source": ".codex/skills/contextdb-autopilot",
+      "source": "skill-sources/contextdb-autopilot",
       "clients": ["codex", "claude"],
       "scopes": ["global", "project"],
       "defaultInstall": {
@@ -124,7 +124,7 @@
     {
       "name": "cap-commit-push",
       "description": "Fast commit-and-push shortcut for this repository.",
-      "source": ".codex/skills/cap-commit-push",
+      "source": "skill-sources/cap-commit-push",
       "clients": ["codex", "claude"],
       "scopes": ["global", "project"],
       "defaultInstall": {
@@ -136,7 +136,7 @@
     {
       "name": "aios-jimeng-image-ops",
       "description": "Jimeng image generation workflow for aios.",
-      "source": ".codex/skills/aios-jimeng-image-ops",
+      "source": "skill-sources/aios-jimeng-image-ops",
       "clients": ["codex", "claude"],
       "scopes": ["global", "project"],
       "defaultInstall": {
@@ -148,7 +148,7 @@
     {
       "name": "seed2-manga-drama",
       "description": "Seed2 style manga-drama generation workflow.",
-      "source": ".codex/skills/seed2-manga-drama",
+      "source": "skill-sources/seed2-manga-drama",
       "clients": ["codex", "claude"],
       "scopes": ["global", "project"],
       "defaultInstall": {
@@ -160,7 +160,7 @@
     {
       "name": "xhs-ops-methods",
       "description": "Reusable Xiaohongshu operations workflow.",
-      "source": ".codex/skills/xhs-ops-methods",
+      "source": "skill-sources/xhs-ops-methods",
       "clients": ["codex", "claude"],
       "scopes": ["global", "project"],
       "defaultInstall": {

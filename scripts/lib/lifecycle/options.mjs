@@ -4,6 +4,7 @@ export const COMPONENT_NAMES = ['browser', 'shell', 'skills', 'agents', 'superpo
 export const WRAP_MODES = ['all', 'repo-only', 'opt-in', 'off'];
 export const CLIENT_NAMES = ['all', 'codex', 'claude', 'gemini', 'opencode'];
 export const SKILL_SCOPE_NAMES = ['global', 'project'];
+export const SKILL_INSTALL_MODE_NAMES = ['copy', 'link'];
 export const QUALITY_GATE_MODES = ['quick', 'full', 'pre-pr'];
 export const ORCHESTRATOR_FORMAT_NAMES = ['text', 'json'];
 export const ORCHESTRATOR_BLUEPRINT_NAMES = ['feature', 'bugfix', 'refactor', 'security'];
@@ -34,6 +35,14 @@ export function normalizeSkillScope(raw = 'global') {
   const value = String(raw || 'global').trim().toLowerCase();
   if (!SKILL_SCOPE_NAMES.includes(value)) {
     throw new Error(`--scope must be one of: ${SKILL_SCOPE_NAMES.join(', ')}`);
+  }
+  return value;
+}
+
+export function normalizeSkillInstallMode(raw = 'copy') {
+  const value = String(raw || 'copy').trim().toLowerCase();
+  if (!SKILL_INSTALL_MODE_NAMES.includes(value)) {
+    throw new Error(`--install-mode must be one of: ${SKILL_INSTALL_MODE_NAMES.join(', ')}`);
   }
   return value;
 }
@@ -151,6 +160,7 @@ export function createDefaultSetupOptions() {
     wrapMode: 'opt-in',
     client: 'all',
     scope: 'global',
+    installMode: 'copy',
     skills: [],
     skipPlaywrightInstall: false,
     skipDoctor: false,
@@ -163,6 +173,7 @@ export function createDefaultUpdateOptions() {
     wrapMode: 'opt-in',
     client: 'all',
     scope: 'global',
+    installMode: 'copy',
     skills: [],
     withPlaywrightInstall: false,
     skipDoctor: false,

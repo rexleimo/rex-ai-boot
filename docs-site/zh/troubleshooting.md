@@ -9,6 +9,24 @@ description: 常见报错与修复步骤。
 
 大多数问题来自环境与作用域配置（MCP 依赖缺失、包装未加载、wrap 模式不匹配）。先跑诊断，再改配置。
 
+## 切换 Node 后 `better-sqlite3` / ContextDB 失败
+
+RexCLI 现在明确以 **Node 22 LTS** 为运行基线。如果你的 shell 还在跑 Node 25，或者 native 依赖是按别的 Node ABI 编出来的，ContextDB 相关命令就可能报错。
+
+快速修复：
+
+```bash
+node -v
+source ~/.nvm/nvm.sh && nvm use 22
+cd mcp-server && npm rebuild better-sqlite3
+```
+
+然后重新验证：
+
+```bash
+npm run test:scripts
+```
+
 ## Browser MCP 工具不可用
 
 先执行（macOS / Linux）：
@@ -170,6 +188,25 @@ powershell -ExecutionPolicy Bypass -File .\\scripts\\install-contextdb-skills.ps
 powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-skills.ps1 -Client all
 ```
 
+## 在 RexCLI 源仓库里执行 `--scope project` 失败
+
+这是预期行为。
+
+现在：
+
+- `skill-sources/` 是 canonical source tree
+- repo-local 的 `.codex/skills` / `.claude/skills` / `.agents/skills` 是由 sync 管理的生成目录
+- source repo 自己不再允许把 `--scope project` 当作安装入口
+
+正确做法：
+
+```bash
+node scripts/sync-skills.mjs
+node scripts/check-skills-sync.mjs
+```
+
+如果你是想把 skills 安装到别的项目，请切到那个目标工作区再执行 `aios ... --scope project`。
+
 ## 常见问答
 
 ### 浏览器工具不可用时第一步做什么？
@@ -183,7 +220,11 @@ powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-skills.ps1
 
 ## 把技能放进了错误目录
 
-仓库内可发现的 repo-local skills 只应放在：
+canonical skill source tree 现在放在：
+
+- `<repo>/skill-sources`
+
+生成后的 repo-local discoverable 输出放在：
 
 - `<repo>/.codex/skills`
 - `<repo>/.claude/skills`
@@ -191,5 +232,6 @@ powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-skills.ps1
 如果你把 `SKILL.md` 放进 `.baoyu-skills/` 之类的平行目录，Codex / Claude 不会把它当作可发现技能。
 
 - `.baoyu-skills/` 只适合放 `EXTEND.md` 一类扩展配置
-- 真正的技能请移动到 `.codex/skills/<name>/SKILL.md` 或 `.claude/skills/<name>/SKILL.md`
+- canonical 技能源文件请移动到 `skill-sources/<name>/SKILL.md`
+- 然后执行 `node scripts/sync-skills.mjs` 重建各 client 的兼容目录
 - 运行 `scripts/doctor-contextdb-skills.sh --client all` 检查是否存在错误的技能根目录

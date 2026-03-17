@@ -23,6 +23,23 @@ export function ensureFile(filePath) {
   }
 }
 
+export function copyDirRecursive(sourcePath, targetPath, { excludeNames = [] } = {}) {
+  const ignored = new Set(Array.isArray(excludeNames) ? excludeNames : []);
+  fs.rmSync(targetPath, { recursive: true, force: true });
+  ensureParentDir(targetPath);
+  fs.cpSync(sourcePath, targetPath, {
+    recursive: true,
+    filter: (currentSource) => {
+      const relPath = path.relative(sourcePath, currentSource);
+      if (!relPath) {
+        return true;
+      }
+      const segments = relPath.split(path.sep);
+      return segments.every((segment) => !ignored.has(segment));
+    },
+  });
+}
+
 export function readTextIfExists(filePath) {
   try {
     return fs.readFileSync(filePath, 'utf8');
@@ -116,6 +133,24 @@ export function removeManagedLink(targetPath, sourcePath) {
   return true;
 }
 
+export function removeManagedDirectory(targetPath, predicate = null) {
+  if (!fs.existsSync(targetPath)) {
+    return false;
+  }
+  if (typeof predicate === 'function' && !predicate(targetPath)) {
+    return false;
+  }
+  fs.rmSync(targetPath, { recursive: true, force: true });
+  return true;
+}
+
+export function isLegacyManagedSkillLink(targetPath, { sourcePath = '' } = {}) {
+  if (!sourcePath) {
+    return false;
+  }
+  return isManagedLink(targetPath, sourcePath);
+}
+
 export function collectSkillEntries(sourceRoots) {
   const entries = [];
   const seen = new Set();
@@ -149,6 +184,10 @@ const REPO_DISCOVERABLE_SKILL_ROOTS = new Set([
   '.agents/skills',
   '.gemini/skills',
   '.opencode/skills',
+]);
+
+const REPO_CANONICAL_SKILL_SOURCE_ROOTS = new Set([
+  'skill-sources',
 ]);
 
 const SKILL_SCAN_EXCLUDED_TOP_LEVEL = new Set([
@@ -187,7 +226,10 @@ export function collectUnexpectedSkillRootFindings(rootDir) {
     if (SKILL_SCAN_EXCLUDED_TOP_LEVEL.has(entry.name)) continue;
 
     const relName = entry.name;
-    const normalizedAllowed = Array.from(REPO_DISCOVERABLE_SKILL_ROOTS);
+    const normalizedAllowed = [
+      ...Array.from(REPO_DISCOVERABLE_SKILL_ROOTS),
+      ...Array.from(REPO_CANONICAL_SKILL_SOURCE_ROOTS),
+    ];
     if (normalizedAllowed.includes(relName) || normalizedAllowed.some((allowed) => allowed.startsWith(`${relName}/`))) {
       continue;
     }
