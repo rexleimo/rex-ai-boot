@@ -39,6 +39,12 @@ async function seedFixtureRepo(rootDir, { checkSkillsSyncScript = 'process.exit(
   await writeFixtureFile(rootDir, 'mcp-server/package.json', '{"name":"fixture-mcp"}\n');
   await writeFixtureFile(rootDir, 'memory/README.md', '# memory\n');
   await writeFixtureFile(rootDir, 'skill-sources/sample-skill/SKILL.md', '# canonical\n');
+  await writeFixtureFile(rootDir, 'memory/specs/orchestrator-agents.json', '{}\n');
+  await writeFixtureFile(rootDir, 'agent-sources/manifest.json', '{"schemaVersion":1,"generatedTargets":["claude","codex"]}\n');
+  await writeFixtureFile(rootDir, 'agent-sources/roles/rex-planner.json', '{"schemaVersion":1,"id":"rex-planner","role":"planner","name":"rex-planner","description":"planner","tools":["Read"],"model":"sonnet","handoffTarget":"next-phase","systemPrompt":"plan"}\n');
+  await writeFixtureFile(rootDir, 'agent-sources/roles/rex-implementer.json', '{"schemaVersion":1,"id":"rex-implementer","role":"implementer","name":"rex-implementer","description":"implement","tools":["Read","Edit"],"model":"sonnet","handoffTarget":"next-phase","systemPrompt":"implement"}\n');
+  await writeFixtureFile(rootDir, 'agent-sources/roles/rex-reviewer.json', '{"schemaVersion":1,"id":"rex-reviewer","role":"reviewer","name":"rex-reviewer","description":"review","tools":["Read"],"model":"sonnet","handoffTarget":"merge-gate","systemPrompt":"review"}\n');
+  await writeFixtureFile(rootDir, 'agent-sources/roles/rex-security-reviewer.json', '{"schemaVersion":1,"id":"rex-security-reviewer","role":"security-reviewer","name":"rex-security-reviewer","description":"security","tools":["Read"],"model":"sonnet","handoffTarget":"merge-gate","systemPrompt":"secure"}\n');
   await writeFixtureFile(rootDir, '.codex/skills/sample-skill/SKILL.md', '# codex\n');
   await writeFixtureFile(rootDir, '.codex/agents/rex.md', '# codex agent\n');
   await writeFixtureFile(rootDir, '.claude/skills/sample-skill/SKILL.md', '# claude\n');
@@ -49,9 +55,17 @@ async function seedFixtureRepo(rootDir, { checkSkillsSyncScript = 'process.exit(
   await writeFixtureFile(rootDir, 'scripts/package-release.ps1', await readFile(path.join(workspaceRoot, 'scripts', 'package-release.ps1'), 'utf8'));
   await writeFixtureFile(rootDir, 'scripts/release-preflight.sh', await readFile(path.join(workspaceRoot, 'scripts', 'release-preflight.sh'), 'utf8'));
   await writeFixtureFile(rootDir, 'scripts/release-stable.sh', await readFile(path.join(workspaceRoot, 'scripts', 'release-stable.sh'), 'utf8'));
+  await writeFixtureFile(rootDir, 'scripts/generate-orchestrator-agents.mjs', await readFile(path.join(workspaceRoot, 'scripts', 'generate-orchestrator-agents.mjs'), 'utf8'));
   await writeFixtureFile(rootDir, 'scripts/aios-install.sh', '#!/usr/bin/env bash\n');
   await writeFixtureFile(rootDir, 'scripts/aios-install.ps1', "Write-Host 'fixture'\n");
   await writeFixtureFile(rootDir, 'scripts/check-skills-sync.mjs', checkSkillsSyncScript);
+  await writeFixtureFile(rootDir, 'scripts/lib/agents/source-tree.mjs', await readFile(path.join(workspaceRoot, 'scripts', 'lib', 'agents', 'source-tree.mjs'), 'utf8'));
+  await writeFixtureFile(rootDir, 'scripts/lib/agents/compat-export.mjs', await readFile(path.join(workspaceRoot, 'scripts', 'lib', 'agents', 'compat-export.mjs'), 'utf8'));
+  await writeFixtureFile(rootDir, 'scripts/lib/agents/sync.mjs', await readFile(path.join(workspaceRoot, 'scripts', 'lib', 'agents', 'sync.mjs'), 'utf8'));
+  await writeFixtureFile(rootDir, 'scripts/lib/agents/emitters/shared.mjs', await readFile(path.join(workspaceRoot, 'scripts', 'lib', 'agents', 'emitters', 'shared.mjs'), 'utf8'));
+  await writeFixtureFile(rootDir, 'scripts/lib/agents/emitters/claude.mjs', await readFile(path.join(workspaceRoot, 'scripts', 'lib', 'agents', 'emitters', 'claude.mjs'), 'utf8'));
+  await writeFixtureFile(rootDir, 'scripts/lib/agents/emitters/codex.mjs', await readFile(path.join(workspaceRoot, 'scripts', 'lib', 'agents', 'emitters', 'codex.mjs'), 'utf8'));
+  await writeFixtureFile(rootDir, 'scripts/lib/harness/orchestrator-agents.mjs', await readFile(path.join(workspaceRoot, 'scripts', 'lib', 'harness', 'orchestrator-agents.mjs'), 'utf8'));
 
   assertOk(run('git', ['init'], { cwd: rootDir }), 'git init failed');
   assertOk(run('git', ['config', 'user.email', 'fixture@example.com'], { cwd: rootDir }));
@@ -60,7 +74,7 @@ async function seedFixtureRepo(rootDir, { checkSkillsSyncScript = 'process.exit(
   assertOk(run('git', ['commit', '-m', 'fixture'], { cwd: rootDir }));
 }
 
-test('package-release.sh emits stable assets that include skill-sources', async () => {
+test('package-release.sh emits stable assets that include skill-sources and agent-sources', async () => {
   const rootDir = await makeTemp('rex-release-assets-fixture-');
   await seedFixtureRepo(rootDir);
 
@@ -82,6 +96,10 @@ test('package-release.sh emits stable assets that include skill-sources', async 
     run('test', ['-f', path.join(extractDir, 'rex-cli', 'skill-sources', 'sample-skill', 'SKILL.md')]),
     'rex-cli.tar.gz did not include skill-sources/sample-skill/SKILL.md'
   );
+  assertOk(
+    run('test', ['-f', path.join(extractDir, 'rex-cli', 'agent-sources', 'manifest.json')]),
+    'rex-cli.tar.gz did not include agent-sources/manifest.json'
+  );
 });
 
 test('release-preflight.sh validates matching tag, VERSION, changelog, and skills sync state', async () => {
@@ -95,6 +113,7 @@ test('release-preflight.sh validates matching tag, VERSION, changelog, and skill
   });
   assertOk(ok);
   assert.match(ok.stdout, /SKILLS:\s+generated roots match skill-sources\//);
+  assert.match(ok.stdout, /AGENTS:\s+export-only regeneration passed/);
 
   const failingRoot = await makeTemp('rex-release-preflight-fail-');
   await seedFixtureRepo(failingRoot, {

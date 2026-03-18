@@ -80,7 +80,17 @@ if ! node "$ROOT_DIR/scripts/check-skills-sync.mjs" >/dev/null; then
   exit 1
 fi
 
+if [[ -f "$ROOT_DIR/agent-sources/manifest.json" ]]; then
+  if ! node "$ROOT_DIR/scripts/generate-orchestrator-agents.mjs" --export-only >/dev/null; then
+    echo "agent export regeneration failed; run: node scripts/generate-orchestrator-agents.mjs --export-only" >&2
+    exit 1
+  fi
+fi
+
 echo "[ok] release preflight passed for $TAG"
 echo "  VERSION:   $VERSION"
 echo "  CHANGELOG: has ## [$EXPECTED_VERSION] - YYYY-MM-DD"
 echo "  SKILLS:    generated roots match skill-sources/"
+if [[ -f "$ROOT_DIR/agent-sources/manifest.json" ]]; then
+  echo "  AGENTS:    export-only regeneration passed"
+fi

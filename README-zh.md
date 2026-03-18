@@ -193,8 +193,17 @@ User -> codex/claude/gemini
 - `scripts/ctx-agent.mjs`: 统一运行器（自动接入 ContextDB）
 - `scripts/contextdb-shell.zsh`: 透明接管 `codex/claude/gemini`
 - `scripts/privacy-guard.mjs`: Privacy Guard CLI（`init/status/set/redact`）
+- `agent-sources/`: orchestrator agents 的 canonical source tree
+- `memory/specs/orchestrator-agents.json`: 提供给 orchestrator/runtime 的生成兼容导出
+- `.claude/agents` / `.codex/agents`: 由 `node scripts/generate-orchestrator-agents.mjs` 管理的仓库内生成目录
 - `memory/context-db/`: 本仓库会话数据（本地产物，已忽略提交）
 - `config/browser-profiles.json`: 浏览器 profile/CDP 配置
+
+Agent 目录说明：
+
+- 运行 `node scripts/generate-orchestrator-agents.mjs` 会同时刷新兼容导出和仓库内 agent catalogs。
+- 运行 `node scripts/generate-orchestrator-agents.mjs --export-only` 只刷新 `memory/specs/orchestrator-agents.json`。
+- `gemini` 和 `opencode` 在 v1 里仍复用 Claude/Codex 的兼容 catalogs，还没有单独的仓库原生 agent 根目录。
 
 ## 前置条件
 

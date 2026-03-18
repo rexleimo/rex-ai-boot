@@ -96,6 +96,34 @@ function listAgentMdFiles(workspace, relDir) {
   return out;
 }
 
+function listFilesUnder(workspace, relDir, predicate) {
+  const absDir = path.join(workspace, relDir);
+  const out = [];
+
+  function walk(currentDir) {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const absPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        walk(absPath);
+        continue;
+      }
+      if (entry.isFile() && predicate(entry.name, absPath)) {
+        out.push(absPath);
+      }
+    }
+  }
+
+  walk(absDir);
+  return out;
+}
+
 function readTextSafe(filePath, maxBytes) {
   try {
     const st = fs.statSync(filePath);
@@ -236,6 +264,7 @@ function main() {
   );
   files.push(...listAgentMdFiles(workspace, '.claude/agents'));
   files.push(...listAgentMdFiles(workspace, '.codex/agents'));
+  files.push(...listFilesUnder(workspace, 'agent-sources', (name) => name.toLowerCase().endsWith('.json')));
 
   if (args.scanGlobal) {
     if (homeDir) {

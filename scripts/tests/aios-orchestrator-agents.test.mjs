@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { buildLocalDispatchPlan, buildOrchestrationPlan } from '../lib/harness/orchestrator.mjs';
 
@@ -16,6 +18,34 @@ async function importAgentModule() {
 
 async function makeRootDir() {
   return await fs.mkdtemp(path.join(os.tmpdir(), 'aios-orchestrator-agents-'));
+}
+
+function resolveRepoRoot() {
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+}
+
+function run(command, args, options = {}) {
+  return spawnSync(command, args, {
+    encoding: 'utf8',
+    ...options,
+  });
+}
+
+async function copyCanonicalSource(rootDir) {
+  await fs.cp(path.join(resolveRepoRoot(), 'agent-sources'), path.join(rootDir, 'agent-sources'), {
+    recursive: true,
+  });
+}
+
+async function writeJson(rootDir, relativePath, value) {
+  const filePath = path.join(rootDir, relativePath);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+async function loadCanonicalFixture() {
+  const sourceTree = await import('../lib/agents/source-tree.mjs');
+  return sourceTree.loadCanonicalAgents({ rootDir: resolveRepoRoot() });
 }
 
 test('orchestrator agent module exists', async () => {
@@ -54,44 +84,86 @@ test('renderAgentMarkdown emits YAML frontmatter and a managed marker', async ()
   assert.match(md, /output a single JSON object/i);
 });
 
-test('syncGeneratedAgents writes managed files and skips non-managed files', async () => {
+test('renderCompatibilityExport preserves current orchestrator agent shape', async () => {
+  const source = await loadCanonicalFixture();
+  const mod = await import('../lib/agents/compat-export.mjs');
+  const text = mod.renderCompatibilityExport(source);
+  const parsed = JSON.parse(text);
+
+  assert.deepEqual(Object.keys(parsed), ['schemaVersion', 'roleMap', 'agents']);
+  assert.deepEqual(Object.keys(parsed.roleMap), [
+    'planner',
+    'implementer',
+    'reviewer',
+    'security-reviewer',
+  ]);
+  assert.deepEqual(Object.keys(parsed.agents), [
+    'rex-implementer',
+    'rex-planner',
+    'rex-reviewer',
+    'rex-security-reviewer',
+  ]);
+  assert.equal(parsed.agents['rex-planner'].model, 'sonnet');
+});
+
+test('generate-orchestrator-agents --export-only skips generated target sync', () => {
+  const result = run(process.execPath, ['scripts/generate-orchestrator-agents.mjs', '--export-only'], {
+    cwd: resolveRepoRoot(),
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const lines = result.stdout.trim().split('\n');
+  const summary = JSON.parse(lines.slice(1).join('\n'));
+
+  assert.deepEqual(summary.targets, []);
+  assert.deepEqual(summary.totals, { installed: 0, updated: 0, skipped: 0, removed: 0 });
+});
+
+test('syncGeneratedAgents renders from rootDir canonical source', async () => {
   const agents = await importAgentModule();
   assert.ok(agents, 'expected orchestrator-agents module');
 
   const rootDir = await makeRootDir();
+  const source = await loadCanonicalFixture();
+  const planner = source.agentsById[source.roleMap.planner];
+  await copyCanonicalSource(rootDir);
+  await writeJson(rootDir, 'agent-sources/roles/rex-planner.json', {
+    ...planner,
+    description: 'Planner role from temp canonical source.',
+  });
+
+  const codexDir = path.join(rootDir, '.codex', 'agents');
+  await fs.mkdir(codexDir, { recursive: true });
+
+  const result = await agents.syncGeneratedAgents({ rootDir, targets: ['.codex/agents'] });
+  assert.equal(result.ok, true);
+  assert.equal(result.targets.includes('.codex/agents'), true);
+
+  const generated = await fs.readFile(path.join(codexDir, 'rex-planner.md'), 'utf8');
+  assert.match(generated, /Planner role from temp canonical source/);
+});
+
+test('syncGeneratedAgents rejects unmanaged conflicts', async () => {
+  const agents = await importAgentModule();
+  assert.ok(agents, 'expected orchestrator-agents module');
+
+  const rootDir = await makeRootDir();
+  await copyCanonicalSource(rootDir);
   const claudeDir = path.join(rootDir, '.claude', 'agents');
   const codexDir = path.join(rootDir, '.codex', 'agents');
   await fs.mkdir(claudeDir, { recursive: true });
   await fs.mkdir(codexDir, { recursive: true });
-
-  // A manual file (no marker) must never be overwritten.
   await fs.writeFile(path.join(claudeDir, 'rex-planner.md'), 'manual\n', 'utf8');
 
-  const spec = {
-    schemaVersion: 1,
-    roleMap: { planner: 'rex-planner' },
-    agents: {
-      'rex-planner': {
-        name: 'rex-planner',
-        description: 'Planner role',
-        tools: ['Read'],
-        model: 'sonnet',
-        role: 'planner',
-        handoffTarget: 'next-phase',
-        systemPrompt: 'You are the planner.',
-      },
-    },
-  };
-
-  const result = await agents.syncGeneratedAgents({ rootDir, spec });
-  assert.equal(result.ok, true);
-  assert.equal(result.targets.includes('.claude/agents'), true);
+  await assert.rejects(
+    () => agents.syncGeneratedAgents({ rootDir, targets: ['.claude/agents'] }),
+    /unmanaged conflict/i
+  );
 
   const manual = await fs.readFile(path.join(claudeDir, 'rex-planner.md'), 'utf8');
   assert.equal(manual, 'manual\n');
-
-  const generated = await fs.readFile(path.join(codexDir, 'rex-planner.md'), 'utf8');
-  assert.match(generated, /AIOS-GENERATED/);
+  await assert.rejects(() => fs.readFile(path.join(codexDir, 'rex-planner.md'), 'utf8'));
 });
 
 test('buildLocalDispatchPlan injects agentRefId into phase job launchSpec', () => {
@@ -102,4 +174,3 @@ test('buildLocalDispatchPlan injects agentRefId into phase job launchSpec', () =
   assert.equal(phaseJobs.length > 0, true);
   assert.equal(phaseJobs.every((job) => typeof job.launchSpec.agentRefId === 'string' && job.launchSpec.agentRefId.length > 0), true);
 });
-

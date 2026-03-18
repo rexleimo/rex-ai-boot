@@ -15,10 +15,16 @@ Output Contract
 Output a single JSON object (no surrounding text) that conforms to `memory/specs/agent-handoff.schema.json`.
 
 Required fields:
+- schemaVersion
+- status
 - fromRole
 - toRole
 - taskTitle
 - contextSummary
+- findings
+- filesTouched
+- openQuestions
+- recommendations
 
 Set `fromRole=planner` and `toRole=next-phase`.
 

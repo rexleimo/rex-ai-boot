@@ -1,12 +1,4 @@
-import { syncGeneratedAgents } from '../harness/orchestrator-agents.mjs';
-
-function resolveAgentTargets(client = 'all') {
-  const normalized = String(client || 'all').trim().toLowerCase();
-  if (normalized === 'claude') return ['.claude/agents'];
-  if (normalized === 'codex') return ['.codex/agents'];
-  // Gemini/OpenCode do not have a native repo agent root yet; reuse both catalogs.
-  return ['.claude/agents', '.codex/agents'];
-}
+import { resolveAgentTargets, syncCanonicalAgents } from '../agents/sync.mjs';
 
 export async function installOrchestratorAgents({
   rootDir,
@@ -14,7 +6,7 @@ export async function installOrchestratorAgents({
   io = console,
 } = {}) {
   const targets = resolveAgentTargets(client);
-  const result = await syncGeneratedAgents({ rootDir, io, targets });
+  const result = await syncCanonicalAgents({ rootDir, io, targets, mode: 'install' });
 
   for (const item of result.results) {
     io.log(`[done] agents ${item.targetRel} -> installed=${item.installed} updated=${item.updated} skipped=${item.skipped} removed=${item.removed}`);
@@ -29,8 +21,13 @@ export async function uninstallOrchestratorAgents({
   io = console,
 } = {}) {
   const targets = resolveAgentTargets(client);
-  const emptySpec = { schemaVersion: 1, roleMap: {}, agents: {} };
-  const result = await syncGeneratedAgents({ rootDir, io, targets, spec: emptySpec });
+  const result = await syncCanonicalAgents({
+    rootDir,
+    io,
+    targets,
+    mode: 'uninstall',
+    writeCompatibilityExport: false,
+  });
 
   for (const item of result.results) {
     io.log(`[done] agents ${item.targetRel} -> removed=${item.removed} skipped=${item.skipped}`);
@@ -38,4 +35,3 @@ export async function uninstallOrchestratorAgents({
 
   return result;
 }
-

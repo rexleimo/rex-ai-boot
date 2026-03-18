@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { lstat, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -80,6 +80,12 @@ async function writeSkillsCatalog(rootDir, skills) {
     version: 1,
     skills,
   }, null, 2), 'utf8');
+}
+
+async function copyCanonicalAgentSource(rootDir) {
+  await cp(path.join(process.cwd(), 'agent-sources'), path.join(rootDir, 'agent-sources'), {
+    recursive: true,
+  });
 }
 
 test('shell install writes managed block and uninstall removes it', async () => {
@@ -362,33 +368,58 @@ test('skills doctor warns on non-discoverable repo skill roots', async () => {
   assert.equal(logs.some((line) => line.includes('.baoyu-skills/wrong-skill/SKILL.md')), true);
 });
 
-test('agents install writes generated catalogs and uninstall removes managed files only', async () => {
+test('agents install maps gemini to both compatibility targets and uninstall removes managed files only', async () => {
   const rootDir = await makeTemp('aios-agents-root-');
+  await copyCanonicalAgentSource(rootDir);
   const claudeDir = path.join(rootDir, '.claude', 'agents');
   const codexDir = path.join(rootDir, '.codex', 'agents');
   await mkdir(claudeDir, { recursive: true });
   await mkdir(codexDir, { recursive: true });
 
-  // A manual file (no marker) must never be overwritten or removed.
-  await writeFile(path.join(claudeDir, 'rex-planner.md'), 'manual\n', 'utf8');
+  await writeFile(path.join(claudeDir, 'notes.md'), 'manual\n', 'utf8');
 
   const logs = [];
   const io = { log: (line) => logs.push(String(line)) };
 
-  await installOrchestratorAgents({ rootDir, client: 'all', io });
-  assert.equal(await readFile(path.join(claudeDir, 'rex-planner.md'), 'utf8'), 'manual\n');
+  await installOrchestratorAgents({ rootDir, client: 'gemini', io });
 
-  const generated = await readFile(path.join(codexDir, 'rex-planner.md'), 'utf8');
-  assert.match(generated, /AIOS-GENERATED/);
+  assert.match(await readFile(path.join(claudeDir, 'rex-planner.md'), 'utf8'), /AIOS-GENERATED/);
+  assert.match(await readFile(path.join(codexDir, 'rex-planner.md'), 'utf8'), /AIOS-GENERATED/);
 
   await uninstallOrchestratorAgents({ rootDir, client: 'all', io });
-  assert.equal(await readFile(path.join(claudeDir, 'rex-planner.md'), 'utf8'), 'manual\n');
+  assert.equal(await readFile(path.join(claudeDir, 'notes.md'), 'utf8'), 'manual\n');
 
-  let missing = false;
+  let claudeMissing = false;
+  try {
+    await readFile(path.join(claudeDir, 'rex-planner.md'), 'utf8');
+  } catch {
+    claudeMissing = true;
+  }
+  assert.equal(claudeMissing, true);
+
+  let codexMissing = false;
   try {
     await readFile(path.join(codexDir, 'rex-planner.md'), 'utf8');
   } catch {
-    missing = true;
+    codexMissing = true;
   }
-  assert.equal(missing, true);
+  assert.equal(codexMissing, true);
+});
+
+test('agents install fails on unmanaged conflicts before writing other targets', async () => {
+  const rootDir = await makeTemp('aios-agents-conflict-root-');
+  await copyCanonicalAgentSource(rootDir);
+  const claudeDir = path.join(rootDir, '.claude', 'agents');
+  const codexDir = path.join(rootDir, '.codex', 'agents');
+  await mkdir(claudeDir, { recursive: true });
+  await mkdir(codexDir, { recursive: true });
+  await writeFile(path.join(claudeDir, 'rex-planner.md'), 'manual\n', 'utf8');
+
+  await assert.rejects(
+    () => installOrchestratorAgents({ rootDir, client: 'all', io: { log() {} } }),
+    /unmanaged conflict/i
+  );
+
+  assert.equal(await readFile(path.join(claudeDir, 'rex-planner.md'), 'utf8'), 'manual\n');
+  await assert.rejects(() => readFile(path.join(codexDir, 'rex-planner.md'), 'utf8'));
 });

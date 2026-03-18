@@ -193,8 +193,17 @@ User -> codex/claude/gemini
 - `scripts/ctx-agent.mjs`: Unified runner that integrates ContextDB
 - `scripts/contextdb-shell.zsh`: Transparent wrappers for `codex/claude/gemini`
 - `scripts/privacy-guard.mjs`: Privacy guard config + redaction CLI (`init/status/set/redact`)
+- `agent-sources/`: canonical orchestrator agent source tree
+- `memory/specs/orchestrator-agents.json`: generated compatibility export for orchestrator/runtime consumers
+- `.claude/agents` / `.codex/agents`: generated repo-local agent catalogs owned by `node scripts/generate-orchestrator-agents.mjs`
 - `memory/context-db/`: Runtime session artifacts for this repo (ignored by git)
 - `config/browser-profiles.json`: Browser profile/CDP config
+
+Agent catalog note:
+
+- Run `node scripts/generate-orchestrator-agents.mjs` to regenerate the compatibility export plus repo-local agent catalogs.
+- Run `node scripts/generate-orchestrator-agents.mjs --export-only` to refresh only `memory/specs/orchestrator-agents.json`.
+- `gemini` and `opencode` client selections still reuse the Claude/Codex compatibility catalogs in v1; they do not have native repo agent roots yet.
 
 ## Prerequisites
 
