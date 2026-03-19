@@ -62,6 +62,10 @@ npm run contextdb -- event:get --id <session_id>#<seq>
 npm run contextdb -- index:rebuild
 ```
 
+Notes:
+- `contextdb search` now uses SQLite FTS5 + `bm25` ranking by default.
+- `--semantic` is an optional second-pass rerank on top of query-scoped lexical candidates.
+
 Optional semantic rerank:
 
 ```bash

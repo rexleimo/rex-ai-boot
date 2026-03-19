@@ -1158,9 +1158,7 @@ export async function searchEvents(input: SearchEventsInput): Promise<SearchEven
   const limit = input.limit && Number.isFinite(input.limit) ? Math.max(1, Math.floor(input.limit)) : 20;
   const query = typeof input.query === 'string' ? input.query.trim() : '';
   const semanticRequested = input.semantic === true && query.length > 0;
-  const candidateLimit = semanticRequested
-    ? Math.max(limit * 5, 50)
-    : limit;
+  const candidateLimit = semanticRequested ? Math.max(limit * 10, 100) : limit;
 
   const rows = await withSidecarReadFallback(input.workspaceRoot, () => {
     return searchEventRows(getSqlitePath(input.workspaceRoot), {
@@ -1169,7 +1167,7 @@ export async function searchEvents(input: SearchEventsInput): Promise<SearchEven
       role: input.role,
       kinds: (input.kinds ?? []).map((kind) => kind.trim()).filter((kind) => kind.length > 0),
       refs: normalizeRefs(input.refs ?? []),
-      query: semanticRequested ? undefined : (query.length > 0 ? query : undefined),
+      query: query.length > 0 ? query : undefined,
       limit: candidateLimit,
     });
   });

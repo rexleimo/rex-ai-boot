@@ -98,6 +98,23 @@ interface CheckpointSelectRow {
 
 const dbConnections = new Map<string, Database.Database>();
 
+function tokenizeSearchQuery(query: string): string[] {
+  return Array.from(
+    new Set(
+      String(query || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]+/g, ' ')
+        .split(/\s+/)
+        .map((token) => token.trim())
+        .filter((token) => token.length >= 2)
+    )
+  );
+}
+
+function toFtsMatchQuery(tokens: string[]): string {
+  return tokens.map((token) => `${token}*`).join(' OR ');
+}
+
 function refsToFlat(refs: string[]): string {
   if (refs.length === 0) return '';
   return `|${refs.join('|')}|`;
@@ -188,6 +205,17 @@ function ensureCheckpointTelemetryColumns(db: Database.Database): void {
   }
 }
 
+function ensureEventsFtsBackfill(db: Database.Database): void {
+  db.exec(`
+    INSERT INTO events_fts (event_id, kind, text, refs)
+    SELECT e.event_id, e.kind, e.text, e.refs_flat
+    FROM events AS e
+    WHERE NOT EXISTS (
+      SELECT 1 FROM events_fts AS f WHERE f.event_id = e.event_id
+    );
+  `);
+}
+
 export function ensureSqliteSidecar(dbPath: string): void {
   const db = getConnection(dbPath);
   db.exec(`
@@ -242,6 +270,14 @@ export function ensureSqliteSidecar(dbPath: string): void {
       UNIQUE(session_id, seq)
     );
 
+    CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(
+      event_id UNINDEXED,
+      kind,
+      text,
+      refs,
+      tokenize = 'unicode61'
+    );
+
     CREATE INDEX IF NOT EXISTS idx_sessions_agent_project_updated
       ON sessions (agent, project, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_events_project_ts
@@ -256,6 +292,7 @@ export function ensureSqliteSidecar(dbPath: string): void {
       ON checkpoints (session_id, ts_epoch DESC);
   `);
   ensureCheckpointTelemetryColumns(db);
+  ensureEventsFtsBackfill(db);
 }
 
 export function recreateSqliteSidecar(dbPath: string): void {
@@ -331,6 +368,16 @@ export function upsertEventRow(dbPath: string, row: SqliteEventRow): void {
     text_hash: row.textHash,
     signature_hash: row.signatureHash,
   });
+  db.prepare('DELETE FROM events_fts WHERE event_id = ?').run(row.eventId);
+  db.prepare(`
+    INSERT INTO events_fts (event_id, kind, text, refs)
+    VALUES (?, ?, ?, ?)
+  `).run(
+    row.eventId,
+    row.kind,
+    row.text,
+    row.refs.join(' ')
+  );
 }
 
 export function upsertCheckpointRow(dbPath: string, row: SqliteCheckpointRow): void {
@@ -407,23 +454,58 @@ export function searchEventRows(dbPath: string, input: SqliteSearchInput): Sqlit
     clauses.push(`(${refClauses.join(' OR ')})`);
     params.push(...input.refs.map((ref) => `%|${ref}|%`));
   }
-  if (input.query && input.query.trim().length > 0) {
-    clauses.push('LOWER(text) LIKE ?');
-    params.push(`%${input.query.trim().toLowerCase()}%`);
-  }
+  const tokens = input.query && input.query.trim().length > 0
+    ? tokenizeSearchQuery(input.query)
+    : [];
 
   const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
   const limit = Number.isFinite(input.limit) ? Math.max(1, Math.floor(input.limit)) : 20;
-  params.push(limit);
+  let rows: EventSelectRow[] = [];
 
-  const rows = db.prepare(`
-    SELECT
-      event_id, session_id, seq, ts, ts_epoch, project, agent, role, kind, text, refs_json, text_hash, signature_hash
-    FROM events
-    ${where}
-    ORDER BY ts_epoch DESC
-    LIMIT ?;
-  `).all(...params) as EventSelectRow[];
+  if (tokens.length > 0) {
+    try {
+      const ftsWhere = clauses.length > 0 ? `AND ${clauses.join(' AND ')}` : '';
+      const ftsParams: Array<string | number> = [toFtsMatchQuery(tokens), ...params, limit];
+      rows = db.prepare(`
+        SELECT
+          e.event_id, e.session_id, e.seq, e.ts, e.ts_epoch, e.project, e.agent, e.role, e.kind, e.text, e.refs_json, e.text_hash, e.signature_hash
+        FROM events_fts
+        INNER JOIN events AS e ON e.event_id = events_fts.event_id
+        WHERE events_fts MATCH ?
+        ${ftsWhere}
+        ORDER BY bm25(events_fts, 4.0, 2.0, 1.0), e.ts_epoch DESC
+        LIMIT ?;
+      `).all(...ftsParams) as EventSelectRow[];
+    } catch {
+      const fallbackClauses = [...clauses];
+      const fallbackParams = [...params];
+      const tokenClauses = tokens.map(() => '(LOWER(text) LIKE ? OR LOWER(kind) LIKE ? OR LOWER(refs_flat) LIKE ?)');
+      fallbackClauses.push(`(${tokenClauses.join(' OR ')})`);
+      for (const token of tokens) {
+        const pattern = `%${token}%`;
+        fallbackParams.push(pattern, pattern, pattern);
+      }
+      fallbackParams.push(limit);
+      rows = db.prepare(`
+        SELECT
+          event_id, session_id, seq, ts, ts_epoch, project, agent, role, kind, text, refs_json, text_hash, signature_hash
+        FROM events
+        WHERE ${fallbackClauses.join(' AND ')}
+        ORDER BY ts_epoch DESC
+        LIMIT ?;
+      `).all(...fallbackParams) as EventSelectRow[];
+    }
+  } else {
+    params.push(limit);
+    rows = db.prepare(`
+      SELECT
+        event_id, session_id, seq, ts, ts_epoch, project, agent, role, kind, text, refs_json, text_hash, signature_hash
+      FROM events
+      ${where}
+      ORDER BY ts_epoch DESC
+      LIMIT ?;
+    `).all(...params) as EventSelectRow[];
+  }
 
   return rows.map((row) => ({
     eventId: row.event_id,

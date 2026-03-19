@@ -715,7 +715,7 @@ test('searchEvents semantic mode reranks lexical candidates and falls back safel
     sessionId: session.sessionId,
     role: 'assistant',
     kind: 'response',
-    text: 'release notes draft for docs website',
+    text: 'auth checklist draft for docs website',
     refs: ['docs.md'],
   });
 
@@ -731,7 +731,7 @@ test('searchEvents semantic mode reranks lexical candidates and falls back safel
       semantic: true,
       limit: 5,
     });
-    assert.equal(lexicalFallback.results.length, 0);
+    assert.equal(lexicalFallback.results.length, 2);
 
     process.env.CONTEXTDB_SEMANTIC = '1';
     process.env.CONTEXTDB_SEMANTIC_PROVIDER = 'token';
@@ -745,6 +745,89 @@ test('searchEvents semantic mode reranks lexical candidates and falls back safel
     });
     assert.equal(semantic.results.length, 2);
     assert.match(semantic.results[0].text, /auth issue/i);
+  } finally {
+    if (previousSemantic === undefined) {
+      delete process.env.CONTEXTDB_SEMANTIC;
+    } else {
+      process.env.CONTEXTDB_SEMANTIC = previousSemantic;
+    }
+    if (previousProvider === undefined) {
+      delete process.env.CONTEXTDB_SEMANTIC_PROVIDER;
+    } else {
+      process.env.CONTEXTDB_SEMANTIC_PROVIDER = previousProvider;
+    }
+  }
+});
+
+test('searchEvents tokenized query matches punctuation-delimited terms', async () => {
+  const workspace = await makeWorkspace();
+  const session = await createSession({
+    workspaceRoot: workspace,
+    agent: 'codex-cli',
+    project: 'rex-cli',
+    goal: 'tokenized lexical retrieval',
+  });
+
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    role: 'assistant',
+    kind: 'orchestration.human-gate',
+    text: 'Clarity gate requires human input: blocked checkpoints (5) reached threshold (2); auth/payment/policy boundary signals detected (3)',
+  });
+
+  const results = await searchEvents({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    query: 'blocked checkpoints threshold auth policy boundary',
+    limit: 5,
+  });
+
+  assert.equal(results.results.length, 1);
+  assert.match(results.results[0].text, /auth\/payment\/policy boundary/i);
+});
+
+test('searchEvents semantic mode keeps query-scoped candidates so older exact hits are not dropped', async () => {
+  const workspace = await makeWorkspace();
+  const session = await createSession({
+    workspaceRoot: workspace,
+    agent: 'codex-cli',
+    project: 'rex-cli',
+    goal: 'semantic candidate scope',
+  });
+
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    role: 'user',
+    kind: 'prompt',
+    text: 'smoke two',
+  });
+
+  for (let i = 0; i < 40; i += 1) {
+    await appendEvent({
+      workspaceRoot: workspace,
+      sessionId: session.sessionId,
+      role: 'assistant',
+      kind: 'response',
+      text: `recent status update ${i}`,
+    });
+  }
+
+  const previousSemantic = process.env.CONTEXTDB_SEMANTIC;
+  const previousProvider = process.env.CONTEXTDB_SEMANTIC_PROVIDER;
+  try {
+    process.env.CONTEXTDB_SEMANTIC = '1';
+    process.env.CONTEXTDB_SEMANTIC_PROVIDER = 'token';
+    const semantic = await searchEvents({
+      workspaceRoot: workspace,
+      sessionId: session.sessionId,
+      query: 'smoke two',
+      semantic: true,
+      limit: 5,
+    });
+    assert.equal(semantic.results.length > 0, true);
+    assert.match(semantic.results[0].text, /^smoke two$/i);
   } finally {
     if (previousSemantic === undefined) {
       delete process.env.CONTEXTDB_SEMANTIC;
