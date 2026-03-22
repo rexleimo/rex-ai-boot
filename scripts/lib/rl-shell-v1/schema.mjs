@@ -7,6 +7,10 @@ const SPLITS = new Set(['train', 'held_out']);
 const EPISODE_STATUS = new Set(['success', 'failed', 'runtime_error', 'timeout']);
 const DISTILLATION_STATUS = new Set(['applied', 'skipped']);
 const TASK_SOURCES = new Set(['synthetic', 'real_shadow']);
+const COMPARISON_STATUS = new Set(['completed', 'comparison_failed']);
+const RELATIVE_OUTCOMES = new Set(['better', 'same', 'worse']);
+const ADMISSION_STATUS = new Set(['admitted', 'rejected']);
+const REPLAY_ROUTES = new Set(['positive', 'neutral', 'negative', 'diagnostic_only']);
 const STOP_CONDITIONS = new Set([
   'student_stop',
   'verification_passed',
@@ -52,6 +56,11 @@ export function assertArray(value, label) {
 function assertNullableString(value, label) {
   if (value === null) return;
   assertString(value, label);
+}
+
+function assertNullableEnum(value, allowed, label) {
+  if (value === null) return;
+  assertEnum(value, allowed, label);
 }
 
 function assertNumber(value, label) {
@@ -230,6 +239,9 @@ export function validateEpisodeRecord(raw) {
       'teacher_backend_requested',
       'teacher_backend_used',
       'attempt_id',
+      'update_epoch_id',
+      'batch_id',
+      'pre_update_ref_checkpoint_id',
       'seed',
       'start_ts',
       'end_ts',
@@ -243,6 +255,8 @@ export function validateEpisodeRecord(raw) {
       'files_read',
       'files_touched',
       'patch_apply_results',
+      'verification_executed',
+      'verification_passed',
       'stdout_summary',
       'stderr_summary',
       'final_diff',
@@ -266,8 +280,14 @@ export function validateEpisodeRecord(raw) {
       'fused_reward',
       'advantage',
       'return',
+      'comparison_status',
+      'relative_outcome',
+      'rollback_batch',
+      'admission_status',
+      'admission_reason',
       'replay_eligible',
       'replay_priority',
+      'replay_route',
       'policy_loss',
       'distill_loss',
       'kl_loss',
@@ -292,6 +312,9 @@ export function validateEpisodeRecord(raw) {
   } else if (raw.attempt_id !== null && raw.attempt_id !== undefined) {
     assertString(raw.attempt_id, 'episode.attempt_id');
   }
+  assertString(raw.update_epoch_id, 'episode.update_epoch_id');
+  assertString(raw.batch_id, 'episode.batch_id');
+  assertNullableString(raw.pre_update_ref_checkpoint_id, 'episode.pre_update_ref_checkpoint_id');
   assertInteger(raw.seed, 'episode.seed');
   assertString(raw.start_ts, 'episode.start_ts');
   assertString(raw.end_ts, 'episode.end_ts');
@@ -306,6 +329,8 @@ export function validateEpisodeRecord(raw) {
   assertStringArray(raw.files_read, 'episode.files_read');
   assertStringArray(raw.files_touched, 'episode.files_touched');
   assertArray(raw.patch_apply_results, 'episode.patch_apply_results');
+  assertBoolean(raw.verification_executed, 'episode.verification_executed');
+  assertBoolean(raw.verification_passed, 'episode.verification_passed');
   if (typeof raw.stdout_summary !== 'string') throw new Error('episode.stdout_summary must be a string');
   if (typeof raw.stderr_summary !== 'string') throw new Error('episode.stderr_summary must be a string');
   if (typeof raw.final_diff !== 'string') throw new Error('episode.final_diff must be a string');
@@ -334,10 +359,20 @@ export function validateEpisodeRecord(raw) {
   for (const field of ['terminal_reward', 'teacher_term', 'fused_reward', 'advantage', 'return', 'replay_priority', 'policy_loss', 'distill_loss', 'kl_loss']) {
     assertNumber(raw[field], `episode.${field}`);
   }
+  assertEnum(raw.comparison_status, COMPARISON_STATUS, 'episode.comparison_status');
+  if (raw.comparison_status === 'completed') {
+    assertEnum(raw.relative_outcome, RELATIVE_OUTCOMES, 'episode.relative_outcome');
+  } else if (raw.relative_outcome !== null) {
+    throw new Error('episode.relative_outcome must be null when comparison_status=comparison_failed');
+  }
+  assertBoolean(raw.rollback_batch, 'episode.rollback_batch');
+  assertEnum(raw.admission_status, ADMISSION_STATUS, 'episode.admission_status');
+  assertNullableString(raw.admission_reason, 'episode.admission_reason');
   if (raw.replay_priority < 0 || raw.replay_priority > 1) {
     throw new Error('episode.replay_priority must be in [0, 1]');
   }
   assertBoolean(raw.replay_eligible, 'episode.replay_eligible');
+  assertEnum(raw.replay_route, REPLAY_ROUTES, 'episode.replay_route');
   for (const field of ['stdout_artifact_path', 'stderr_artifact_path', 'final_diff_artifact_path', 'observation_trace_artifact_path']) {
     assertString(raw[field], `episode.${field}`);
   }
@@ -348,7 +383,7 @@ export function validateRunSummary(raw) {
   assertObject(raw, 'run summary');
   assertNoUnknownKeys(raw, Object.keys(runSummarySchema.properties), 'run summary');
   for (const field of runSummarySchema.required) {
-    if (!(field in raw)) {
+    if (!(field in raw) || raw[field] === undefined) {
       throw new Error(`run summary missing required field: ${field}`);
     }
   }
@@ -365,6 +400,11 @@ export function validateRunSummary(raw) {
   assertString(raw.best_checkpoint_path, 'run summary.best_checkpoint_path');
   assertObject(raw.best_metrics, 'run summary.best_metrics');
   assertArray(raw.seed_results, 'run summary.seed_results');
+  for (const field of ['updates_completed', 'updates_failed', 'rollbacks_completed', 'replay_only_epochs', 'comparison_failed_count']) {
+    if (raw[field] !== undefined) {
+      assertInteger(raw[field], `run summary.${field}`, { min: 0 });
+    }
+  }
   if (raw.replay_pool_status !== undefined) {
     assertString(raw.replay_pool_status, 'run summary.replay_pool_status');
   }

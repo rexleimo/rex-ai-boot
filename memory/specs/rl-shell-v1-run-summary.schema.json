@@ -14,6 +14,11 @@
     "held_out_split",
     "best_checkpoint_path",
     "best_metrics",
+    "updates_completed",
+    "updates_failed",
+    "rollbacks_completed",
+    "replay_only_epochs",
+    "comparison_failed_count",
     "seed_results",
     "status"
   ],
@@ -31,6 +36,11 @@
     "held_out_split": { "type": "string", "minLength": 1 },
     "best_checkpoint_path": { "type": "string", "minLength": 1 },
     "best_metrics": { "type": "object" },
+    "updates_completed": { "type": "integer", "minimum": 0 },
+    "updates_failed": { "type": "integer", "minimum": 0 },
+    "rollbacks_completed": { "type": "integer", "minimum": 0 },
+    "replay_only_epochs": { "type": "integer", "minimum": 0 },
+    "comparison_failed_count": { "type": "integer", "minimum": 0 },
     "seed_results": {
       "type": "array",
       "items": { "type": "object" }

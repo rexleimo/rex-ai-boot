@@ -21,6 +21,9 @@ function makeValidEpisodeRecord() {
     teacher_backend_requested: 'codex-cli',
     teacher_backend_used: 'codex-cli',
     attempt_id: null,
+    update_epoch_id: 'epoch-001',
+    batch_id: 'batch-001',
+    pre_update_ref_checkpoint_id: null,
     seed: 17,
     start_ts: '2026-03-22T03:00:00.000Z',
     end_ts: '2026-03-22T03:00:05.000Z',
@@ -57,6 +60,8 @@ function makeValidEpisodeRecord() {
     files_read: ['src/math.mjs'],
     files_touched: ['src/math.mjs'],
     patch_apply_results: [{ applied: false, reject_reason: 'none' }],
+    verification_executed: true,
+    verification_passed: false,
     stdout_summary: '',
     stderr_summary: '1 failing test',
     final_diff: '',
@@ -85,8 +90,14 @@ function makeValidEpisodeRecord() {
     fused_reward: 0.08,
     advantage: 0.08,
     return: 0.08,
+    comparison_status: 'completed',
+    relative_outcome: 'worse',
+    rollback_batch: false,
+    admission_status: 'admitted',
+    admission_reason: null,
     replay_eligible: true,
     replay_priority: 0.6,
+    replay_route: 'negative',
     policy_loss: 0.1,
     distill_loss: 0.2,
     kl_loss: 0.01,
@@ -154,6 +165,10 @@ test('validateTeacherResponse enforces failure defaults and call_status enum', (
 test('validateEpisodeRecord requires reward, distillation, and artifact fields', () => {
   const episode = makeValidEpisodeRecord();
   assert.doesNotThrow(() => validateEpisodeRecord(episode));
+  assert.throws(() => validateEpisodeRecord({ ...episode, update_epoch_id: undefined }), /update_epoch_id/i);
+  assert.throws(() => validateEpisodeRecord({ ...episode, verification_executed: undefined }), /verification_executed/i);
+  assert.throws(() => validateEpisodeRecord({ ...episode, comparison_status: undefined }), /comparison_status/i);
+  assert.throws(() => validateEpisodeRecord({ ...episode, replay_route: undefined }), /replay_route/i);
   assert.throws(() => validateEpisodeRecord({ ...episode, fused_reward: undefined }), /fused_reward/i);
   assert.throws(() => validateEpisodeRecord({ ...episode, task_source: undefined }), /task_source/i);
   assert.doesNotThrow(() => validateEpisodeRecord({
@@ -184,16 +199,24 @@ test('validateRunSummary enforces ContextDB summary contract', () => {
     run_id: 'run-001',
     spec_path: 'docs/superpowers/specs/2026-03-22-aios-shell-rl-v1-design.md',
     student_model_id: 'tiny-json-policy-v1',
+    phase: '3',
     primary_teacher: 'codex-cli',
     fallback_order: ['claude-code'],
     train_split: 'benchmark-v1-train',
     held_out_split: 'benchmark-v1-held-out',
     best_checkpoint_path: 'experiments/rl-shell-v1/runs/run-001/checkpoints/best/policy.json',
     best_metrics: { success_rate: 0.5 },
+    updates_completed: 2,
+    updates_failed: 1,
+    rollbacks_completed: 1,
+    replay_only_epochs: 1,
+    comparison_failed_count: 1,
     seed_results: [{ seed: 17, status: 'ok' }],
     status: 'ok',
   };
 
   assert.doesNotThrow(() => validateRunSummary(summary));
   assert.throws(() => validateRunSummary({ ...summary, primary_teacher: '' }), /primary_teacher/i);
+  assert.throws(() => validateRunSummary({ ...summary, updates_completed: undefined }), /updates_completed/i);
+  assert.throws(() => validateRunSummary({ ...summary, comparison_failed_count: undefined }), /comparison_failed_count/i);
 });
