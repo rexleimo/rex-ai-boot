@@ -47,7 +47,7 @@ The right next step is therefore to add browser and orchestrator as first-class 
 1. Add a browser adapter that performs real online training.
 2. Add an orchestrator adapter that performs real online training.
 3. Keep one shared `student/checkpoint` across shell, browser, and orchestrator.
-4. Allow one `live batch` to mix shell, browser, and orchestrator trajectories.
+4. Allow one `live batch` to mix trajectories from any active environment, including shell, browser, and orchestrator.
 5. Keep comparison normalization unified as:
    - `better`
    - `same`
@@ -163,6 +163,100 @@ In effect:
 - learning control is centralized,
 - parameters are shared.
 
+## Component Responsibilities
+
+The mixed-environment system must keep ownership explicit.
+
+| Action | Owner |
+|---|---|
+| sample environment task | adapter |
+| execute one environment episode | adapter |
+| decide teacher trigger (`failure` / `boundary` / none) | adapter |
+| normalize teacher response | `RL Core` |
+| build replay candidate | adapter |
+| seal live batch | `RL Core` |
+| run online update | `RL Core` trainer |
+| capture baseline freeze checkpoint id | campaign runner |
+| request holdout validation from an environment | campaign runner |
+| evaluate epoch-close decision | `RL Core` campaign controller |
+| promote checkpoint | `RL Core` checkpoint registry |
+| execute rollback state transition | `RL Core` campaign controller |
+| produce environment-specific rollback evidence | adapter |
+
+## Adapter Interface Contract
+
+Browser and orchestrator must implement the same narrow adapter surface.
+
+### `sampleTask({ environment, activeCheckpointId, controlState })`
+
+Returns either:
+
+- one task descriptor,
+- or `null` when no admissible task is currently available.
+
+It must be side-effect free with respect to training state.
+
+### `runEpisode({ task, checkpointId })`
+
+Executes one full environment episode and returns a normalized episode payload.
+
+Environment failure must normally be returned in-band as episode evidence rather than thrown as a process error.
+
+Throwing is reserved for:
+
+- adapter infrastructure failure,
+- unrecoverable runtime initialization failure.
+
+If this method throws:
+
+- `RL Core` does not automatically retry it,
+- the attempt is recorded as infrastructure failure evidence,
+- the resulting record is replay-routed to `diagnostic_only`,
+- and the current episode is excluded from replay training.
+
+### `compareAgainstReference({ task, activeCheckpointId, preUpdateRefCheckpointId })`
+
+Runs matched comparison for the same task/control context and returns a normalized comparison payload.
+
+If reproducibility fails after the allowed retry budget, this must return `comparison_failed` rather than silently coercing to `same` or throwing.
+
+If this method throws instead of returning a normalized result:
+
+- `RL Core` records the attempt as `comparison_failed`,
+- routes the evidence to `diagnostic_only`,
+- and blocks promotion eligibility for the current epoch.
+
+### `buildReplayCandidate({ episode, comparison })`
+
+Produces the replay contract expected by `RL Core`.
+
+If an episode is not replay-trainable, this method must still produce a valid replay candidate and route it to `diagnostic_only`.
+
+### `summarizeEnvironmentEvidence({ episode, comparison })`
+
+Produces compact environment-specific evidence for:
+
+- batch summaries,
+- rollback diagnosis,
+- ContextDB reporting,
+- replay metadata.
+
+This method must be side-effect free.
+
+## Compatibility And Migration Rule
+
+Mixed-environment rollout must preserve compatibility with existing shell RL data.
+
+The migration rule for this phase is:
+
+1. all newly written mixed-environment episodes use `schema_version: 1`,
+2. existing shell episodes without `schema_version` are treated as legacy `v0`,
+3. legacy `v0` shell episodes remain readable for diagnosis,
+4. legacy `v0` shell episodes are replay-ineligible by default,
+5. shell episode writers must be upgraded to emit `schema_version: 1` before mixed live campaigns are enabled.
+
+This avoids ambiguous replay mixing between old shell data and new mixed-environment data.
+
 ## Shared Data Contract Extensions
 
 To support mixed-environment RL, shared episode and batch records must explicitly carry environment metadata.
@@ -189,6 +283,62 @@ Every live batch summary must carry:
 - overall aggregated comparison signal.
 
 The point is not only to mix environments, but to keep mixed updates debuggable.
+
+## Normative Contracts
+
+The first implementation must treat these contract fields as normative.
+
+### Shared Episode Fields
+
+Every replay-addressable episode must carry:
+
+- `schema_version: 1`
+- `environment: "shell" | "browser" | "orchestrator"`
+- `task_family: string`
+- `teacher_triggered: boolean`
+- `teacher_trigger_reason: "failure" | "boundary" | null`
+- `boundary_episode: boolean`
+- `terminal_reward: number`
+  - required
+  - range `[-1, 1]`
+- `comparison_status: "completed" | "comparison_failed"`
+- `relative_outcome: "better" | "same" | "worse" | null`
+  - must be `null` when `comparison_status = comparison_failed`
+- `replay_route: "positive" | "neutral" | "negative" | "diagnostic_only"`
+
+### Shared Live Batch Summary Fields
+
+Every sealed mixed batch must carry:
+
+- `schema_version: 1`
+- `batch_id: string`
+- `checkpoint_id: string`
+- `environments_in_batch: string[]`
+- `total_episode_count: integer`
+- `environment_counts`
+  - map of environment to admitted trajectory count
+- `environment_reward_summary`
+  - map of environment to aggregate reward stats
+- `environment_comparison_summary`
+  - map of environment to:
+    - `better_count`
+    - `same_count`
+    - `worse_count`
+    - `comparison_failed_count`
+
+### Replay Admission Rules
+
+Replay admission is deterministic:
+
+1. `diagnostic_only` never enters replay training.
+2. `comparison_status=comparison_failed` must use `replay_route=diagnostic_only`.
+3. `boundary_episode=true` may enter replay only if:
+   - the trajectory schema is complete,
+   - environment evidence is present,
+   - no unsafe side-effect violation occurred.
+4. `relative_outcome=worse` routes to `negative`.
+5. `relative_outcome=same` routes to `neutral`.
+6. `relative_outcome=better` routes to `positive`.
 
 ## Mixed Live Batch Rules
 
@@ -240,18 +390,113 @@ Each adapter must convert its comparison result into the shared normalized contr
 
 Rollback is based on overall mixed-environment monitoring, not per-environment hard failure.
 
-The first implementation should compute one aggregate monitoring signal from:
+The first implementation must use one deterministic aggregate monitoring rule set:
 
-- normalized `better/same/worse`,
-- `comparison_failed`,
-- environment coverage sufficiency.
+- `better` resets degradation streak to `0`
+- `same` leaves degradation streak unchanged
+- `worse` increments degradation streak by `1`
+- `comparison_failed` increments degradation streak by `1`
 
-That aggregate signal decides:
+Rollback is triggered when:
 
-- continue monitoring,
-- close epoch as replay-only,
-- close epoch as promotion-eligible,
-- roll back.
+- `degradation_streak >= 3`
+
+This keeps mixed-environment rollback compatible with the existing shell online path while still using one overall cross-environment signal.
+
+### Environment Coverage Sufficiency
+
+Coverage sufficiency is defined against `active_environments`, a campaign-configured set.
+
+For this project, the final mixed campaign target set is:
+
+- shell
+- browser
+- orchestrator
+
+Earlier delivery phases may use smaller active sets:
+
+- Phase B may use `browser` only,
+- Phase C may use `orchestrator` only,
+- Phase D/E use the full mixed set.
+
+An epoch is coverage-sufficient only when every environment in `active_environments` has produced either:
+
+- one `comparison_status=completed` result in the current monitoring epoch,
+- or one explicit holdout validation result for the candidate promoted checkpoint.
+
+If coverage is insufficient at epoch close, the epoch cannot become promotion-eligible.
+
+### Shell-Safety Gate
+
+The shell-safety gate is a campaign-runner-owned holdout validation computed before final promotion.
+
+Inputs:
+
+- candidate promoted checkpoint,
+- frozen shell baseline checkpoint id,
+- fixed shell holdout validation set.
+
+Shell-safety gate passes only when:
+
+- shell holdout success rate is no worse than `5` percentage points below the frozen shell baseline,
+- shell validation emits no schema failure,
+- shell holdout comparison completes successfully.
+
+If the shell-safety gate fails:
+
+- epoch outcome becomes `replay_only`,
+- promotion is blocked,
+- rollout evidence is persisted for diagnosis.
+
+### Epoch Aggregation Algorithm
+
+The monitoring epoch is evaluated in two steps.
+
+Step 1: sequential monitoring
+
+- process comparison results in arrival order,
+- update degradation streak per result:
+  - `better` -> reset to `0`
+  - `same` -> no change
+  - `worse` -> `+1`
+  - `comparison_failed` -> `+1`
+- if streak reaches `3`, rollback triggers immediately and epoch evaluation stops.
+
+Step 2: epoch-close aggregation
+
+If rollback was not triggered, compute:
+
+- `better_count`
+- `same_count`
+- `worse_count`
+- `comparison_failed_count`
+- coverage sufficiency
+- shell-safety gate result
+
+Then apply the decision matrix below.
+
+### Decision Matrix
+
+At epoch close, the controller must apply this precedence order:
+
+1. evaluate monitoring results and compute:
+   - degradation streak
+   - coverage sufficiency
+   - shell-safety gate
+2. if `degradation_streak >= 3`:
+   - execute rollback
+   - on rollback success: enter `collection` with restored checkpoint
+   - on rollback failure: enter `frozen_failure`
+3. else if coverage is insufficient:
+   - `replay_only`
+4. else if shell-safety gate failed:
+   - `replay_only`
+5. else if any `comparison_failed` occurred in the epoch:
+   - `replay_only`
+6. else if aggregate completed comparisons contain at least one `better` and zero `worse`:
+   - `promotion_eligible`
+7. else:
+   - continue monitoring until max monitoring budget, then `replay_only`
 
 ### Diagnostic Requirement
 
@@ -263,6 +508,61 @@ Otherwise the system would know that an update failed overall but not whether:
 - orchestrator poisoned browser,
 - shell stabilized the batch,
 - one environment had no meaningful comparison coverage.
+
+## Comparison Reproducibility Policy
+
+Matched comparison is only valid if the adapter can reconstruct sufficiently similar initial conditions.
+
+### Browser Reproducibility
+
+Browser matched comparison must pin:
+
+- target site,
+- target path or flow id,
+- authenticated state class,
+- input payload,
+- comparison start URL or equivalent start screen.
+
+Browser retry budget:
+
+- one automatic replay retry on transient navigation or challenge divergence,
+- after that, mark `comparison_failed`.
+
+Browser must mark `comparison_failed` when:
+
+- start page cannot be reconstructed,
+- required auth state is unavailable,
+- the target flow diverges before comparable action execution begins,
+- challenge or anti-bot state prevents a meaningful matched run twice.
+
+If auth has expired or human re-auth is required:
+
+- the adapter must emit `comparison_failed`,
+- route the episode to `diagnostic_only`,
+- set re-auth or challenge evidence in the environment summary,
+- and trigger human handoff rather than automatic auth recovery.
+
+### Orchestrator Reproducibility
+
+Orchestrator matched comparison must pin:
+
+- task context snapshot,
+- available executors,
+- available preflight actions,
+- stop/handoff policy inputs,
+- evidence packet seen by the controller.
+
+Orchestrator retry budget:
+
+- one automatic retry on transient infrastructure failure,
+- after that, mark `comparison_failed`.
+
+Orchestrator must mark `comparison_failed` when:
+
+- the task context snapshot cannot be reconstructed,
+- required upstream evidence is missing,
+- the executor menu or policy inputs differ from the original control context,
+- the replayed control round cannot be evaluated under the same decision surface twice.
 
 ## Browser Adapter Design
 
@@ -460,6 +760,12 @@ For browser and orchestrator:
 - teacher call on failed episodes,
 - teacher call on near-success boundary episodes.
 
+Teacher-trigger ownership is adapter-local:
+
+- the adapter decides whether an episode is `failure`, `boundary`, or `no-teacher`,
+- the adapter sets `teacher_triggered` and `teacher_trigger_reason`,
+- `RL Core` only consumes the normalized trigger metadata and the normalized teacher response.
+
 Teacher outputs remain the same normalized structure:
 
 - critique,
@@ -501,9 +807,13 @@ New environments do not get custom rollback semantics.
 Important rules:
 
 1. Browser and orchestrator failures still normalize into shared replay and comparison outcomes.
-2. `comparison_failed` contributes to overall instability even if it does not directly force rollback.
+2. `comparison_failed` increments degradation streak by `1` and blocks promotion eligibility for the current epoch.
 3. `rollback_failed` still drives `frozen_failure`.
 4. Mixed campaigns must never lose environment attribution on failed evidence.
+
+The adapter-level `comparison_failed` pass gates below are bring-up quality thresholds, not promotion thresholds.
+
+Promotion eligibility still requires zero `comparison_failed` inside the final promotion window.
 
 ## Acceptance Criteria
 
@@ -517,11 +827,23 @@ Browser adapter must:
 - produce normalized comparison results,
 - produce replay candidates and evidence summaries.
 
+Browser adapter pass gate:
+
+- at least `20` controlled real browser episodes,
+- `0` schema validation failures,
+- `comparison_failed` rate at or below `20%`.
+
 Orchestrator adapter must:
 
 - produce structured control-decision episodes,
 - produce normalized comparison results,
 - produce replay candidates and evidence summaries.
+
+Orchestrator adapter pass gate:
+
+- at least `20` real control-decision episodes,
+- `0` schema validation failures,
+- `comparison_failed` rate at or below `20%`.
 
 ### 2. Mixed-Campaign Correctness
 
@@ -533,6 +855,28 @@ The system must prove:
 - rollback triggers from overall mixed-environment performance rather than per-environment hard gates,
 - rollback diagnostics preserve environment-level evidence.
 
+Mixed-campaign pass gate:
+
+- at least `3` mixed live batches,
+- at least `1` mixed batch contains `browser + orchestrator`,
+- at least `1` mixed batch contains `shell` plus one of the new environments,
+- at least `1` successful rollback drill,
+- at least `1` resume-from-snapshot drill with no duplicate event application.
+
+Rollback drill pass evidence:
+
+- one induced monitoring sequence that reaches `degradation_streak >= 3`,
+- one `rollback-completed-*` event,
+- post-rollback `active_checkpoint_id` equals the expected restored checkpoint,
+- control mode returns to `collection`.
+
+Resume drill pass evidence:
+
+- one persisted snapshot read on restart,
+- resumed `active_checkpoint_id` matches the last persisted snapshot,
+- `duplicateEventApplications = 0`,
+- no replayed control event mutates checkpoint lineage twice.
+
 ### 3. Behavioral Improvement
 
 The mixed-environment system must show:
@@ -540,6 +884,19 @@ The mixed-environment system must show:
 - browser task performance improves versus baseline,
 - orchestrator control quality improves versus baseline,
 - mixed training does not degrade overall behavior below the relevant single-environment baselines.
+
+Behavioral pass gate:
+
+- baseline freeze point = the `last_stable_checkpoint_id` captured immediately before mixed browser-orchestrator online training begins,
+- validation window = fixed `30` episodes per environment on an operator-approved heldout task/flow set,
+- all deltas are measured against that frozen baseline on the same validation window,
+- no statistical significance test is required in v1; fixed threshold deltas are the source of truth,
+- browser controlled-flow success rate improves by at least `10` percentage points versus the frozen pre-phase baseline,
+- orchestrator decision success rate improves by at least `10` percentage points versus the frozen pre-phase baseline,
+- missed-handoff rate does not increase,
+- mixed-campaign overall `better_count - worse_count` is positive on the validation window,
+- shell holdout validation does not regress by more than `5` percentage points,
+- no environment regresses by more than `5` percentage points versus its own baseline.
 
 ## Implementation Order
 
@@ -554,6 +911,50 @@ Recommended delivery order:
 5. run mixed-environment validation.
 
 This keeps the shared semantics stable before the higher-risk adapters land.
+
+## Delivery Phases
+
+Even though this is one project, implementation planning must be phased.
+
+### Phase A: Contracts And Compatibility
+
+Exit criteria:
+
+- mixed-environment contracts finalized,
+- shell compatibility rule implemented,
+- shell-safety promotion gate specified in code and tests.
+
+### Phase B: Browser Adapter
+
+Exit criteria:
+
+- controlled-flow browser episodes run end-to-end,
+- browser comparison reproducibility rules enforced,
+- browser replay candidates and teacher triggers validated.
+
+### Phase C: Orchestrator Adapter
+
+Exit criteria:
+
+- control-decision episodes run end-to-end,
+- orchestrator matched comparison reproducibility enforced,
+- orchestrator replay candidates and teacher triggers validated.
+
+### Phase D: Mixed Campaign Control
+
+Exit criteria:
+
+- mixed live batches run with shared checkpoints,
+- overall rollback state machine is tested,
+- shell-safety gate is active.
+
+### Phase E: Validation
+
+Exit criteria:
+
+- rollback drill passes,
+- resume drill passes,
+- browser, orchestrator, and shell holdout gates all pass.
 
 ## Risks
 
