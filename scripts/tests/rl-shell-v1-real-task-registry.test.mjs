@@ -46,6 +46,8 @@ test('real-task registry admits only stable reproducible failing tasks', async (
 
   assert.equal(result.admitted.every((task) => task.admission_status === 'admitted'), true);
   assert.equal(result.admitted.every((task) => task.baseline_reproduced === true), true);
+  assert.equal(result.admitted.every((task) => task.reproducible === true), true);
+  assert.equal(result.admitted.every((task) => /failing_tests|typecheck|build/.test(task.task_family)), true);
 });
 
 test('real-task registry marks limited-pool when fewer than three tasks are admitted', async () => {

@@ -1,4 +1,4 @@
-import { appendFile, mkdir, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { validateEpisodeRecord } from './schema.mjs';
@@ -86,4 +86,23 @@ export async function writeCheckpointMetadata({ runDir, kind, metadata }) {
   const metadataPath = path.join(targetDir, 'metadata.json');
   await writeJson(metadataPath, metadata);
   return metadataPath;
+}
+
+async function readEpisodeRecords(runDir) {
+  const entries = await readdir(runDir.episodesDir);
+  const records = [];
+  for (const entry of entries.filter((name) => name.endsWith('.json')).sort()) {
+    records.push(JSON.parse(await readFile(path.join(runDir.episodesDir, entry), 'utf8')));
+  }
+  return records;
+}
+
+export async function listReplayEligible({ runDir }) {
+  const records = await readEpisodeRecords(runDir);
+  return records.filter((episode) => episode.replay_eligible && episode.replay_route !== 'diagnostic_only');
+}
+
+export async function listDiagnosticEpisodes({ runDir }) {
+  const records = await readEpisodeRecords(runDir);
+  return records.filter((episode) => episode.replay_route === 'diagnostic_only');
 }

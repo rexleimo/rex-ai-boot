@@ -16,6 +16,9 @@ function makeEpisodeRecordWithTruncatedStreams() {
     teacher_backend_requested: 'codex-cli',
     teacher_backend_used: 'codex-cli',
     attempt_id: null,
+    update_epoch_id: 'epoch-001',
+    batch_id: 'batch-001',
+    pre_update_ref_checkpoint_id: null,
     seed: 17,
     start_ts: '2026-03-22T03:00:00.000Z',
     end_ts: '2026-03-22T03:00:05.000Z',
@@ -73,6 +76,8 @@ function makeEpisodeRecordWithTruncatedStreams() {
     files_read: ['src/math.mjs'],
     files_touched: ['src/math.mjs'],
     patch_apply_results: [{ applied: false, reject_reason: 'none' }],
+    verification_executed: true,
+    verification_passed: false,
     stdout_summary: 'stdout\n[TRUNCATED]\n',
     stderr_summary: 'stderr\n[TRUNCATED]\n',
     final_diff: '*** Begin Patch\n*** End Patch\n',
@@ -100,8 +105,14 @@ function makeEpisodeRecordWithTruncatedStreams() {
     fused_reward: 0.08,
     advantage: 0.08,
     return: 0.08,
+    comparison_status: 'completed',
+    relative_outcome: 'worse',
+    rollback_batch: false,
+    admission_status: 'admitted',
+    admission_reason: null,
     replay_eligible: true,
     replay_priority: 0.6,
+    replay_route: 'negative',
     policy_loss: 0.1,
     distill_loss: 0.2,
     kl_loss: 0.01,
@@ -162,4 +173,28 @@ test('trajectory store appends metrics and keeps latest/best checkpoint metadata
   assert.match(metrics, /fused_reward/);
   assert.match(latest, /ckpt-1/);
   assert.match(best, /ckpt-best/);
+});
+
+test('trajectory store keeps update_failed and diagnostic_only records separate from replay lanes', async () => {
+  const mod = await import('../lib/rl-shell-v1/trajectory-store.mjs');
+  const rootDir = await makeRunRoot();
+  const runDir = await mod.createRunLayout({ rootDir, runId: 'run-003' });
+
+  await mod.persistEpisode({
+    runDir,
+    episode: {
+      ...makeEpisodeRecordWithTruncatedStreams(),
+      episode_id: 'episode-diagnostic',
+      replay_route: 'diagnostic_only',
+      admission_status: 'rejected',
+      admission_reason: 'comparison_failed',
+    },
+  });
+
+  const replayEligible = await mod.listReplayEligible({ runDir });
+  const diagnosticOnly = await mod.listDiagnosticEpisodes({ runDir });
+
+  assert.equal(replayEligible.length, 0);
+  assert.equal(diagnosticOnly.length, 1);
+  assert.equal(diagnosticOnly[0].episode_id, 'episode-diagnostic');
 });

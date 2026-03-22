@@ -31,6 +31,7 @@ export function createCurrentFailureCandidates(rootDir) {
     {
       task_id: 'real-test-scripts',
       task_kind: 'failing_tests',
+      task_family: 'failing_tests',
       verification_command: 'npm run test:scripts',
       cwd: rootDir,
       task_prompt: 'Repair the current failing scripts test workflow in the aios repository.',
@@ -39,6 +40,7 @@ export function createCurrentFailureCandidates(rootDir) {
     {
       task_id: 'real-mcp-typecheck',
       task_kind: 'typecheck_repair',
+      task_family: 'typecheck',
       verification_command: 'cd mcp-server && npm run typecheck',
       cwd: rootDir,
       task_prompt: 'Repair the current mcp-server typecheck failure in the aios repository.',
@@ -47,6 +49,7 @@ export function createCurrentFailureCandidates(rootDir) {
     {
       task_id: 'real-mcp-build',
       task_kind: 'build_repair',
+      task_family: 'build',
       verification_command: 'cd mcp-server && npm run build',
       cwd: rootDir,
       task_prompt: 'Repair the current mcp-server build failure in the aios repository.',
@@ -108,6 +111,7 @@ export async function collectRealTasks({
     const task = {
       ...candidate,
       task_source: 'real_shadow',
+      reproducible: admission.baseline_reproduced && Boolean(admission.stable_signature),
       admission_status: admission.admission_status,
       baseline_reproduced: admission.baseline_reproduced,
       baseline_failure_signature: admission.stable_signature,
