@@ -29,6 +29,22 @@ function createLane(filePath) {
   };
 }
 
+export function classifyReplayRoute(episode) {
+  if (episode?.comparison_status === 'comparison_failed' || episode?.lifecycle_status === 'update_failed') {
+    return 'diagnostic_only';
+  }
+  if (episode?.rollback_batch || episode?.relative_outcome === 'worse') {
+    return 'negative';
+  }
+  if (episode?.comparison_status === 'completed' && episode?.relative_outcome === 'same' && episode?.admission_status === 'admitted') {
+    return 'neutral';
+  }
+  if (episode?.comparison_status === 'completed' && episode?.relative_outcome === 'better') {
+    return 'positive';
+  }
+  return 'diagnostic_only';
+}
+
 export async function createReplayPool({ rootDir }) {
   const poolDir = path.join(rootDir, 'experiments', 'rl-shell-v1', 'replay-pool');
   await mkdir(poolDir, { recursive: true });
@@ -41,7 +57,14 @@ export async function createReplayPool({ rootDir }) {
 }
 
 export async function addReplayEpisode({ pool, episode }) {
-  if (!episode?.replay_eligible) {
+  const hasPhase3Routing =
+    episode?.replay_route !== undefined ||
+    episode?.comparison_status !== undefined ||
+    episode?.relative_outcome !== undefined ||
+    episode?.rollback_batch !== undefined ||
+    episode?.lifecycle_status !== undefined;
+  const replayRoute = hasPhase3Routing ? episode?.replay_route || classifyReplayRoute(episode) : null;
+  if (!episode?.replay_eligible || replayRoute === 'diagnostic_only') {
     return { admitted: false };
   }
   const lane = episode.task_source === 'real_shadow' ? pool.realShadow : pool.synthetic;
@@ -49,6 +72,7 @@ export async function addReplayEpisode({ pool, episode }) {
     ...episode,
     episode_id: episode.episode_id,
     task_source: episode.task_source,
+    replay_route: replayRoute,
     replay_priority: Number(episode.replay_priority || 0),
   });
   lane.episodes.sort((left, right) => right.replay_priority - left.replay_priority || left.episode_id.localeCompare(right.episode_id));

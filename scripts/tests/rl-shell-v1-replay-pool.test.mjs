@@ -33,3 +33,26 @@ test('replay pool ignores ineligible episodes', async () => {
   assert.equal(pool.synthetic.count, 0);
   assert.equal(pool.realShadow.count, 0);
 });
+
+test('replay pool keeps comparison_failed and update_failed trajectories out of training lanes', async () => {
+  const mod = await import('../lib/rl-shell-v1/replay-pool.mjs');
+
+  assert.equal(
+    mod.classifyReplayRoute({
+      comparison_status: 'comparison_failed',
+      rollback_batch: false,
+      admission_status: 'rejected',
+    }),
+    'diagnostic_only'
+  );
+
+  assert.equal(
+    mod.classifyReplayRoute({
+      comparison_status: 'completed',
+      relative_outcome: 'same',
+      rollback_batch: false,
+      admission_status: 'admitted',
+    }),
+    'neutral'
+  );
+});
