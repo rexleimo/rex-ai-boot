@@ -172,6 +172,49 @@ test('entrypoint train command prints run summary path', async () => {
   assert.match(result.stdout, /summary_path/i);
 });
 
+test('entrypoint usage lists phase 3 commands and resume flag', async () => {
+  const result = spawnSync(
+    process.execPath,
+    ['scripts/rl-shell-v1.mjs'],
+    {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+    }
+  );
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /phase3-train/i);
+  assert.match(result.stderr, /--resume/i);
+});
+
+test('entrypoint phase3-train command prints rollback metrics and summary path', async () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      'scripts/rl-shell-v1.mjs',
+      'phase3-train',
+      '--config',
+      'experiments/rl-shell-v1/configs/benchmark-v1.json',
+      '--teacher',
+      'codex-cli',
+      '--max-tasks',
+      '5',
+      '--initial-checkpoint',
+      'ckpt-a',
+    ],
+    {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+    }
+  );
+
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /phase=3/i);
+  assert.match(result.stdout, /updates_completed=/i);
+  assert.match(result.stdout, /rollbacks_completed=/i);
+  assert.match(result.stdout, /summary_path=/i);
+});
+
 test('contextdb summary writer validates required fields and keeps write failures non-fatal', async () => {
   const mod = await import('../lib/rl-shell-v1/contextdb-summary.mjs');
   const rootDir = await mkdtemp(path.join(os.tmpdir(), 'aios-rl-shell-v1-summary-'));

@@ -13,6 +13,7 @@
     "rl-shell-v1:train:2a": "node scripts/rl-shell-v1.mjs train --phase 2A --config experiments/rl-shell-v1/configs/benchmark-v1.json --seed 17 --teacher codex-cli",
     "rl-shell-v1:eval:2b": "node scripts/rl-shell-v1.mjs eval --phase 2B --config experiments/rl-shell-v1/configs/benchmark-v1.json --teacher codex-cli",
     "rl-shell-v1:campaign": "node scripts/rl-shell-v1.mjs campaign --config experiments/rl-shell-v1/configs/benchmark-v1.json --teacher codex-cli",
-    "rl-shell-v1:campaign:2c": "node scripts/rl-shell-v1.mjs campaign --phase 2C --config experiments/rl-shell-v1/configs/benchmark-v1.json --teacher codex-cli"
+    "rl-shell-v1:campaign:2c": "node scripts/rl-shell-v1.mjs campaign --phase 2C --config experiments/rl-shell-v1/configs/benchmark-v1.json --teacher codex-cli",
+    "rl-shell-v1:phase3:smoke": "node scripts/rl-shell-v1.mjs phase3-train --config experiments/rl-shell-v1/configs/benchmark-v1.json --teacher codex-cli --max-tasks 5 --initial-checkpoint ckpt-a"
   }
 }

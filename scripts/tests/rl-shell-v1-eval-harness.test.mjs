@@ -152,3 +152,73 @@ test('eval harness summarizes phase 2 ablation deltas and warnings', async () =>
   assert.equal(summary.replayDrivenImprovement, 0.15);
   assert.equal(summary.overfittingWarning, false);
 });
+
+test('eval harness reports better/same/worse and comparison_failed counts', async () => {
+  const mod = await import('../lib/rl-shell-v1/eval-harness.mjs');
+  const summary = await mod.evaluatePhase3Run({
+    episodeRecords: [
+      { comparison_status: 'completed', relative_outcome: 'better', teacher_shaping_score: 0.7 },
+      { comparison_status: 'completed', relative_outcome: 'better', teacher_shaping_score: 0.4 },
+      { comparison_status: 'completed', relative_outcome: 'same', teacher_shaping_score: 0 },
+      { comparison_status: 'completed', relative_outcome: 'worse', teacher_shaping_score: -0.5 },
+      { comparison_status: 'comparison_failed', relative_outcome: null, teacher_shaping_score: 0.3 },
+    ],
+    runSummary: {
+      updates_completed: 2,
+      updates_failed: 1,
+      rollbacks_completed: 1,
+      replay_only_epochs: 1,
+      active_checkpoint_id: 'ckpt-10',
+      pre_update_ref_checkpoint_id: null,
+      last_stable_checkpoint_id: 'ckpt-9',
+    },
+  });
+
+  assert.equal(summary.better_count, 2);
+  assert.equal(summary.same_count, 1);
+  assert.equal(summary.worse_count, 1);
+  assert.equal(summary.comparison_failed_count, 1);
+  assert.equal(summary.rollbacks_completed, 1);
+  assert.equal(summary.teacher_shaping_alignment_rate, 1);
+  assert.equal(summary.last_stable_checkpoint_id, 'ckpt-9');
+});
+
+test('contextdb summary includes checkpoint lineage and rollback evidence', async () => {
+  const mod = await import('../lib/rl-shell-v1/contextdb-summary.mjs');
+  const payload = mod.buildRunSummaryPayload({
+    run: {
+      runId: 'run-003',
+      studentModelId: 'tiny-json-policy-v1',
+      bestCheckpointPath: 'experiments/rl-shell-v1/runs/run-003/checkpoints/best/policy.json',
+      status: 'ok',
+    },
+    metrics: {
+      successRate: 0.5,
+      better_count: 3,
+      same_count: 1,
+      worse_count: 1,
+      comparison_failed_count: 1,
+      teacher_shaping_alignment_rate: 0.8,
+    },
+    config: {
+      teacher_backend_requested: 'codex-cli',
+      fallback_order: ['claude-code'],
+      seed_results: [{ seed: 17, status: 'ok' }],
+      phase: '3',
+      updates_completed: 2,
+      updates_failed: 1,
+      rollbacks_completed: 1,
+      replay_only_epochs: 1,
+      comparison_failed_count: 1,
+      active_checkpoint_id: 'ckpt-10',
+      pre_update_ref_checkpoint_id: null,
+      last_stable_checkpoint_id: 'ckpt-9',
+    },
+  });
+  const contextSummary = mod.buildPhase3ContextSummary({ runSummary: payload });
+
+  assert.equal(payload.better_count, 3);
+  assert.equal(payload.teacher_shaping_alignment_rate, 0.8);
+  assert.equal(contextSummary.last_stable_checkpoint_id, 'ckpt-9');
+  assert.equal(contextSummary.rollbacks_completed, 1);
+});

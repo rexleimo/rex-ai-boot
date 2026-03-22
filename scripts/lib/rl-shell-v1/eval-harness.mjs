@@ -1,3 +1,6 @@
+import { readdir, readFile } from 'node:fs/promises';
+import path from 'node:path';
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -20,6 +23,48 @@ function average(values) {
 function ratio(numerator, denominator) {
   if (!Number(denominator)) return 0;
   return Number(numerator || 0) / Number(denominator);
+}
+
+function averageDefined(values) {
+  const defined = (Array.isArray(values) ? values : []).filter((value) => value !== null && value !== undefined);
+  return average(defined);
+}
+
+async function readPhase3EpisodeRecords(runDir) {
+  if (!runDir) {
+    return [];
+  }
+  const episodesDir = typeof runDir === 'string' ? path.join(runDir, 'episodes') : runDir.episodesDir;
+  if (!episodesDir) {
+    return [];
+  }
+  try {
+    const entries = (await readdir(episodesDir)).filter((name) => name.endsWith('.json')).sort();
+    const records = [];
+    for (const entry of entries) {
+      records.push(JSON.parse(await readFile(path.join(episodesDir, entry), 'utf8')));
+    }
+    return records;
+  } catch {
+    return [];
+  }
+}
+
+function computeTeacherShapingAlignment(episode) {
+  if (episode.comparison_status !== 'completed') {
+    return null;
+  }
+  const shapingScore = Number(episode.teacher_shaping_score || 0);
+  if (episode.relative_outcome === 'better') {
+    return shapingScore > 0 ? 1 : 0;
+  }
+  if (episode.relative_outcome === 'worse') {
+    return shapingScore < 0 ? 1 : 0;
+  }
+  if (episode.relative_outcome === 'same') {
+    return shapingScore === 0 ? 1 : 0;
+  }
+  return null;
 }
 
 function deterministicResult(taskId, checkpoint) {
@@ -120,6 +165,29 @@ export function summarizePhase2Ablation({ phase2a, phase2b, phase2c }) {
     realRepairImprovement,
     replayDrivenImprovement,
     overfittingWarning,
+  };
+}
+
+export async function evaluatePhase3Run({ runDir, episodeRecords, runSummary = {} }) {
+  const records = Array.isArray(episodeRecords) ? episodeRecords : await readPhase3EpisodeRecords(runDir);
+  const betterCount = records.filter((episode) => episode.comparison_status === 'completed' && episode.relative_outcome === 'better').length;
+  const sameCount = records.filter((episode) => episode.comparison_status === 'completed' && episode.relative_outcome === 'same').length;
+  const worseCount = records.filter((episode) => episode.comparison_status === 'completed' && episode.relative_outcome === 'worse').length;
+  const comparisonFailedCount = records.filter((episode) => episode.comparison_status === 'comparison_failed').length;
+
+  return {
+    better_count: betterCount,
+    same_count: sameCount,
+    worse_count: worseCount,
+    comparison_failed_count: comparisonFailedCount,
+    updates_completed: Number(runSummary.updates_completed || 0),
+    updates_failed: Number(runSummary.updates_failed || 0),
+    rollbacks_completed: Number(runSummary.rollbacks_completed || 0),
+    replay_only_epochs: Number(runSummary.replay_only_epochs || 0),
+    teacher_shaping_alignment_rate: averageDefined(records.map(computeTeacherShapingAlignment)),
+    active_checkpoint_id: runSummary.active_checkpoint_id || null,
+    pre_update_ref_checkpoint_id: runSummary.pre_update_ref_checkpoint_id ?? null,
+    last_stable_checkpoint_id: runSummary.last_stable_checkpoint_id || null,
   };
 }
 

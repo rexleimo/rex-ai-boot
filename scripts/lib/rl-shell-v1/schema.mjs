@@ -405,6 +405,22 @@ export function validateRunSummary(raw) {
       assertInteger(raw[field], `run summary.${field}`, { min: 0 });
     }
   }
+  for (const field of ['better_count', 'same_count', 'worse_count']) {
+    if (raw[field] !== undefined) {
+      assertInteger(raw[field], `run summary.${field}`, { min: 0 });
+    }
+  }
+  if (raw.teacher_shaping_alignment_rate !== undefined) {
+    assertNumber(raw.teacher_shaping_alignment_rate, 'run summary.teacher_shaping_alignment_rate');
+    if (raw.teacher_shaping_alignment_rate < 0 || raw.teacher_shaping_alignment_rate > 1) {
+      throw new Error('run summary.teacher_shaping_alignment_rate must be in [0, 1]');
+    }
+  }
+  for (const field of ['active_checkpoint_id', 'pre_update_ref_checkpoint_id', 'last_stable_checkpoint_id']) {
+    if (raw[field] !== undefined) {
+      assertString(raw[field], `run summary.${field}`);
+    }
+  }
   if (raw.replay_pool_status !== undefined) {
     assertString(raw.replay_pool_status, 'run summary.replay_pool_status');
   }

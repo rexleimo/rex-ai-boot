@@ -46,6 +46,13 @@
       "items": { "type": "object" }
     },
     "replay_pool_status": { "type": "string", "minLength": 1 },
+    "better_count": { "type": "integer", "minimum": 0 },
+    "same_count": { "type": "integer", "minimum": 0 },
+    "worse_count": { "type": "integer", "minimum": 0 },
+    "teacher_shaping_alignment_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+    "active_checkpoint_id": { "type": "string", "minLength": 1 },
+    "pre_update_ref_checkpoint_id": { "type": "string", "minLength": 1 },
+    "last_stable_checkpoint_id": { "type": "string", "minLength": 1 },
     "status": { "type": "string", "minLength": 1 }
   }
 }

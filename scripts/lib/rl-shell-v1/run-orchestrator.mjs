@@ -749,6 +749,9 @@ export async function runPhase3Campaign({ config, deps = {} }) {
   let replayOnlyEpochs = 0;
   let rollbacksCompleted = 0;
   let comparisonFailedCount = 0;
+  let betterCount = 0;
+  let sameCount = 0;
+  let worseCount = 0;
   let updatesAfterFreeze = 0;
   let currentEpoch = buildPhase3Epoch({
     epochNumber,
@@ -849,6 +852,15 @@ export async function runPhase3Campaign({ config, deps = {} }) {
       comparison_status: episode.comparison_status || 'comparison_failed',
       relative_outcome: episode.relative_outcome ?? null,
     });
+    if (episode.comparison_status === 'comparison_failed') {
+      comparisonFailedCount += 1;
+    } else if (episode.relative_outcome === 'better') {
+      betterCount += 1;
+    } else if (episode.relative_outcome === 'same') {
+      sameCount += 1;
+    } else if (episode.relative_outcome === 'worse') {
+      worseCount += 1;
+    }
     currentEpoch.comparison_results = [...monitoringResults];
     currentEpoch.degradation_streak = getRelativeOutcomeStreak(monitoringResults);
 
@@ -903,7 +915,6 @@ export async function runPhase3Campaign({ config, deps = {} }) {
 
   if (controlState.mode !== 'frozen_failure' && currentEpoch.phase === 'monitoring' && monitoringResults.length > 0) {
     currentEpoch = recordComparisonResults(currentEpoch, monitoringResults);
-    comparisonFailedCount += currentEpoch.comparison_failed_count;
 
     if (currentEpoch.close_reason === 'replay_only') {
       replayOnlyEpochs += 1;
@@ -953,11 +964,15 @@ export async function runPhase3Campaign({ config, deps = {} }) {
     updatesFailed,
     replayOnlyEpochs,
     rollbacksCompleted,
+    betterCount,
+    sameCount,
+    worseCount,
     comparisonFailedCount,
     duplicateEventApplications,
     updatesAfterFreeze,
     currentEpoch,
     activeCheckpointId: controlState.active_checkpoint_id,
+    preUpdateRefCheckpointId: controlState.pre_update_ref_checkpoint_id,
     lastStableCheckpointId: controlState.last_stable_checkpoint_id,
     controlState,
   };

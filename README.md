@@ -590,4 +590,16 @@ This repository includes an isolated shell/coding RL experiment runner under `sc
 - Run Phase 2B real-task shadow eval: `npm run rl-shell-v1:eval:2b`
 - Run Phase 2C campaign: `npm run rl-shell-v1:campaign:2c`
 - Run baseline campaign: `npm run rl-shell-v1:campaign`
+- Run Phase 3 operator smoke: `npm run rl-shell-v1:phase3:smoke`
 - Run focused tests: `npm run test:rl-shell-v1`
+
+Phase 3 notes:
+
+- Real-task online RL stays isolated from the main workspace. Episodes must execute in temporary worktrees or temporary directories; the main worktree is never mutated directly.
+- The online controller seals one live update batch every `4` admitted trajectories, then promotes the new checkpoint immediately.
+- Three relative `worse` outcomes without an intervening `better` trigger automatic rollback to the pre-update reference checkpoint.
+- If rollback itself fails, the control plane enters `frozen_failure` mode and blocks further online updates until an operator intervenes.
+- Operator commands:
+  - `node scripts/rl-shell-v1.mjs phase3-train --config experiments/rl-shell-v1/configs/benchmark-v1.json --teacher codex-cli --max-tasks 5 --initial-checkpoint ckpt-a`
+  - `node scripts/rl-shell-v1.mjs phase3-resume --config experiments/rl-shell-v1/configs/benchmark-v1.json --teacher codex-cli --max-tasks 5 --initial-checkpoint ckpt-a`
+  - `node scripts/rl-shell-v1.mjs phase3-eval --summary experiments/rl-shell-v1/runs/<run-id>/run-summary.json`
