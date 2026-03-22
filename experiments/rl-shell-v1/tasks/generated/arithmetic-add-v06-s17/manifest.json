@@ -6,7 +6,10 @@
   "split": "train",
   "task_prompt": "Fix the failing addition behavior for variant 6.",
   "verification_command": "node --test",
-  "baseline_failing_tests": [],
+  "baseline_failing_tests": [
+    "not ok 1 - addition returns the sum",
+    "failureType: 'testCodeFailure'"
+  ],
   "constraints": [
     "Do not edit tests",
     "Use only local files"

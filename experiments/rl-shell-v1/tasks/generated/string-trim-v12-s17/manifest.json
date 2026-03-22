@@ -6,7 +6,10 @@
   "split": "held_out",
   "task_prompt": "Fix the normalization helper for trim variant 12.",
   "verification_command": "node --test",
-  "baseline_failing_tests": [],
+  "baseline_failing_tests": [
+    "not ok 1 - normalizeName trims outer whitespace",
+    "failureType: 'testCodeFailure'"
+  ],
   "constraints": [
     "Do not edit tests",
     "Keep function signature stable"

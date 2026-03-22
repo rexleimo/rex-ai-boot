@@ -581,3 +581,10 @@ source ~/.zshrc
 ```
 
 Manual fallback (only if needed): remove the managed `# >>> contextdb-shell >>>` block from `~/.zshrc`.
+## Experimental: Shell RL V1
+
+This repository includes an isolated shell/coding RL experiment runner under `scripts/rl-shell-v1.mjs`.
+
+- Generate benchmark: `npm run rl-shell-v1:benchmark`
+- Run campaign: `npm run rl-shell-v1:campaign`
+- Run focused tests: `npm run test:rl-shell-v1`
