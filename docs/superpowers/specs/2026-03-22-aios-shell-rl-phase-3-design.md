@@ -71,6 +71,18 @@ Every real task episode must:
 
 Phase 3 does not yet attempt to generalize beyond these task classes.
 
+## Initial State
+
+At Phase 3 startup:
+
+- `active_checkpoint_id` is set to the operator-selected starting student checkpoint,
+- `last_stable_checkpoint_id <- active_checkpoint_id`,
+- `pre_update_ref_checkpoint_id <- null`,
+- `degradation_streak <- 0`,
+- the first open epoch is a `collection` epoch under `active_checkpoint_id`.
+
+The initial `collection` epoch gathers the first `4` admitted real trajectories to form the first sealed live batch. Matched comparison begins only after the first successful online update produces a distinct post-update checkpoint and freezes `pre_update_ref_checkpoint_id`.
+
 ## Core Decisions
 
 The following design decisions are fixed for Phase 3:
@@ -235,9 +247,9 @@ Phase 3 uses explicit update epochs so that the comparison baseline cannot be ov
 
 An `update_epoch` is defined as:
 
-1. one sealed live batch of `4` admitted real trajectories used to produce a new checkpoint,
-2. followed by the next `4` admitted real trajectories served by that new checkpoint,
-3. with matched comparison against the frozen `pre_update_ref_checkpoint_id` for those `4` post-update trajectories.
+1. one sealed live batch of `4` admitted real trajectories submitted for one online update attempt,
+2. if that update succeeds, the next `4` admitted real trajectories served by the new checkpoint,
+3. with matched comparison against the frozen `pre_update_ref_checkpoint_id` for those post-update trajectories.
 
 Rules:
 
@@ -248,6 +260,11 @@ Rules:
   - all `4` post-update trajectories have completed matched comparison or been marked `comparison_failed`,
 - if the epoch closes without rollback and all `4` post-update trajectories have `comparison_status=completed`, the epoch closes as `promotion_eligible` and the `4` admitted post-update trajectories become the next sealed live batch,
 - if any post-update trajectory has `comparison_status=comparison_failed`, the epoch may close as `replay_only`, but it is not eligible for automatic promotion into the next online update.
+
+Recovery rules:
+
+- when an epoch closes as `replay_only`, the current `active_checkpoint_id` remains in service, `pre_update_ref_checkpoint_id` remains frozen, and a fresh monitoring epoch opens under the same checkpoint pair so the system can regain update eligibility with a new set of `4` trajectories,
+- when an update attempt fails before promotion, the epoch closes as `update_failed`; the failed batch is preserved, `pre_update_ref_checkpoint_id` is cleared, and the system reopens a fresh `collection` epoch under the unchanged `active_checkpoint_id`.
 
 This makes the monitoring window finite, deterministic, and aligned with the `4`-trajectory update cadence.
 
@@ -331,6 +348,27 @@ Each control-layer unit communicates through explicit events with deterministic 
 - required fields: `update_epoch_id`, `restored_checkpoint_id`, `rollback_batch_ids`
 - consumer: `active-checkpoint-registry`, replay lanes, metrics
 - effect: active checkpoint is restored and rollback evidence is preserved
+
+### `rollback.failed`
+
+- producer: `rollback-and-replay-sink`
+- required fields: `update_epoch_id`, `last_stable_checkpoint_id`, `failure_reason`
+- consumer: `active-checkpoint-registry`, metrics, safety controls
+- effect: control plane enters frozen failure mode and stops further online updates
+
+## State Transition Table
+
+| Event | Preconditions | Pointer Mutations | Next State |
+|------|---------------|------------------|-----------|
+| `batch.sealed` | open `collection` epoch has `4` admitted trajectories | none | `online-update` |
+| `update.completed` | sealed batch update succeeds | `active <- new_active`, `pre_update_ref <- previous active`, `last_stable` unchanged | `monitoring` |
+| `epoch.closed` with `promotion_eligible=true` | monitoring epoch has `4` completed comparisons and no rollback | `last_stable <- active`, `pre_update_ref <- null` | new `collection` epoch |
+| `epoch.closed` with `replay_only` | monitoring epoch has `>=1 comparison_failed`, no rollback | pointers unchanged | new `monitoring` epoch under same checkpoint pair |
+| `update.failed` | update attempt fails before promotion | `pre_update_ref <- null`, `active` unchanged, `last_stable` unchanged | new `collection` epoch |
+| `rollback.completed` | degradation threshold reached and restore succeeds | `active <- restored`, `last_stable <- restored`, `pre_update_ref <- null` | new `collection` epoch |
+| `rollback.failed` | degradation threshold reached and restore fails | pointers remain unchanged on disk; serving falls back to `last_stable_checkpoint_id` if loadable | `frozen_failure` |
+
+`frozen_failure` is a terminal safety mode for the running campaign. In this mode, no new online updates or promotions are allowed.
 
 ## Real Task Episode Flow
 
@@ -526,6 +564,14 @@ All trajectories first enter the trajectory store, then pass replay-lane assignm
 - valid trajectory structure,
 - rollback metadata when applicable.
 
+Deterministic routing rules:
+
+- `relative_outcome=better` -> `positive lane`
+- `relative_outcome=same` with `comparison_status=completed` -> `neutral lane`
+- `relative_outcome=worse` or `rollback_batch=true` -> `negative lane`
+- `comparison_status=comparison_failed` and non-rollback trajectories stay in diagnostic storage only and do not enter replay lanes
+- `update_failed` batches stay in diagnostic storage only unless a later manual or offline process explicitly re-admits them
+
 This separation prevents low-quality online traces from contaminating later replay training.
 
 ## Failure Handling
@@ -608,6 +654,9 @@ Handling:
 
 - escalate immediately as a critical run failure,
 - freeze further online updates,
+- keep checkpoint pointers unchanged on disk,
+- switch serving mode to `shadow-only` on `last_stable_checkpoint_id` if that checkpoint is loadable,
+- otherwise stop Phase 3 real-task serving entirely for the active campaign,
 - preserve all currently known batch and trajectory evidence for manual diagnosis.
 
 ## Metrics and Success Criteria
