@@ -20,13 +20,14 @@ function parseArgs(argv) {
   return { command, flags };
 }
 
-async function loadConfig(rootDir, configPath, teacher) {
+async function loadConfig(rootDir, configPath, teacher, phase) {
   const absolutePath = path.join(rootDir, configPath);
   const raw = JSON.parse(await readFile(absolutePath, 'utf8'));
   return {
     ...raw,
     rootDir,
     configPath,
+    phase: phase || raw.phase || 'v1',
     teacher_backend_requested: teacher || raw.teacher_backend_requested || '',
     fallback_order: raw.fallback_order || ['claude-code'],
   };
@@ -49,11 +50,12 @@ async function main() {
   }
 
   if (command === 'train') {
-    const config = await loadConfig(rootDir, flags.config || 'experiments/rl-shell-v1/configs/benchmark-v1.json', flags.teacher);
+    const config = await loadConfig(rootDir, flags.config || 'experiments/rl-shell-v1/configs/benchmark-v1.json', flags.teacher, flags.phase);
     const result = await runTrainingRun({
       config,
       seed: Number(flags.seed || 17),
     });
+    console.log(`phase=${config.phase}`);
     console.log(`run_id=${result.runId}`);
     console.log(`status=${result.status}`);
     console.log(`summary_path=${result.summaryPath}`);
@@ -63,7 +65,7 @@ async function main() {
 
   if (command === 'eval') {
     const configPath = flags.config || 'experiments/rl-shell-v1/configs/benchmark-v1.json';
-    const config = await loadConfig(rootDir, configPath, flags.teacher);
+    const config = await loadConfig(rootDir, configPath, flags.teacher, flags.phase);
     const checkpoint = await loadPolicyCheckpoint(flags.checkpoint);
     const registry = await loadTaskRegistry({ rootDir, configPath });
     const result = await runHeldOutEval({
@@ -77,7 +79,7 @@ async function main() {
   }
 
   if (command === 'campaign') {
-    const config = await loadConfig(rootDir, flags.config || 'experiments/rl-shell-v1/configs/benchmark-v1.json', flags.teacher);
+    const config = await loadConfig(rootDir, flags.config || 'experiments/rl-shell-v1/configs/benchmark-v1.json', flags.teacher, flags.phase);
     const result = await runCampaign({ config });
     console.log(`campaign_id=${result.campaignId}`);
     console.log(`status=${result.status}`);
@@ -91,7 +93,7 @@ async function main() {
     return;
   }
 
-  console.error('Usage: node scripts/rl-shell-v1.mjs <benchmark-generate|train|eval|campaign> [--config path] [--seed N] [--teacher backend]');
+  console.error('Usage: node scripts/rl-shell-v1.mjs <benchmark-generate|train|eval|campaign> [--config path] [--seed N] [--teacher backend] [--phase 2A]');
   process.exitCode = 1;
 }
 

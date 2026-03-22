@@ -17,6 +17,11 @@ function average(values) {
   return values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length;
 }
 
+function ratio(numerator, denominator) {
+  if (!Number(denominator)) return 0;
+  return Number(numerator || 0) / Number(denominator);
+}
+
 function deterministicResult(taskId, checkpoint) {
   const seed = Number(checkpoint.seed || 0);
   const score = computeHash(`${taskId}:${seed}`) % 100;
@@ -37,6 +42,9 @@ function deterministicResult(taskId, checkpoint) {
     klLoss: 0,
     rewardHacking: false,
     degenerateAction: false,
+    invalidStepCount: success ? 0 : 1 + (score % 2),
+    stepCount: success ? 2 : 4,
+    stopCondition: success ? 'student_stop' : score % 2 === 0 ? 'repeated_no_progress' : 'max_steps_reached',
   };
 }
 
@@ -58,7 +66,24 @@ export function summarizeEvalResults(results) {
     klLoss: average(rows.map((row) => row.klLoss)),
     rewardHackingRate: average(rows.map((row) => row.rewardHacking ? 1 : 0)),
     degenerateActionRate: average(rows.map((row) => row.degenerateAction ? 1 : 0)),
+    invalidStepRatio: average(rows.map((row) => ratio(row.invalidStepCount, row.stepCount || row.episodeLength || 0))),
+    repeatedNoProgressRate: average(rows.map((row) => row.stopCondition === 'repeated_no_progress' ? 1 : 0)),
     teacherOverdependenceGap: 0,
+  };
+}
+
+export function comparePhase2ABaseline({ currentSummary, multiStepBaselineSummary, v1Summary }) {
+  const beatsV1Success = Number(currentSummary?.successRate || 0) > Number(v1Summary?.successRate || 0);
+  const preservesRegressionFree = Number(currentSummary?.regressionFreeFixRate || 0) >= Number(v1Summary?.regressionFreeFixRate || 0);
+  const lowersInvalidStepRatio = Number(currentSummary?.invalidStepRatio || 0) < Number(multiStepBaselineSummary?.invalidStepRatio || 0);
+  const lowersRepeatedNoProgressRate = Number(currentSummary?.repeatedNoProgressRate || 0) < Number(multiStepBaselineSummary?.repeatedNoProgressRate || 0);
+
+  return {
+    accepted: beatsV1Success && preservesRegressionFree && lowersInvalidStepRatio && lowersRepeatedNoProgressRate,
+    beatsV1Success,
+    preservesRegressionFree,
+    lowersInvalidStepRatio,
+    lowersRepeatedNoProgressRate,
   };
 }
 
@@ -69,6 +94,12 @@ export function pickBestCheckpoint(checkpoints) {
     }
     if (right.regressionFreeFixRate !== left.regressionFreeFixRate) {
       return right.regressionFreeFixRate - left.regressionFreeFixRate;
+    }
+    if ((left.invalidStepRatio || 0) !== (right.invalidStepRatio || 0)) {
+      return (left.invalidStepRatio || 0) - (right.invalidStepRatio || 0);
+    }
+    if ((left.repeatedNoProgressRate || 0) !== (right.repeatedNoProgressRate || 0)) {
+      return (left.repeatedNoProgressRate || 0) - (right.repeatedNoProgressRate || 0);
     }
     if (left.avgTokenCount !== right.avgTokenCount) {
       return left.avgTokenCount - right.avgTokenCount;
