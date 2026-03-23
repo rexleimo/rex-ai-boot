@@ -135,9 +135,12 @@ export async function runOnlineCampaign({ config, deps = {} }) {
   const initialCheckpointId = config.initialCheckpointId || 'ckpt-initial';
   const nextEpisode = deps.nextEpisode;
   const sampleTask = deps.sampleTask;
+  const episodeRunner = deps.runEpisode;
   const onlineUpdater = deps.runOnlineUpdateBatch || runOnlineUpdateBatch;
   const performRollback = deps.performRollback;
   const holdoutValidator = deps.holdoutValidator;
+  const coverageResolver = deps.coverageResolver;
+  const shellSafetyEvaluator = deps.shellSafetyEvaluator;
 
   if (typeof nextEpisode !== 'function' && typeof sampleTask !== 'function') {
     throw new Error('deps.nextEpisode is required');
@@ -226,7 +229,156 @@ export async function runOnlineCampaign({ config, deps = {} }) {
         }
         continue;
       }
-      throw new Error('deps.nextEpisode is required when sampleTask returns work');
+      if (typeof episodeRunner !== 'function') {
+        throw new Error('deps.runEpisode is required when sampleTask returns work');
+      }
+      idlePolls = 0;
+      const episode = await episodeRunner({
+        task,
+        taskIndex,
+        currentEpoch,
+        activeCheckpointId: controlState.active_checkpoint_id,
+        controlState,
+      });
+
+      if (!episode || episode.admission_status !== 'admitted') {
+        continue;
+      }
+
+      if (currentEpoch.phase === 'collection') {
+        collectionEpisodes.push(episode);
+        currentEpoch.admitted_trajectory_ids = [...currentEpoch.admitted_trajectory_ids, episode.episode_id];
+        if (collectionEpisodes.length < batchSize) {
+          continue;
+        }
+
+        const batchId = formatSequenceId('batch', batchNumber);
+        const updateResult = await onlineUpdater({
+          batchId,
+          checkpointId: controlState.active_checkpoint_id,
+          trajectories: collectionEpisodes,
+        });
+
+        if (updateResult.status !== 'ok') {
+          updatesFailed += 1;
+          const pointerPatch = applyPointerTransition(
+            buildPointerState(controlState, initialCheckpointId),
+            { type: 'update.failed' }
+          );
+          const failureEvent = await applyTrackedEvent({
+            event_id: `update-failed-${batchNumber}`,
+            snapshot_patch: {
+              ...pointerPatch,
+              mode: 'collection',
+            },
+          });
+          controlState = failureEvent.snapshot;
+          currentEpoch = reopenEpoch(currentEpoch, 'update_failed');
+          currentEpoch = {
+            ...currentEpoch,
+            update_epoch_id: formatSequenceId('epoch', epochNumber),
+            active_checkpoint_id: controlState.active_checkpoint_id,
+            pre_update_ref_checkpoint_id: controlState.pre_update_ref_checkpoint_id,
+          };
+          collectionEpisodes = [];
+          monitoringResults = [];
+          batchNumber += 1;
+          continue;
+        }
+
+        updatesCompleted += 1;
+        const pointerPatch = applyPointerTransition(
+          buildPointerState(controlState, initialCheckpointId),
+          {
+            type: 'update.completed',
+            previous_active_checkpoint_id: controlState.active_checkpoint_id,
+            new_active_checkpoint_id: updateResult.nextCheckpointId,
+          }
+        );
+        const updateEvent = await applyTrackedEvent({
+          event_id: `update-completed-${batchNumber}`,
+          snapshot_patch: {
+            ...pointerPatch,
+            mode: 'monitoring',
+          },
+        });
+        controlState = updateEvent.snapshot;
+        epochNumber += 1;
+        currentEpoch = buildEpoch({
+          epochNumber,
+          phase: 'monitoring',
+          controlState,
+          initialCheckpointId,
+        });
+        collectionEpisodes = [];
+        monitoringResults = [];
+        batchNumber += 1;
+        continue;
+      }
+
+      const normalized = normalizeEpisodeComparison(episode);
+      monitoringResults.push(normalized);
+      if (normalized.comparison_status === 'comparison_failed') {
+        comparisonFailedCount += 1;
+      } else if (normalized.relative_outcome === 'better') {
+        betterCount += 1;
+      } else if (normalized.relative_outcome === 'same') {
+        sameCount += 1;
+      } else if (normalized.relative_outcome === 'worse') {
+        worseCount += 1;
+      }
+      currentEpoch.comparison_results = [...monitoringResults];
+      const degradation = reduceDegradationStreakFromResults(monitoringResults, { rollbackThreshold });
+      currentEpoch.degradation_streak = degradation.degradationStreak;
+
+      if (!degradation.shouldRollback) {
+        continue;
+      }
+
+      rollbacksCompleted += 1;
+      const restoredCheckpointId = controlState.pre_update_ref_checkpoint_id || controlState.last_stable_checkpoint_id;
+      try {
+        if (typeof performRollback === 'function') {
+          await performRollback({
+            restoredCheckpointId,
+            controlState,
+            currentEpoch,
+          });
+        }
+      } catch {
+        const rollbackFailureEvent = await applyTrackedEvent({
+          event_id: `rollback-failed-${rollbacksCompleted}`,
+          snapshot_patch: {
+            mode: 'frozen_failure',
+          },
+        });
+        controlState = rollbackFailureEvent.snapshot;
+        break;
+      }
+      const rollbackPatch = applyPointerTransition(
+        buildPointerState(controlState, initialCheckpointId),
+        {
+          type: 'rollback.completed',
+          restored_checkpoint_id: restoredCheckpointId,
+        }
+      );
+      const rollbackEvent = await applyTrackedEvent({
+        event_id: `rollback-completed-${rollbacksCompleted}`,
+        snapshot_patch: {
+          ...rollbackPatch,
+          mode: 'collection',
+        },
+      });
+      controlState = rollbackEvent.snapshot;
+      epochNumber += 1;
+      currentEpoch = buildEpoch({
+        epochNumber,
+        phase: 'collection',
+        controlState,
+        initialCheckpointId,
+      });
+      monitoringResults = [];
+      continue;
     }
 
     idlePolls = 0;
@@ -388,13 +540,31 @@ export async function runOnlineCampaign({ config, deps = {} }) {
         currentEpoch,
       })
       : null;
+    const coverageSatisfied = typeof coverageResolver === 'function'
+      ? await coverageResolver({
+        currentEpoch,
+        monitoringResults,
+        activeEnvironments,
+        controlState,
+        holdoutResult,
+      })
+      : config.coverageSatisfied ?? true;
+    const shellSafetyGatePassed = typeof shellSafetyEvaluator === 'function'
+      ? await shellSafetyEvaluator({
+        currentEpoch,
+        monitoringResults,
+        activeEnvironments,
+        controlState,
+        holdoutResult,
+      })
+      : holdoutResult?.status !== 'failed';
     const epochOutcome = computeEpochOutcome({
       activeEnvironments,
       betterCount: summary.betterCount,
       worseCount: summary.worseCount,
       comparisonFailedCount: summary.comparisonFailedCount,
-      coverageSatisfied: config.coverageSatisfied ?? true,
-      shellSafetyGatePassed: holdoutResult?.status !== 'failed',
+      coverageSatisfied,
+      shellSafetyGatePassed,
       degradationStreak: currentEpoch.degradation_streak,
     });
 

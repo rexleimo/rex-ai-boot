@@ -606,3 +606,23 @@ Phase 3 notes:
   - `node scripts/rl-shell-v1.mjs phase3-train --config experiments/rl-shell-v1/configs/benchmark-v1.json --teacher codex-cli --max-tasks 5 --initial-checkpoint ckpt-a`
   - `node scripts/rl-shell-v1.mjs phase3-resume --config experiments/rl-shell-v1/configs/benchmark-v1.json --teacher codex-cli --max-tasks 5 --initial-checkpoint ckpt-a`
   - `node scripts/rl-shell-v1.mjs phase3-eval --summary experiments/rl-shell-v1/runs/<run-id>/run-summary.json`
+
+## Experimental: Mixed Browser + Orchestrator RL
+
+`scripts/lib/rl-browser-v1/` and `scripts/lib/rl-orchestrator-v1/` now adapt controlled browser flows and high-signal orchestrator control decisions into the shared `scripts/lib/rl-core/` learning surface. `scripts/lib/rl-mixed-v1/` composes shell, browser, and orchestrator under one checkpoint lineage.
+
+- Run browser adapter tests: `npm run test:rl-browser-v1`
+- Run orchestrator adapter tests: `npm run test:rl-orchestrator-v1`
+- Run mixed campaign tests: `npm run test:rl-mixed-v1`
+- Dry-run browser-only mixed surface: `npm run rl-mixed-v1:browser`
+- Dry-run orchestrator-only mixed surface: `npm run rl-mixed-v1:orchestrator`
+- Dry-run full mixed surface: `npm run rl-mixed-v1:mixed`
+- Emit the 30-episode validation artifact: `npm run rl-mixed-v1:eval`
+
+Mixed campaign expectations:
+
+- one shared checkpoint lineage spans shell/browser/orchestrator,
+- mixed batches preserve per-environment evidence and pairwise batch combinations,
+- rollback drill exposes a `rollback-completed-*` event and restored checkpoint lineage,
+- resume drill preserves `duplicateEventApplications === 0`,
+- validation output is written to `experiments/rl-mixed-v1/validation/latest.json`.
