@@ -80,6 +80,14 @@ export interface HybridLayoutModel {
   };
 }
 
+export interface CompactRlSnapshot {
+  pageKind: string;
+  authState: 'authenticated' | 'login_required' | 'reauth_required' | 'unknown';
+  challengeState: 'none' | 'challenge' | 'blocked';
+  keySelectorsPresent: string[];
+  requiresHumanAction: boolean;
+}
+
 export interface SnapshotOptions {
   includeHtml?: boolean;
   htmlMaxChars?: number;
@@ -338,6 +346,41 @@ export function buildHybridLayoutModel(raw: HybridLayoutRawSnapshot): HybridLayo
       needsVisualFallback: fallbackReasons.length > 0,
       reason: fallbackReasons.length > 0 ? fallbackReasons.join(', ') : 'layout-data-sufficient',
     },
+  };
+}
+
+export function compactRlSnapshot(args: {
+  layout?: HybridLayoutModel | null;
+  auth?: { requiresHumanLogin?: boolean } | null;
+  challenge?: { requiresHumanVerification?: boolean } | null;
+} = {}): CompactRlSnapshot {
+  const layout = args.layout ?? null;
+  const auth = args.auth ?? null;
+  const challenge = args.challenge ?? null;
+  const pageKind = layout?.pageSummary?.pageType || 'content';
+  const keySelectorsPresent = Array.isArray(layout?.elements)
+    ? layout!.elements
+      .map((element) => element.selectorHint)
+      .filter((value) => typeof value === 'string' && value.length > 0)
+      .slice(0, 8)
+    : [];
+
+  let authState: CompactRlSnapshot['authState'] = 'authenticated';
+  if (auth?.requiresHumanLogin) {
+    authState = 'login_required';
+  }
+
+  let challengeState: CompactRlSnapshot['challengeState'] = 'none';
+  if (challenge?.requiresHumanVerification) {
+    challengeState = 'challenge';
+  }
+
+  return {
+    pageKind,
+    authState,
+    challengeState,
+    keySelectorsPresent,
+    requiresHumanAction: Boolean(auth?.requiresHumanLogin || challenge?.requiresHumanVerification),
   };
 }
 

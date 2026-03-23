@@ -1,6 +1,15 @@
 import { browserLauncher } from '../launcher.js';
 import { detectChallengeRequired } from '../auth.js';
 
+export function normalizeRlChallengeState(result: {
+  challenge?: { requiresHumanVerification?: boolean };
+}) {
+  if (result?.challenge?.requiresHumanVerification) {
+    return 'challenge';
+  }
+  return 'none';
+}
+
 export async function challengeCheck(profile: string = 'default') {
   const state = browserLauncher.getState(profile);
   if (!state || state.activePageId === null) {
@@ -17,6 +26,7 @@ export async function challengeCheck(profile: string = 'default') {
     success: true,
     profile,
     challenge,
+    rlChallengeState: normalizeRlChallengeState({ challenge }),
     requiresHumanAction: challenge.requiresHumanVerification,
   };
 }

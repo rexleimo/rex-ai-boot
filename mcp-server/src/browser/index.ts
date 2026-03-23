@@ -7,8 +7,9 @@ import { type } from './actions/type.js';
 import { setInputFiles } from './actions/set-input-files.js';
 import { snapshot } from './actions/snapshot.js';
 import { screenshot } from './actions/screenshot.js';
-import { authCheck } from './actions/auth-check.js';
-import { challengeCheck } from './actions/challenge-check.js';
+import { authCheck, normalizeRlAuthState } from './actions/auth-check.js';
+import { challengeCheck, normalizeRlChallengeState } from './actions/challenge-check.js';
+import { compactRlSnapshot } from './actions/snapshot.js';
 
 export {
   profileManager,
@@ -21,6 +22,9 @@ export {
   screenshot,
   authCheck,
   challengeCheck,
+  compactRlSnapshot,
+  normalizeRlAuthState,
+  normalizeRlChallengeState,
 };
 
 // MCP 工具定义
