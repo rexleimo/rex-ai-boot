@@ -196,6 +196,16 @@ function detectRunner(env) {
   return null;
 }
 
+function isInteractivePassthrough(command, passthroughArgs) {
+  // Interactive mode: bare command with no positional arguments (no subcommand, no --prompt, etc.)
+  const first = passthroughArgs[0] || '';
+  if (!first) return true;
+  // Allow help/version flags through to the native agent without ContextDB interference
+  if (first === '--help' || first === '-h' || first === '--version' || first === '-v') return false;
+  // Any other argument is a subcommand or flag — not bare interactive
+  return false;
+}
+
 function shouldDebug(env) {
   const value = (env.CTXDB_DEBUG || '').trim().toLowerCase();
   return value === '1' || value === 'true' || value === 'yes' || value === 'on';
@@ -288,6 +298,16 @@ function main(argv = process.argv.slice(2)) {
   const env = { ...process.env };
   if (opts.command === 'codex') {
     normalizeCodeHome(env, opts.cwd);
+  }
+
+  // Interactive mode detection: bare command invocation (no subcommand/flags) triggers
+  // automatic handoff prompt injection so the new session resumes from the last checkpoint.
+  const interactive = isInteractivePassthrough(opts.command, opts.passthroughArgs);
+  if (interactive && !env.CTXDB_AUTO_PROMPT) {
+    env.CTXDB_AUTO_PROMPT = 'continue';
+    if (shouldDebug(env)) {
+      console.error(`[contextdb-shell-bridge] interactive detected; auto-prompt=continue`);
+    }
   }
 
   const firstArg = opts.passthroughArgs[0] || '';
