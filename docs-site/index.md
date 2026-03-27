@@ -14,6 +14,13 @@ description: Upgrade your existing Codex/Claude/Gemini/OpenCode workflow with Op
 
 Project URL: <https://github.com/rexleimo/rex-cli>
 
+## Latest
+
+- [AIOS RL Training System: Multi-Environment Reinforcement Learning](/blog/rl-training-system/)
+- [ContextDB Search Upgrade: FTS5/BM25 by Default](/blog/contextdb-fts-bm25-search/)
+- [Windows CLI Startup Stability Update](/blog/windows-cli-startup-stability/)
+- [Orchestrate Live: Subagent Runtime](/blog/orchestrate-live/)
+
 ## What is this?
 
 RexCLI is a thin layer on top of your existing CLI agents. It doesn't replace them—it makes them work better together.

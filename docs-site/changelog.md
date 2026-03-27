@@ -57,7 +57,7 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
 
 ## Related Reading
 
-- [Blog: Skills install experience update](blog/2026-03-rexcli-skills-install-experience.md)
+- [Blog: Skills install experience update](/blog/2026-03-rexcli-skills-install-experience/)
 - [Quick Start](getting-started.md)
 - [ContextDB](contextdb.md)
 - [Troubleshooting](troubleshooting.md)

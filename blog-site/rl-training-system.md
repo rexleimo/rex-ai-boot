@@ -10,7 +10,7 @@ Since launching `aios orchestrate` live execution, we've been building something
 
 This post explains what we built, why we built it that way, and what it unlocks.
 
-![RL Training System Architecture](../assets/rl-training/rl-architecture-hero.png)
+![RL Training System Architecture](assets/rl-training/rl-architecture-hero.png)
 
 ## The Problem with Per-Environment RL
 
@@ -88,7 +88,7 @@ active ────────────── current policy in use
 
 This gives us **safe exploration with automatic rollback** — the core guarantee that makes online learning tractable.
 
-![Checkpoint Lineage: Three-Pointer Model](../assets/rl-training/rl-checkpoint-lineage.png)
+![Checkpoint Lineage: Three-Pointer Model](assets/rl-training/rl-checkpoint-lineage.png)
 
 ## Replay Pool: Four Lanes
 
@@ -103,7 +103,7 @@ Instead of storing every episode, we route them into lanes by comparison outcome
 
 The routing is deterministic — based on comparison result, not a learned router. This keeps the system simple and debuggable.
 
-![Replay Pool: Four Lanes](../assets/rl-training/rl-replay-pool.png)
+![Replay Pool: Four Lanes](assets/rl-training/rl-replay-pool.png)
 
 ## Mixed-Environment Campaigns
 
@@ -163,6 +163,6 @@ The next milestone is **Phase D/E validation**: confirming that mixed-environmen
 
 ## Read More
 
-- [AIOS Architecture](docs-site/architecture.md) — harness, dispatcher, and RL module layout
-- [RL Core Design Spec](docs/superpowers/specs/2026-03-22-aios-rl-core-design.md) — full technical specification
-- [Browser + Orchestrator RL Design](docs/superpowers/specs/2026-03-23-aios-browser-orchestrator-rl-design.md) — mixed-environment details
+- [AIOS Architecture](/architecture/)
+- [RL Core Design Spec](https://github.com/rexleimo/rex-cli/blob/main/docs/superpowers/specs/2026-03-22-aios-rl-core-design.md)
+- [Browser + Orchestrator RL Design](https://github.com/rexleimo/rex-cli/blob/main/docs/superpowers/specs/2026-03-23-aios-browser-orchestrator-rl-design.md)

@@ -17,6 +17,8 @@ description: RexAI CLI 생태계를 위한 성장/엔지니어링 아티클.
 ## 최신 글
 
 - [AIOS RL Training System: Multi-Environment Reinforcement Learning](rl-training-system.md)
+- [ContextDB Search Upgrade: FTS5/BM25 by Default](contextdb-fts-bm25-search.md)
+- [Windows CLI Startup Stability Update](windows-cli-startup-stability.md)
 - [Orchestrate Live: Subagent Runtime](orchestrate-live.md)
 - [小手작업 그만! AI 자동화로 매일 2시간씩 절약한 방법](xiaohongshu-automation.md)
 - [2026년 AI 프로그래밍 CLI 누가最强? Claude Code vs Codex vs Gemini 심층 비교](ai-cli-comparison.md)
