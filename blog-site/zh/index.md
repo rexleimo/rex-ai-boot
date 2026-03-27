@@ -16,6 +16,7 @@ description: 面向 RexAI CLI 生态的工程与增长文章。
 
 ## 最新文章
 
+- [AIOS RL 训练系统：从合成 BUG 修复到多环境联合学习](rl-training-system.md)
 - [ContextDB 检索升级：默认走 FTS5/BM25](contextdb-fts-bm25-search.md)
 - [Windows 启动稳定性更新：cmd 包装器下的 CLI 启动更稳了](windows-cli-startup-stability.md)
 - [Orchestrate Live：Subagent Runtime 正式可用](orchestrate-live.md)

@@ -15,6 +15,8 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
 ## Recent Versions
 
 - `main` (Unreleased):
+  - **Multi-environment RL training system**: shared `rl-core` control plane with shell, browser, and orchestrator adapters; three-pointer checkpoint lineage; four-lane replay pool; PPO + teacher distillation training
+  - **Mixed-environment campaigns** (`rl-mixed-v1`): one live batch can span shell + browser + orchestrator episodes with unified rollback decision
   - ContextDB `search` now defaults to SQLite FTS5 + `bm25(...)` ranking, with automatic lexical fallback when FTS is unavailable
   - ContextDB semantic rerank now operates on query-scoped lexical candidates, reducing drops of older exact matches
   - `subagent-runtime` live execution for `aios orchestrate` (opt-in via `AIOS_EXECUTE_LIVE=1`)

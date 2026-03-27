@@ -94,7 +94,14 @@ Check your config for security issues before automation.
 完成前用 verification-before-completion 验证一下
 ```
 
+## RL Training System
+
+AIOS includes a multi-environment reinforcement learning system. It trains a shared student policy across shell, browser, and orchestrator tasks using a unified control plane.
+
+See the [Architecture page](architecture.md#rl-training-layer-aios) for details, or read the [full RL training post](blog/rl-training-system.md).
+
 ## Read More
 
 - [Case Library](case-library.md) - Real-world usage examples
 - [ContextDB](contextdb.md) - How memory persists across sessions
+- [RL Training System](blog/rl-training-system.md) - Multi-environment RL architecture and usage

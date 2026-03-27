@@ -59,3 +59,59 @@ Live execution is opt-in and gated by:
 
 - `AIOS_EXECUTE_LIVE=1`
 - `AIOS_SUBAGENT_CLIENT=codex-cli`
+
+## RL Training Layer (AIOS)
+
+AIOS includes a multi-environment reinforcement learning system that continuously improves a shared student policy across shell, browser, and orchestrator tasks.
+
+### Shared Control Plane (`scripts/lib/rl-core/`)
+
+```
+campaign-controller.mjs   # epoch orchestration (collection + monitoring)
+checkpoint-registry.mjs  # active / pre_update_ref / last_stable lineage
+comparison-engine.mjs    # better / same / worse / comparison_failed
+control-state-store.mjs  # restart-safe control snapshots
+epoch-ledger.mjs         # epoch state + degradation streaks
+replay-pool.mjs          # four-lane routing (positive/neutral/negative/diagnostic)
+reward-engine.mjs       # environment reward + teacher shaping fusion
+teacher-gateway.mjs      # normalized teacher outputs (Codex/Claude/Gemini/opencode)
+schema.mjs               # shared contract validation
+trainer.mjs              # PPO entry points (online + offline)
+```
+
+### Environment Adapters
+
+| Adapter | Path | Training Focus |
+|---------|------|---------------|
+| Shell RL | `scripts/lib/rl-shell-v1/` | Synthetic bugfix tasks → real repositories |
+| Browser RL | `scripts/lib/rl-browser-v1/` | Controlled real web flows |
+| Orchestrator RL | `scripts/lib/rl-orchestrator-v1/` | High-value control decisions |
+| Mixed RL | `scripts/lib/rl-mixed-v1/` | Cross-environment joint training |
+
+### Key RL Concepts
+
+- **Episode contract**: uniform structured output across all environments (taskId, trajectory, outcome, reward, comparison)
+- **Three-pointer checkpoint lineage**: `active` → `pre_update_ref` → `last_stable` with automatic rollback on degradation
+- **Four-lane replay pool**: positive / neutral / negative / diagnostic_only — deterministic routing by comparison result
+- **Teacher gateway**: normalized signal from Codex CLI, Claude Code, Gemini CLI, and OpenCode
+
+### Running RL
+
+```bash
+# Shell RL pipeline
+node scripts/rl-shell-v1.mjs benchmark-generate --count 20
+node scripts/rl-shell-v1.mjs train --epochs 5
+node scripts/rl-shell-v1.mjs eval
+
+# Mixed-environment campaign
+node scripts/rl-mixed-v1.mjs mixed --mixed
+node scripts/rl-mixed-v1.mjs mixed-eval
+```
+
+### RL Status
+
+- RL Core: stable (40+ tests)
+- Shell RL V1: stable (Phase 1–3)
+- Browser RL V1: beta
+- Orchestrator RL V1: beta
+- Mixed RL: experimental (end-to-end validated)
