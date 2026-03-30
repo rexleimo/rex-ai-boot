@@ -10,7 +10,7 @@ Superpowersは再利用可能な自動化スキル。Claude Code、Codex、Gemin
 ## コア特徴
 
 - **自動計画** - 要件を実行可能なステップに自動分解
-- **並列分发** - 独立タスクを識別し、複数のサブタスクを並行実行
+- **並列分散** - 独立タスクを識別し、複数のサブタスクを並行実行
 - **スマート検証** - 完了前に結果を自動検証、推測に頼らない
 
 ## あるスキル
@@ -88,11 +88,17 @@ Superpowersは再利用可能な自動化スキル。Claude Code、Codex、Gemin
 ## 例
 
 ```
-brainstormingでこの機能怎么做/
-writing-plansでこの要件を步骤に分ける
-dispatching-parallel-agentsで这些任务并发执行
-verification-before-completionで完成前に検証
+brainstormingで新機能の実装方針を考える
+writing-plansで要件をステップに分解する
+dispatching-parallel-agentsでタスクを並行実行する
+verification-before-completionで完成前に検証する
 ```
+
+## RL トレーニングシステム
+
+AIOS にはマルチ環境の強化学習システムが含まれています。統一制御プレーンを通じて、シェル、ブラウザ、オーケストレータータスク間で共有学生ポリシーを訓練します。
+
+詳細は[アーキテクチャページ](architecture.md#rl-training-layer-aios)を参照してください。
 
 ## 続きを読む
 

@@ -5,6 +5,28 @@ description: よくある問題と対処。
 
 # トラブルシューティング
 
+## クイックアンサー（AI 検索）
+
+ほとんどの失敗は環境のセットアップの問題です（MCP ランタイム缺失、wrapper 未ロード、wrap モード不一致）。まず doctor スクリプトを実行し、wrapper スコープを確認してください。
+
+## Node 切り替え後 `better-sqlite3` / ContextDB が失敗する
+
+RexCLI は **Node 22 LTS** を対象としています。シェルがまだ Node 25 を実行している、または native 依存関係が別の Node ABI 用にビルドされている場合、ContextDB 関連コマンドが失敗する可能性があります。
+
+クイック修復:
+
+```bash
+node -v
+source ~/.nvm/nvm.sh && nvm use 22
+cd mcp-server && npm rebuild better-sqlite3
+```
+
+再試行:
+
+```bash
+npm run test:scripts
+```
+
 ## Browser MCP ツールが使えない
 
 まず実行 (macOS / Linux):
@@ -115,7 +137,9 @@ Tip: まず DAG を検証したい場合は `--execute dry-run`、または `AIO
 printf '%s' 'Return a JSON object matching the schema.' | codex exec --output-schema memory/specs/agent-handoff.schema.json -
 ```
 
-## ラップされない
+## コマンドがラップされていない
+
+チェック項目：
 
 - ContextDB を有効化したいワークスペース/ディレクトリ内か確認（非 git ディレクトリでも可）
 - `~/.zshrc` で wrapper が読み込まれているか確認
@@ -144,6 +168,14 @@ mkdir -p "$CODEX_HOME"
 
 最新版 wrapper は実行時に相対 `CODEX_HOME` を自動正規化します。
 
+## ラップ有効だが無効化したい
+
+シェル設定で以下を設定:
+
+```zsh
+export CTXDB_WRAP_MODE=off
+```
+
 ## このリポジトリの skills が他プロジェクトで見えない
 
 wrapper と skills は分離です。グローバル skills を明示的にインストールしてください:
@@ -158,3 +190,59 @@ scripts/doctor-contextdb-skills.sh --client all
 powershell -ExecutionPolicy Bypass -File .\\scripts\\install-contextdb-skills.ps1 -Client all
 powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-skills.ps1 -Client all
 ```
+
+## RexCLI ソースレポ内で `--scope project` が失敗する
+
+これは意図的な動作です。
+
+canonical skill source tree の移行後：
+
+- `skill-sources/` が authoring tree
+- repo-local の `.codex/skills` / `.claude/skills` / `.agents/skills` は sync 管理の生成ディレクトリ
+- ソースレポ自身への `--scope project` インストールは意図的にブロック済み
+
+代わりに以下を実行してください：
+
+```bash
+node scripts/sync-skills.mjs
+node scripts/check-skills-sync.mjs
+```
+
+他のプロジェクトに skills をインストールしたい場合は、そのワークスペースに切り替えてから `aios ... --scope project` を実行してください。
+
+## GitHub Pages `configure-pages` が見つからない
+
+これは通常 Pages ソースが完全に有効化されていないことを意味します。
+
+GitHub 設定で修正：
+
+1. `Settings -> Pages -> Source: GitHub Actions`
+2. `docs-pages` ワークフローを再実行
+
+## FAQ
+
+### ブラウザツールが使えないとき最初は何を実行すべきですか？
+
+再インストール前に `scripts/doctor-browser-mcp.sh`（または PowerShell 版）を実行してください。
+
+### `codex` を入力してもコンテキストが注入されないのはなぜですか？
+
+通常、wrapper が読み込まれていない、`CTXDB_WRAP_MODE` が現在のワークスペースをカバーしていない、またはコマンドが透伝管理サブコマンドであるのが原因です。
+
+## Skills が 잘못なディレクトリに保存された
+
+canonical skill source tree は以下に置かれるようになりました：
+
+- `<repo>/skill-sources`
+
+生成された repo-local 検出可能出力は以下の場所にあります：
+
+- `<repo>/.codex/skills`
+- `<repo>/.claude/skills`
+
+`SKILL.md` を `.baoyu-skills/` のような並行ディレクトリに保存すると、Codex / Claude はそれをスキルとして検出できません。
+
+- `.baoyu-skills/` は `EXTEND.md` のような拡張設定のみに使用
+- 本来のスキルソースファイルは `skill-sources/<name>/SKILL.md` に移動
+- `node scripts/sync-skills.mjs` で各クライアントの互換ディレクトリを再生成
+- `scripts/doctor-contextdb-skills.sh --client all` で未対応のスキルルートディレクトリを検出

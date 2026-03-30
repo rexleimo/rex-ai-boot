@@ -10,8 +10,8 @@ Superpowers는 재사용 가능한 자동화 스킬입니다. Claude Code, Codex
 ## 핵심 특징
 
 - **자동 계획** - 요구사항을 실행 가능한 스텝으로 자동 분해
-- **병렬分发** - 독립 태스크 식별, 여러 서브태스크 병렬 실행
-- **스마트 검증** - 완료 전에 결과 자동 검증, 추측に頼:X
+- **병렬 실행** - 독립 태스크 식별, 여러 서브태스크 병렬 실행
+- **스마트 검증** - 완료 전에 결과 자동 검증, 추측에 의존하지 않음
 
 ## 있는 스킬들
 
@@ -81,18 +81,24 @@ Superpowers는 재사용 가능한 자동화 스킬입니다. Claude Code, Codex
 
 ##使い方
 
-1. Superpowers 필요하면 자연스럽게 말해
-2. AI가 스킬 호출하고 네비게이트
-3. 결과는 프로젝트 메모리에 저장
+1. Superpowers가 필요하면 자연스럽게 말하세요
+2. AI가 스킬을 호출하고 안내합니다
+3. 결과는 프로젝트 메모리에 저장됩니다
 
 ## 예
 
 ```
-brainstorming으로 이 기능怎么做/
-writing-plans으로 이 요구사항을 단계로 나누기
-dispatching-parallel-agents로 这些任务并发执行
-verification-before-completion으로 완료 전에 검증
+brainstorming으로 이 기능을 어떻게 구현할지 생각하기
+writing-plans으로 요구사항을 단계로 나누기
+dispatching-parallel-agents로 태스크 병렬 실행하기
+verification-before-completion으로 완료 전에 검증하기
 ```
+
+## RL 훈련 시스템
+
+AIOS는 멀티 환경 강화학습 시스템을 포함합니다. 통합 제어 플레인을 통해 셸, 브라우저, 오케스트레이터 태스크에서 공유 학생 정책을 훈련합니다.
+
+자세한 내용은[아키텍처 페이지](architecture.md#rl-training-layer-aios)를 참조하세요.
 
 ## 더 보기
 

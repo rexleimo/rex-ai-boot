@@ -23,6 +23,18 @@ description: wrapper、runner 与 ContextDB 的运行关系。
   -> 启动原生 CLI（注入 context）
 ```
 
+## 存储模型
+
+每个被包装的工作区有独立的本地存储（git 根目录，如无则为当前目录）：
+
+```text
+memory/context-db/
+  manifest.json
+  index/sessions.jsonl
+  sessions/<session_id>/
+  exports/<session_id>-context.md
+```
+
 ## 作用域控制
 
 - `all`：所有工作区启用，包括非 git 目录
@@ -43,3 +55,59 @@ AIOS 在 ContextDB 之上提供面向运营的 harness：
 
 - `AIOS_EXECUTE_LIVE=1`
 - `AIOS_SUBAGENT_CLIENT=codex-cli`
+
+## RL 训练层（AIOS）
+
+AIOS 包含一个多环境强化学习系统，持续在 shell、浏览器和编排器任务中改进共享的学生策略。
+
+### 共享控制平面（`scripts/lib/rl-core/`）
+
+```
+campaign-controller.mjs   # epoch 编排（采集 + 监控）
+checkpoint-registry.mjs  # active / pre_update_ref / last_stable 血统追踪
+comparison-engine.mjs     # better / same / worse / comparison_failed
+control-state-store.mjs  # 重启安全的控制快照
+epoch-ledger.mjs         # epoch 状态 + 降级 streak
+replay-pool.mjs          # 四车道路由（positive/neutral/negative/diagnostic）
+reward-engine.mjs        # 环境 reward + teacher 塑形融合
+teacher-gateway.mjs      # 来自 Codex/Claude/Gemini/opencode 的标准化输出
+schema.mjs               # 共享契约验证
+trainer.mjs              # PPO 入口（online + offline）
+```
+
+### 环境适配器
+
+| 适配器 | 路径 | 训练重点 |
+|---------|------|------------|
+| Shell RL | `scripts/lib/rl-shell-v1/` | 合成 bugfix 任务 → 真实仓库 |
+| Browser RL | `scripts/lib/rl-browser-v1/` | 受控真实网页流程 |
+| Orchestrator RL | `scripts/lib/rl-orchestrator-v1/` | 高价值控制决策 |
+| Mixed RL | `scripts/lib/rl-mixed-v1/` | 跨环境联合训练 |
+
+### 核心 RL 概念
+
+- **Episode contract**：统一结构化输出，跨所有环境（taskId, trajectory, outcome, reward, comparison）
+- **三指针 checkpoint 血统**：`active` → `pre_update_ref` → `last_stable`，降级时自动回滚
+- **四车道 replay pool**：positive / neutral / negative / diagnostic_only — 按比较结果确定性路由
+- **Teacher gateway**：来自 Codex CLI、Claude Code、Gemini CLI 和 OpenCode 的标准化信号
+
+### 运行 RL
+
+```bash
+# Shell RL 流程
+node scripts/rl-shell-v1.mjs benchmark-generate --count 20
+node scripts/rl-shell-v1.mjs train --epochs 5
+node scripts/rl-shell-v1.mjs eval
+
+# 混合环境 campaign
+node scripts/rl-mixed-v1.mjs mixed --mixed
+node scripts/rl-mixed-v1.mjs mixed-eval
+```
+
+### RL 状态
+
+- RL Core：稳定（40+ 测试）
+- Shell RL V1：稳定（Phase 1–3）
+- Browser RL V1：beta
+- Orchestrator RL V1：beta
+- Mixed RL：实验性（端到端已验证）

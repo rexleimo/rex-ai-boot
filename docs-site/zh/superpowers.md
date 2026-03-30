@@ -94,6 +94,12 @@ Superpowers 是可复用的自动化技能。它们挂载到 Claude Code、Codex
 完成前用 verification-before-completion 验证一下
 ```
 
+## RL 训练系统
+
+AIOS 包含一个多环境强化学习系统。它通过统一控制平面，在 shell、浏览器和编排器任务中训练一个共享的学生策略。
+
+详见[架构页面](architecture.md#rl-training-layer-aios)。
+
 ## 继续阅读
 
 - [案例集](case-library.md) - 真实使用案例

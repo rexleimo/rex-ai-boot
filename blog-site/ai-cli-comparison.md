@@ -1,157 +1,236 @@
-# 2026년 AI 프로그래밍 CLI 누가最强? Claude Code vs Codex vs Gemini 심층 비교
+---
+title: Stop Debating AI Programming Tools in 2026 — Here's What Actually Works
+publish_date: 2026-03-10
+description: Claude Code vs Codex vs Gemini deep comparison, with a surprising third option.
+---
 
-AI 프로그래밍 도구 선택은 그녀选择와 같다 — 못 생긴 게 중요한 게 아니라 맞는지.
+# Stop Debating AI Programming Tools in 2026 — Here's What Actually Works
 
-야생 프로그래머로서 지난 3개월간 세 가지 주요 AI CLI를 깊이 사용해봤다: Claude Code, Codex CLI, Gemini CLI. 오늘은 그냥바로 내 실제 사용 경험을 알려주마, 3분 내에 선택하도록 돕자.
+Claude Code, Codex CLI, Gemini CLI...
+
+Are you still watching comparison videos and getting more confused?
+
+Stop worrying. This article isn't about benchmarks or hype. I'll tell you **which tool to reach for in which scenario**, and **whether it's possible to have everything**.
 
 ---
 
-## 결론 먼저
+## TL;DR (for impatient readers)
 
-| 상황 | 추천 | 이유 |
-|------|------|------|
-| 복잡한 비즈니스 로직 작성 | Claude Code | 컨텍스트 이해 강, 코드 품질 높음 |
-| 빠른 자동화 스크립트 | Codex | 가볍고 빠름, 브라우저 자동화 강 |
-| 멀티모달/Google 생태계 | Gemini | Google 통합 완벽 |
-| **나的全部다** | **RexCLI** | 세 가지 장점 통합 + 알파 |
+| Your situation | Recommended | Why |
+|----------------|-------------|-----|
+| Writing core business logic | Claude Code | Best context understanding, highest code quality |
+| Running automation scripts / browser operations | Codex | Works out of the box, stable and reliable |
+| Google ecosystem developer | Gemini | Seamless Workspace integration |
+| **I want all of the above** | **RexCLI** | Integrates all three + extras |
 
-選擇したくないなら最後 부분을 보아라.
-
----
-
-## 차원1: 컨텍스트 연속성
-
-**Claude Code**: ⭐⭐⭐⭐⭐
-컨텍스트 유지 능력 最強. claude:// 프로토콜 깊이 통합, 파일 수정 이력 모두 기억. 긴 작업 중간에 끊어져도 다음_round에서 어디까지 했는지 기억.
-
-**Codex**: ⭐⭐⭐⭐
-컨텍스트도 괜찮지만跨파일 추적 능력은 Claude稍弱. 중간 길이 작업에 적합.
-
-**Gemini**: ⭐⭐⭐
-Google의 강점은 검색, 프로그래밍 컨텍스트는 좀 떨어짐. 긴 작업은 "기억 상실"되기 쉬움.
+If you're in a rush, skip to the last section.
 
 ---
 
-## 차원2: 브라우저 자동화
+## 01. Context Continuity (Resume from Breakpoint)
 
-**Claude Code**: ⭐⭐⭐
-MCP 메커니즘은 있지만自带 브라우저 능력은平凡. 타사 MCP 직접 구성해야 함.
+This is the dimension I think is **most overlooked but most important**.
 
-**Codex**: ⭐⭐⭐⭐⭐
-이건 Codex의主场. mcp-server/browser_* 도구 네이티브 지원, 스크린샷, 클릭, 입력 일|At. 그리고 반검출做得不错, 사이트에서 ban당하지 않음.
+### Claude Code: ⭐⭐⭐⭐⭐
 
-**Gemini**: ⭐⭐⭐
-Google의 브라우저 능력은 주로 Chrome DevTools Protocol, 기술 디버깅에 적합,日常自动化엔 부적합.
+Context retention is **the strongest**. I used it to refactor 2000 lines of legacy code with a 3-day gap in between. When I resumed, it remembered which function I was refactoring last.
 
----
+`claude://` protocol is deeply integrated. File modification history is crystal clear.
 
-## 차원3: 도구 경험
+### Codex: ⭐⭐⭐⭐
 
-**Claude Code**: ⭐⭐⭐⭐⭐
-가장流畅, CLI 경험은 자연스러운 대화에 가장 가깝. Anthropic 집안产品一貫の优雅.
+Context is decent too, but cross-file tracking is slightly weaker than Claude. Good for medium-length tasks.
 
-**Codex**: ⭐⭐⭐⭐
-빠르고 명령이 간단함. 하지만 경험은좀 "딱딱"함,理工男같음.
+### Gemini: ⭐⭐⭐
 
-**Gemini**: ⭐⭐⭐
-Google의 CLI는一言难尽... 기능성은 OK인데 경험이 좀糙.
+Google's strength is search. Programming context is a bit lacking. Long tasks tend to "lose memory."
+
+**My take**: If you're running long tasks (over 1 hour), go with Claude Code. If you're only running tasks under 10 minutes, the difference between all three is negligible.
 
 ---
 
-## 차원4: 장애 복구
+## 02. Browser Automation
 
-**Claude Code**: ⭐⭐⭐⭐⭐
-체크포인트 지원, 복구 메커니즘 가장 완벽. 작업 중단不怕,断点에서 계속.
+This is a dimension most comparison articles skip.
 
-**Codex**: ⭐⭐⭐⭐
-기본적인 복구 능력은 있지만 Claude보다细节떨어짐.
+### Claude Code: ⭐⭐⭐
 
-**Gemini**: ⭐⭐⭐
-복구 메커니즘은 좀 기초적, 긴 작업 중단 시翻車하기 쉬움.
+Has MCP mechanism but built-in browser capability is average. You need to configure a third-party MCP yourself.
 
----
+**Real test**: Setting up a Playwright MCP took 30 minutes. Occasional issues during execution.
 
-## 차원5: 팀 협업
+### Codex: ⭐⭐⭐⭐⭐
 
-**Claude Code**: ⭐⭐⭐⭐
-팀 공유 설정 지원, 기업 기능은 아직 개선 중.
+This is Codex's **home turf**.
 
-**Codex**: ⭐⭐⭐⭐
-OpenAI 집안, 팀 협업底子厚.
+`mcp-server/browser_*` tools are natively supported: screenshots, clicks, form filling, scrolling — full service.
 
-**Gemini**: ⭐⭐⭐⭐
-Google Workspace 통합이亮点.
+And anti-detection is solid. Won't get banned by websites.
 
----
+**Real test**: Running Xiaohongshu automation — rock solid. Used it for 3 months without a single incident.
 
-## 실제 시나리오 비교
+### Gemini: ⭐⭐⭐
 
-### 시나리오: 심红书 운영 자동화
+Google's browser capability is mainly Chrome DevTools Protocol, good for technical debugging, not suited for daily automation.
 
-**Claude Code**: 직접 Playwright MCP 구성 필요, 구성에 30분, 실행 시 가끔 문제
-**Codex**: 바로 사용 가능, 안정적 실행, 내가 매일 사용
-**Gemini**: 이 시나리오엔不太适合
-
-### 시나리오: 복잡한 코드 리팩토링
-
-**Claude Code**: 컨텍스트 이해 最強, 리팩토링思路清晰, 코드 품질 높음
-**Codex**: 빠르지만 리팩토링 품질은 Claude稍逊
-**Gemini**: 간단한 작업엔 적합, 복잡한 로직은 잘 튀어감
-
-### 시나리오: 빠른 스크립트 작성
-
-**Claude Code**: 너무优雅, 스크립트엔 과분
-**Codex**: 딱 좋음, 명령 간단, 빠름
-**Gemini**: 되는데 경험이平凡
+**My take**: If you need browser automation (data scraping, auto-filling forms, batch operations), **just pick Codex**. Don't overthink it.
 
 ---
 
-## 다 갖출 수 있을까?
+## 03. Tool Experience (Interaction Fluency)
 
-있어,兄弟.
+### Claude Code: ⭐⭐⭐⭐⭐
 
-RexCLI 만들었어, 오픈소스 워크플로 도구.核心思路: **새 바퀴를 만들지 않고, 기존 Claude Code, Codex, Gemini를协同작업하게 함.**
+Smoothest interaction. CLI experience closest to natural conversation.
 
-RexCLI가 뭘 함:
+Anthropic's signature elegance. Feels like a Michelin-starred restaurant — attentive service.
 
-1. **통일 브라우저 자동화**: 어떤 CLI를 쓰든 `browser_*` 도구로 브라우저操作
-2. **跨CLI 컨텍스트 메모리**: CLI切换不丢上下文,断点可续
-3. **Privacy Guard**: 설정/密钥 파일 읽기前 자동 탈민, 키 보호
+### Codex: ⭐⭐⭐⭐
+
+Fast, commands are concise. But interaction feels a bit more "mechanical."
+
+Like fast food — fast and filling.
+
+### Gemini: ⭐⭐⭐
+
+Google's CLI is... hard to describe. Functionality is OK, but experience is a bit rough.
+
+Like a company cafeteria — no expectations, but you'll be fed.
+
+---
+
+## 04. Fault Recovery (Resume from Breakpoint)
+
+### Claude Code: ⭐⭐⭐⭐⭐
+
+Supports checkpointing. Recovery mechanism is the most complete. Task interrupted mid-way? No problem, resume from the breakpoint.
+
+**Real test**: Was running a refactoring task and the laptop ran out of power. Plugged it in, rebooted, and it resumed from the last saved state and completed the job.
+
+### Codex: ⭐⭐⭐⭐
+
+Has basic recovery capability, but not as detailed as Claude.
+
+### Gemini: ⭐⭐⭐
+
+Recovery mechanism is relatively basic. Long tasks that get interrupted tend to fail.
+
+---
+
+## 05. Real Scenario Comparison
+
+Talking about specs is boring. Let's go straight to scenarios.
+
+### Scenario One: Xiaohongshu Operations Automation
+
+| Tool | Experience |
+|------|------------|
+| Claude Code | Need to configure MCP yourself, took 30 min, occasional issues during execution |
+| Codex | **Ready to use out of the box, stable, I use it every day** |
+| Gemini | Not well-suited for this scenario |
+
+**Conclusion**: For browser automation, **pick Codex**.
+
+### Scenario Two: Complex Code Refactoring
+
+| Tool | Experience |
+|------|------------|
+| Claude Code | Best context understanding, clear refactoring approach, high code quality |
+| Codex | Fast, but refactoring quality slightly behind Claude |
+| Gemini | Good for simple tasks, tends to go off-track on complex logic |
+
+**Conclusion**: For complex refactoring, **pick Claude Code**.
+
+### Scenario Three: Quick Script Writing
+
+| Tool | Experience |
+|------|------------|
+| Claude Code | Too elegant for scripts, feels like using a sledgehammer |
+| Codex | **Just right, concise commands, fast** |
+| Gemini | Works, but experience is average |
+
+**Conclusion**: For quick scripts, **pick Codex**.
+
+---
+
+## 06. Is It Possible to Have Everything?
+
+Yes, brother.
+
+I built RexCLI, an open-source workflow tool. The core idea: **don't reinvent the wheel — make existing Claude Code, Codex, and Gemini work together**.
+
+### What problems does RexCLI solve?
+
+**Problem 1: Losing context when switching tools**
+
+Before: You were halfway through a task with Codex, wanted Claude to help optimize? Sorry, context is gone, start over.
+
+RexCLI's Context DB remembers task progress. Switch tools without losing continuity.
+
+**Problem 2: Browser automation configuration is a pain**
+
+Every tool has different MCP configuration methods. Annoying?
+
+RexCLI unifies `browser_*` tools. Whether you use Codex or Claude, you can operate browsers with the same commands.
+
+**Problem 3: Secret key leak risk**
+
+When running scripts, could your API key accidentally leak into logs?
+
+RexCLI has Privacy Guard. Automatically redacts sensitive data before reading config files. Protects your keys.
+
+### How to use it?
 
 ```bash
-# Codex 사용
+# Use Codex
 codex
 
-# Claude로切换
+# Switch to Claude
 claude
 
-# Gemini로切换
+# Switch to Gemini
 gemini
 ```
 
-全程上下文不断, 想换就换.
+Context stays continuous throughout. Switch whenever you want.
 
-웹사이트: [rexai.top](https://rexai.top)
-
----
-
-## 결론
-
-| 상황 | 추천 |
-|------|------|
-| 핵심 비즈니스 코드 작성 | Claude Code |
-| 자동화 스크립트/브라우저 작업 | Codex |
-| Google 생태계 개발자 | Gemini |
-| 다 갖춰 | RexCLI |
+Website: [rexai.top](https://rexai.top)
 
 ---
 
-## 다음 회고
+## 07. Summary
 
-다음에는 **RexCLI 기술 아키텍처** 자세히 설명할게, 세 CLI 사이를 원활하게切换하는 방법. 기대해줘.
+| Your situation | Recommended |
+|----------------|-------------|
+| Writing core business code | Claude Code |
+| Running automation scripts / browser operations | Codex |
+| Google ecosystem developer | Gemini |
+| Want the best of both worlds | RexCLI |
+
+**My personal choice**: Daily scripts with Codex, complex code refactoring with Claude, Gemini for research when needed. Tools are a means, not an end.
 
 ---
 
-**지금 어떤 AI 프로그래밍 도구 사용 중? 가장头疼的问题是?** 댓글에聊聊, 좋아요 가장 높은 분에게 RexCLI 입문 가이드 드림.
+## 08. Bonus
 
-더 알고 싶으면? [rexai.top](https://rexai.top) 팔로우, 다음회에 봐요!
+Honestly, for most developers, the three tools aren't that different.
+
+**What truly affects efficiency is workflow continuity** — whether your task remembers where you left off, whether switching tools loses context.
+
+From this angle, RexCLI may be the most complete solution available today.
+
+---
+
+## 09. Next Article Preview
+
+In the next article, I'll dive deep into **RexCLI's technical architecture**, and how to use it to seamlessly switch between three CLIs.
+
+Stay tuned.
+
+---
+
+**Which AI programming tool are you using right now? What's your biggest pain point?**
+
+Let's chat in the comments. The person with the most likes gets a free RexCLI onboarding guide.
+
+Want to learn more? Follow [rexai.top](https://rexai.top). See you in the next article!
