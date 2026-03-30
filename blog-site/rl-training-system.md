@@ -30,25 +30,25 @@ The right architecture was to **extract the shared control plane first**, then p
 ## Architecture: One Core, Three Environments
 
 ```
-scripts/lib/rl-core/           ← Shared control plane
-├── campaign-controller.mjs    ← collection/monitoring epoch orchestration
-├── checkpoint-registry.mjs   ← active / pre_update_ref / last_stable lineage
-├── comparison-engine.mjs     ← better / same / worse / comparison_failed
-├── control-state-store.mjs   ← restart-safe control snapshots
-├── epoch-ledger.mjs           ← epoch state + degradation streaks
-├── replay-pool.mjs            ← four-lane routing (positive/neutral/negative/diagnostic)
-├── reward-engine.mjs          ← environment reward + teacher shaping fusion
-├── teacher-gateway.mjs        ← normalized teacher outputs (Codex/Claude/Gemini/opencode)
-├── schema.mjs                 ← all shared contracts validated here
-└── trainer.mjs                ← PPO entry points (online + offline)
+scripts/lib/rl-core/           <- Shared control plane
+├── campaign-controller.mjs    <- collection/monitoring epoch orchestration
+├── checkpoint-registry.mjs   <- active / pre_update_ref / last_stable lineage
+├── comparison-engine.mjs     <- better / same / worse / comparison_failed
+├── control-state-store.mjs   <- restart-safe control snapshots
+├── epoch-ledger.mjs           <- epoch state + degradation streaks
+├── replay-pool.mjs            <- four-lane routing (positive/neutral/negative/diagnostic)
+├── reward-engine.mjs          <- environment reward + teacher shaping fusion
+├── teacher-gateway.mjs        <- normalized teacher outputs (Codex/Claude/Gemini/opencode)
+├── schema.mjs                 <- all shared contracts validated here
+└── trainer.mjs                <- PPO entry points (online + offline)
 
-scripts/lib/rl-shell-v1/       ← Shell environment (synthetic bugfix tasks)
-scripts/lib/rl-browser-v1/      ← Browser environment (controlled real web flows)
-scripts/lib/rl-orchestrator-v1/ ← Orchestrator environment (control decisions)
-scripts/lib/rl-mixed-v1/       ← Mixed-environment campaigns
+scripts/lib/rl-shell-v1/       <- Shell environment (synthetic bugfix tasks)
+scripts/lib/rl-browser-v1/      <- Browser environment (controlled real web flows)
+scripts/lib/rl-orchestrator-v1/ <- Orchestrator environment (control decisions)
+scripts/lib/rl-mixed-v1/       <- Mixed-environment campaigns
 ```
 
-**RL Core** owns the common training-control plane. It defines the episode contract, batch semantics, comparison and degradation tracking, checkpoint lineage, rollback rules, replay routing, and trainer entry points.
+**RL Core** owns the common training control plane. It defines the episode contract, batch semantics, comparison and degradation tracking, checkpoint lineage, rollback rules, replay routing, and trainer entry points.
 
 **Environment adapters** own everything execution-specific: task sampling, episode execution, evidence collection, and environment-specific verification inputs. They implement a thin adapter interface — no RL logic leaks in.
 
@@ -137,7 +137,7 @@ With a shared student policy across environments, we can:
 ## How to Run
 
 ```bash
-# Shell RL: benchmark generation → training → evaluation
+# Shell RL: benchmark generation -> training -> evaluation
 node scripts/rl-shell-v1.mjs benchmark-generate --count 20
 node scripts/rl-shell-v1.mjs train --epochs 5
 node scripts/rl-shell-v1.mjs eval

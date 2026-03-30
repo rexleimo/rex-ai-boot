@@ -9,7 +9,7 @@ description: 常见报错与修复步骤。
 
 大多数问题来自环境与作用域配置（MCP 依赖缺失、包装未加载、wrap 模式不匹配）。先跑诊断，再改配置。
 
-## 切换 Node 后 `better-sqlite3` / ContextDB 失败
+## `better-sqlite3` / ContextDB 切换 Node 后失败
 
 RexCLI 现在明确以 **Node 22 LTS** 为运行基线。如果你的 shell 还在跑 Node 25，或者 native 依赖是按别的 Node ABI 编出来的，ContextDB 相关命令就可能报错。
 
@@ -29,35 +29,81 @@ npm run test:scripts
 
 ## Browser MCP 工具不可用
 
-先执行（macOS / Linux）：
+**大多数情况**: Playwright MCP 未安装，或 `~/.config/codex/` (或 `~/.config/claude/` 等) 的 MCP 配置中缺少 `puppeteer-stealth` 别名。
 
-```bash
-scripts/doctor-browser-mcp.sh
-```
+用 Doctor 脚本检查：
 
-Windows（PowerShell）执行：
+=== "macOS / Linux"
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-browser-mcp.ps1
-```
+    ```bash
+    scripts/doctor-browser-mcp.sh
+    ```
 
-如果诊断提示缺依赖，再执行安装脚本：
+=== "Windows (PowerShell)"
 
-```bash
-scripts/install-browser-mcp.sh
-```
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\scripts\doctor-browser-mcp.ps1
+    ```
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
+或手动打开 `~/.config/codex/mcp.json`（或 Claude Code 的 `~/.config/claude/settings.json`，Gemini CLI 的 `~/.gemini/mcp.json`），确保包含：
+
+```json
+{
+  "mcpServers": {
+    "puppeteer-stealth": {
+      "command": "node",
+      "args": ["/path/to/rex-cli/mcp-server/dist/puppeteer-stealth-server.js"]
+    }
+  }
+}
 ```
 
 ## `EXTRA_ARGS[@]: unbound variable`
 
-原因：旧版 `ctx-agent.sh` 在 `bash set -u` 下展开空数组。
+原因：旧版 `ctx-agent.sh` 在 `bash set -u` 空数组展开边界情况下的错误。
 
-处理：更新到最新 `main` 并重新打开 shell。
+修复：
 
-新版本已统一为 `ctx-agent-core.mjs` 作为执行核心，避免 sh/mjs 双实现漂移。
+1. 拉取最新的 `main`。
+2. 重新打开 shell 并重试 `claude`/`codex`/`gemini`。
+
+最新版本使用统一的运行时核心（`ctx-agent-core.mjs`）来处理 shell 和 Node wrapper，避免了这类漂移。
+
+## 命令完全没有被包装
+
+输入 `codex` / `claude` / `gemini` 后完全没有被包装：
+
+1. 执行 `source ~/.zshrc`（或 `~/.bashrc`）重新加载 wrapper
+2. 用 `echo $CTXDB_WRAP_MODE` 确认 wrapper 作用域（若是 `opt-in` 则需要 `.contextdb-enable` 标记）
+3. `cd` 到需要包装的目录（确认 `.contextdb-enable` 文件存在）
+4. 打开新的终端会话
+
+## 命令被包装了但应该透传
+
+如果你想透传而不是包装：
+
+```zsh
+export CTXDB_WRAP_MODE=passthrough
+# 这样 codex/claude/gemini 会直接执行
+```
+
+## better-sqlite3 / ContextDB 切换 Node 后失败
+
+RexCLI 现在明确以 **Node 22 LTS** 为运行基线。如果你的 shell 还在跑 Node 25，或者 native 依赖是按别的 Node ABI 编出来的，ContextDB 相关命令就可能报错。
+
+快速修复：
+
+```bash
+node -v
+source ~/.nvm/nvm.sh && nvm use 22
+cd mcp-server && npm rebuild better-sqlite3
+```
+
+然后重新验证：
+
+```bash
+npm run test:scripts
+```
 
 ## `search` 结果异常为空
 
@@ -68,7 +114,7 @@ powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
 
 ## `contextdb context:pack` 失败
 
-AIOS 会先生成 ContextDB 上下文包（`context:pack`），再启动 `codex/claude/gemini`。
+AIOS 会在启动 `codex/claude/gemini` 之前先生成 ContextDB 上下文包（`context:pack`）。
 
 如果打包失败，`ctx-agent` 默认会**告警并继续运行**（不注入上下文，也不让 CLI 整体起不来）。
 
@@ -78,7 +124,7 @@ AIOS 会先生成 ContextDB 上下文包（`context:pack`），再启动 `codex/
 export CTXDB_PACK_STRICT=1
 ```
 
-注意：shell wrapper（`codex`/`claude`/`gemini`）默认会 fail-open，即便设置了 `CTXDB_PACK_STRICT=1` 也不会让交互式会话直接“起不来”。如果你希望包装层也严格执行：
+注意：shell wrapper（`codex`/`claude`/`gemini`）默认会 fail-open，即便设置了 `CTXDB_PACK_STRICT=1` 也不会让交互式会话直接"起不来"。如果你希望包装层也严格执行：
 
 ```bash
 export CTXDB_PACK_STRICT_INTERACTIVE=1
@@ -90,7 +136,7 @@ export CTXDB_PACK_STRICT_INTERACTIVE=1
 aios quality-gate pre-pr --profile strict
 ```
 
-## `codex /new` 或 `claude/gemini /clear` 后上下文“没了”
+## `codex /new` 或 `claude/gemini /clear` 后上下文"没了"
 
 `/new` / `/clear` 重置的是 **CLI 内部的对话状态**。ContextDB 仍在磁盘上，但包装层只会在 **启动 CLI 进程时** 注入一次 context packet。
 
@@ -104,65 +150,28 @@ aios quality-gate pre-pr --profile strict
 
 如果客户端不支持 `@file` 引用，请把文件内容粘贴为首条消息。
 
-## `aios orchestrate --execute live` 被阻塞或失败
+## `aios orchestrate --execute live` 被阻止/失败
 
-live 编排默认关闭，需要显式 opt-in：
+确保设置了 `AIOS_EXECUTE_LIVE` 和 `AIOS_SUBAGENT_CLIENT`：
 
 ```bash
 export AIOS_EXECUTE_LIVE=1
-export AIOS_SUBAGENT_CLIENT=codex-cli  # 必须（live 当前仅支持 codex-cli）
+export AIOS_SUBAGENT_CLIENT=codex-cli  # 必填（live 目前仅支持 codex-cli）
 ```
 
-同时确保 `codex` 在 `PATH` 中并已登录（例如 `codex --version`）。
+如果你使用 `codex` v0.114+，AIOS 会优先使用 `codex exec` 结构化输出以获得稳定的 JSON handoff（旧版本自动降级）。
 
-Windows 快速验证（PowerShell）：
+## `ctx-agent` 执行报错: `claude: command not found`
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-shell.ps1
-codex --version
-codex
-```
+原因：旧版 `ctx-agent.sh` 在 `bash set -u` 下展开空数组。
 
-期望：不出现 `stdout is not a terminal` 等 TTY 错误，且交互式 `codex` 能正确接管当前终端。
+处理：更新到最新 `main` 并重新打开 shell。
 
-提示（codex-cli）：推荐 Codex CLI >= v0.114。AIOS 会在可用时自动使用 `codex exec` 的结构化输出（`--output-schema`、`--output-last-message`、stdin），让 JSON handoff 更稳定。
+新版本已统一为 `ctx-agent-core.mjs` 作为执行核心，避免 sh/mjs 双实现漂移。
 
-提示：想先验证 DAG 而不产生 token 成本，可以用 `--execute dry-run`，或设置 `AIOS_SUBAGENT_SIMULATE=1` 走 live runtime 的本地模拟路径。
+## `CODEX_HOME points to ".codex"` 错误
 
-常见失败特征：
-
-- `type: upstream_error` / `server_error`：上游不稳定。稍后重试（AIOS 会自动重试几次）。
-- `Timed out after 600000 ms`：增大 `AIOS_SUBAGENT_TIMEOUT_MS`（例如 `900000`），或用 `AIOS_SUBAGENT_CONTEXT_LIMIT` / `AIOS_SUBAGENT_CONTEXT_TOKEN_BUDGET` 缩小上下文包。
-- `invalid_json_schema`（`param: text.format.schema`）：后端拒绝了结构化输出 schema。更新到最新 `main` 后重试；AIOS 也会在检测到 schema 被拒绝时自动去掉 `--output-schema` 再试一次。
-
-最小 structured-output 冒烟测试（macOS/Linux）：
-
-```bash
-printf '%s' 'Return a JSON object matching the schema.' | codex exec --output-schema memory/specs/agent-handoff.schema.json -
-```
-
-## 命令没有被包装
-
-检查：
-
-- 当前目录是你希望启用 ContextDB 的工作区目录（可以是 git 项目，也可以是普通目录）
-- `~/.zshrc` 已 source `contextdb-shell.zsh`
-- `CTXDB_WRAP_MODE` 允许当前工作区
-- `opt-in` 模式下已创建 `.contextdb-enable`
-
-先跑包装诊断：
-
-```bash
-scripts/doctor-contextdb-shell.sh
-```
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-shell.ps1
-```
-
-## `CODEX_HOME points to ".codex"` 报错
-
-原因：`CODEX_HOME` 被设置为相对路径。
+原因：`CODEX_HOME` 被设置成了相对路径。
 
 修复：
 
@@ -171,26 +180,28 @@ export CODEX_HOME="$HOME/.codex"
 mkdir -p "$CODEX_HOME"
 ```
 
-新版本包装脚本也会在运行时自动规范相对 `CODEX_HOME`。
+最新 wrapper 脚本也会在命令执行时自动规范化相对路径的 `CODEX_HOME`。
 
-## 本仓库 skills 在其他项目不可见
+## Wrapper 已加载但应该禁用
 
-包装器与 skills 是分离设计，需要显式安装全局 skills：
-`--client all` 会同时安装到 `codex`、`claude`、`gemini`、`opencode`。
+在 shell 配置中设置：
 
-```bash
-scripts/install-contextdb-skills.sh --client all
-scripts/doctor-contextdb-skills.sh --client all
+```zsh
+export CTXDB_WRAP_MODE=off
 ```
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\\scripts\\install-contextdb-skills.ps1 -Client all
-powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-skills.ps1 -Client all
-```
+## 技能意外地在多个项目间共享
+
+技能加载作用域与 ContextDB 包装是分开的：
+
+- 全局技能：`~/.codex/skills`、`~/.claude/skills`、`~/.gemini/skills`、`~/.config/opencode/skills`
+- 仅项目技能：`<repo>/.codex/skills`、`<repo>/.claude/skills`
+
+如果需要隔离，请将自定义技能放在 repo-local 文件夹中。
 
 ## 在 RexCLI 源仓库里执行 `--scope project` 失败
 
-这是预期行为。
+这是 canonical skill source 迁移后的预期行为。
 
 现在：
 
@@ -207,6 +218,34 @@ node scripts/check-skills-sync.mjs
 
 如果你是想把 skills 安装到别的项目，请切到那个目标工作区再执行 `aios ... --scope project`。
 
+## Repo skills 在其他项目里不可全局使用
+
+wrapper 和 skills 是故意分开的。全局 skills 需要单独安装：
+`--client all` 会同时覆盖 `codex`、`claude`、`gemini` 和 `opencode`。
+
+=== "macOS / Linux"
+
+    ```bash
+    scripts/install-contextdb-skills.sh --client all
+    scripts/doctor-contextdb-skills.sh --client all
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-skills.ps1 -Client all
+    powershell -ExecutionPolicy Bypass -File .\scripts\doctor-contextdb-skills.ps1 -Client all
+    ```
+
+## GitHub Pages `configure-pages` 找不到
+
+这通常意味着 Pages source 没有完全启用。
+
+在 GitHub 设置中修复：
+
+1. `Settings -> Pages -> Source: GitHub Actions`
+2. 重新运行 `docs-pages` workflow。
+
 ## 常见问答
 
 ### 浏览器工具不可用时第一步做什么？
@@ -216,7 +255,6 @@ node scripts/check-skills-sync.mjs
 ### 为什么输入 `codex` 没有注入上下文？
 
 通常是 wrapper 未加载、`CTXDB_WRAP_MODE` 未覆盖当前工作区，或者当前命令属于透传的管理子命令。
-
 
 ## 把技能放进了错误目录
 
