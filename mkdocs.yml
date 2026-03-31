@@ -48,11 +48,13 @@ plugins:
           name: English
           default: true
           build: true
+          link: /
           site_name: RexCLI Documentation
           site_description: Local-first multi-CLI agent workflow docs for Codex CLI, Claude Code, Gemini CLI, and OpenCode skills sync.
         - locale: zh
           name: 简体中文
           build: true
+          link: /zh/
           site_name: RexCLI 文档
           site_description: 面向 Codex CLI、Claude Code、Gemini CLI 及 OpenCode skills 同步的本地优先多 CLI 智能体工作流文档。
           nav_translations:
@@ -80,6 +82,7 @@ plugins:
         - locale: ja
           name: 日本語
           build: true
+          link: /ja/
           site_name: RexCLI ドキュメント
           site_description: Codex CLI、Claude Code、Gemini CLI と OpenCode skills 同期向けのローカルファーストなマルチ CLI エージェント運用ドキュメント。
           nav_translations:
@@ -107,6 +110,7 @@ plugins:
         - locale: ko
           name: 한국어
           build: true
+          link: /ko/
           site_name: RexCLI 문서
           site_description: Codex CLI, Claude Code, Gemini CLI와 OpenCode skills 동기화를 위한 로컬 우선 멀티 CLI 에이전트 워크플로 문서.
           nav_translations:
