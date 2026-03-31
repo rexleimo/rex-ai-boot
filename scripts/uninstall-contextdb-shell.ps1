@@ -6,5 +6,12 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $wrapper = Join-Path $PSScriptRoot 'aios.ps1'
-& $wrapper internal shell uninstall @Args
+
+# Build argument list, filtering out empty strings
+$passArgs = @()
+if ($Args -and @($Args).Count -gt 0) {
+  $passArgs = @($Args) | Where-Object { $_ -and $_.Trim() }
+}
+
+& $wrapper internal shell uninstall @passArgs
 exit $LASTEXITCODE
