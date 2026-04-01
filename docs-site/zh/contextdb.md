@@ -49,6 +49,7 @@ npm run contextdb -- session:new --agent codex-cli --project demo --goal "implem
 npm run contextdb -- event:add --session <id> --role user --kind prompt --text "start"
 npm run contextdb -- checkpoint --session <id> --summary "phase done" --status running --next "write tests|implement"
 npm run contextdb -- context:pack --session <id> --out memory/context-db/exports/<id>-context.md
+npm run contextdb -- index:sync --stats --jsonl-out memory/context-db/exports/index-sync-stats.jsonl
 npm run contextdb -- index:rebuild
 ```
 
@@ -77,15 +78,47 @@ ContextDB 提供 SQLite 支撑的 sidecar 索引检索：
 npm run contextdb -- search --query "auth race" --project demo --kinds response --refs auth.ts
 npm run contextdb -- timeline --session <id> --limit 30
 npm run contextdb -- event:get --id <sessionId>#<seq>
+npm run contextdb -- index:sync --stats
 npm run contextdb -- index:rebuild
 ```
 
 - `search`：按索引查询事件。
 - `timeline`：合并 event/checkpoint 时间线。
 - `event:get`：按稳定 ID 获取单条事件。
+- `index:sync`：从真源会话文件增量同步到 sidecar 索引。
 - `index:rebuild`：从 `sessions/*` 真源文件重建 SQLite 索引。
 - 默认排序路径：SQLite FTS5 `MATCH` + `bm25(...)`（覆盖 `kind/text/refs`）。
 - 兼容性回退：如果当前环境不可用 FTS，`search` 会自动回退到 lexical 匹配。
+
+## 增量同步 + refs 规范化（P1.5）
+
+ContextDB 现在在 SQLite sidecar 中维护规范化 `event_refs` 表。  
+`--refs` 过滤改为基于该表做规范化 refs 精确匹配，减少字符串包含匹配带来的误命中。
+
+```bash
+npm run contextdb -- index:sync --stats
+npm run contextdb -- index:sync --force --stats
+npm run contextdb -- index:sync --stats --jsonl-out memory/context-db/exports/index-sync-stats.jsonl
+```
+
+- `--stats`：输出 sessions/events/checkpoints 的 `scanned/upserted` 计数、耗时、throttle skip 和 force 标记。
+- `--jsonl-out`：每次同步追加一条 JSONL 记录（含时间戳），方便做趋势分析。
+- 仅在 sidecar 缺失/损坏或需要完整 schema 重建时使用 `index:rebuild`。
+
+## refs 查询性能基准
+
+可使用内置脚本监控 refs 查询延迟并做回归门禁：
+
+```bash
+cd mcp-server
+npm run bench:contextdb:refs -- --events 2000 --refs-pool 200 --queries 300 --warmup 30 --json-out test-results/contextdb-refs-bench.local.json
+npm run bench:contextdb:refs:ci
+npm run bench:contextdb:refs:gate
+```
+
+- `bench:contextdb:refs`：本地可调数据集基准。
+- `bench:contextdb:refs:ci`：标准 CI 数据集。
+- `bench:contextdb:refs:gate`：当延迟/命中率阈值不达标时返回失败。
 
 ## 可选语义检索（P2）
 

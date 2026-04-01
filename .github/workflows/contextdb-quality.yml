@@ -1,0 +1,53 @@
+name: contextdb-quality
+
+on:
+  pull_request:
+    paths:
+      - "mcp-server/**"
+      - ".github/workflows/contextdb-quality.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "mcp-server/**"
+      - ".github/workflows/contextdb-quality.yml"
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: mcp-server/package-lock.json
+
+      - name: Install mcp-server deps
+        working-directory: mcp-server
+        run: npm ci
+
+      - name: Typecheck + ContextDB tests
+        working-directory: mcp-server
+        run: |
+          npm run typecheck
+          npm run test:contextdb
+
+      - name: ContextDB refs benchmark
+        working-directory: mcp-server
+        run: npm run bench:contextdb:refs:ci
+
+      - name: ContextDB refs benchmark gate
+        working-directory: mcp-server
+        run: npm run bench:contextdb:refs:gate
+
+      - name: Upload benchmark artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextdb-refs-bench
+          path: mcp-server/test-results/contextdb-refs-bench.json
+          if-no-files-found: ignore

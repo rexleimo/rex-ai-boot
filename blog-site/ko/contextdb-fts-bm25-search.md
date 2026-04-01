@@ -1,43 +1,52 @@
-# ContextDB 검색 업그레이드: 기본값을 FTS5/BM25로
+# ContextDB 검색 업그레이드: FTS5/BM25 + 증분 인덱스 동기화(P1.5)
 
-ContextDB 검색은 “단순 문자열(lexical) 스캔” 중심 경로에서, SQLite FTS5 + BM25 를 기본 경로로 사용하는 방식으로 업그레이드되었습니다. FTS 사용이 불가능한 로컬 런타임을 위한 호환성 폴백과, 선택적 semantic rerank 도 그대로 유지합니다.
+ContextDB는 P1에서 검색 기본 경로를 SQLite FTS5 + BM25로 전환했습니다.  
+P1.5에서는 운영 관측성과 성능 관리까지 확장했습니다.
 
-## 왜 바꿨나
+- 증분 sidecar 동기화 관측 (`index:sync --stats`)
+- 동기화 메트릭 JSONL 기록 (`--jsonl-out`)
+- `event_refs` 정규화 테이블 기반 refs 정확 일치 필터
+- refs 쿼리 벤치마크 및 CI gate 스크립트
 
-세션 히스토리가 길어질수록, 단순 lexical 스캔은 속도와 랭킹 품질 모두에서 불안정해집니다. 우리가 원했던 것은:
+## 왜 추가로 개선했나
 
-- 큰 이벤트 집합에서 더 빠른 검색
-- 정확/준정확 매칭에 더 강한 랭킹
-- 로컬 환경에서 FTS 가 없을 때도 안전한 폴백
+FTS5/BM25 전환 후에도 실무에서 두 가지 공백이 있었습니다.
 
-## 현재 기본 동작
+- 동기화 실행별 구조화 지표가 없어 인덱스 신선도/비용 추적이 어려움
+- 대규모 데이터셋에서 refs 필터 정확도 보장을 더 강화할 필요
 
-`contextdb search` 는 다음 순서로 실행됩니다.
+P1.5는 기존 워크플로우를 깨지 않고 이 문제를 보완합니다.
 
-1. SQLite FTS5 `MATCH` 쿼리
-2. 인덱싱된 필드(`kind/text/refs`)에 대한 BM25 랭킹(`bm25(...)`)
-3. FTS 사용 불가 시 자동 lexical 폴백
+## 현재 동작
 
-일반 사용에는 별도 마이그레이션이 필요 없습니다.
+`contextdb search`와 인덱스 유지 흐름은 다음과 같습니다.
 
-## Semantic rerank 조정
-
-`--semantic` 을 켰을 때, rerank 는 “최근성 후보”가 아니라 “쿼리 기반 lexical 후보”에서 시작합니다.  
-이로 인해 오래된 기록이라도 정확한 히트가 너무 빨리 탈락하는 확률이 줄었습니다.
+1. SQLite FTS5 `MATCH`
+2. `kind/text/refs` 대상 BM25(`bm25(...)`)
+3. FTS 미지원 환경에서는 lexical 자동 폴백
+4. 정규화 `event_refs` 기반 refs 정확 일치(부분 문자열 모호성 제거)
+5. `index:sync` 증분 갱신(`index:rebuild` 전체 재구축도 유지)
 
 ## 명령어
 
 ```bash
 cd mcp-server
-npm run contextdb -- search --query "auth race" --project demo
-npm run contextdb -- search --query "auth race" --project demo --semantic
-npm run contextdb -- index:rebuild
+npm run contextdb -- search --query "auth race" --project demo --refs auth.ts
+npm run contextdb -- index:sync --stats
+npm run contextdb -- index:sync --stats --jsonl-out memory/context-db/exports/index-sync-stats.jsonl
+npm run bench:contextdb:refs:ci
+npm run bench:contextdb:refs:gate
+```
+
+로컬 튜닝용:
+
+```bash
+npm run bench:contextdb:refs -- --events 2000 --refs-pool 200 --queries 300 --warmup 30 --json-out test-results/contextdb-refs-bench.local.json
 ```
 
 ## 실무 영향
 
-- `contextdb search` 기본 관련도 향상
-- 로컬 SQLite 빌드 차이에 대해 더 예측 가능한 동작
-- 긴 세션에서 semantic 모드가 더 안전
-
-장시간 세션이나 크로스-CLI 핸드오프를 운영한다면, 이 기본 경로를 추천합니다.
+- 동기화 품질/비용(`scanned/upserted`, 처리 시간, throttle skip)을 지속 관측 가능
+- 대규모 데이터에서 refs 필터 오탐 감소
+- refs 쿼리 지연/히트율 회귀를 CI gate로 차단
+- 장기 세션/크로스 CLI 핸드오프에서 매번 전체 재구축 없이 안정 운영

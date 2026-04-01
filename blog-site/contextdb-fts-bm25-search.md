@@ -1,43 +1,51 @@
-# ContextDB Search Upgrade: FTS5/BM25 by Default
+# ContextDB Search Upgrade: FTS5/BM25 + Incremental Index Sync (P1.5)
 
-ContextDB search has moved from a lexical-first path to a SQLite FTS5 + BM25 default path, while keeping compatibility fallback and optional semantic rerank.
+ContextDB search moved to SQLite FTS5 + BM25 as the default path (P1), and now adds P1.5 operational upgrades:
 
-## Why We Changed It
+- incremental sidecar sync with observability (`index:sync --stats`),
+- JSONL run history output (`--jsonl-out`),
+- normalized refs table for exact refs filtering (`event_refs`),
+- refs-query benchmark and CI gate scripts.
 
-As session history grows, plain lexical scanning becomes less stable in both speed and ranking quality. We needed:
+## Why We Extended It
 
-- faster lookup on large event sets,
-- better ranking for exact and near-exact matches,
-- safe fallback when FTS is unavailable in a local runtime.
+After the FTS5/BM25 migration, we still had two practical gaps:
+
+- operators needed per-run sync metrics to track index freshness and drift;
+- refs filtering still needed stronger precision guarantees at scale.
+
+P1.5 addresses both without changing existing workflow contracts.
 
 ## What Is Live Now
 
-`contextdb search` now follows this order:
+`contextdb search` and index maintenance now behave as:
 
-1. SQLite FTS5 `MATCH` query
-2. BM25 ranking (`bm25(...)`) on indexed fields (`kind/text/refs`)
-3. Automatic lexical fallback when FTS is unavailable
-
-No migration is required for normal usage.
-
-## Semantic Rerank Adjustment
-
-When `--semantic` is enabled, rerank now runs on query-scoped lexical candidates instead of recency-only candidates.  
-This reduces the chance that older but exact hits are filtered out too early.
+1. SQLite FTS5 `MATCH`
+2. BM25 ranking (`bm25(...)`) over `kind/text/refs`
+3. Lexical fallback when FTS is unavailable
+4. Exact refs filtering via normalized `event_refs` (no substring ambiguity)
+5. Incremental sidecar refresh via `index:sync` (full rebuild remains available)
 
 ## Commands
 
 ```bash
 cd mcp-server
-npm run contextdb -- search --query "auth race" --project demo
-npm run contextdb -- search --query "auth race" --project demo --semantic
-npm run contextdb -- index:rebuild
+npm run contextdb -- search --query "auth race" --project demo --refs auth.ts
+npm run contextdb -- index:sync --stats
+npm run contextdb -- index:sync --stats --jsonl-out memory/context-db/exports/index-sync-stats.jsonl
+npm run bench:contextdb:refs:ci
+npm run bench:contextdb:refs:gate
+```
+
+For local tuning, run:
+
+```bash
+npm run bench:contextdb:refs -- --events 2000 --refs-pool 200 --queries 300 --warmup 30 --json-out test-results/contextdb-refs-bench.local.json
 ```
 
 ## Practical Impact
 
-- Better default relevance for `contextdb search`
-- More predictable behavior across different local SQLite builds
-- Safer semantic mode for long-running sessions with older critical events
-
-If you operate long sessions or cross-CLI handoffs, this is the recommended default path.
+- Better observability for index sync quality and cost (`scanned/upserted`, elapsed time, throttle skips).
+- More stable refs filtering under large datasets due to normalized exact matching.
+- Enforced latency/hit-rate guardrails in CI for refs queries.
+- Safer long-session and cross-CLI handoff behavior without forcing full rebuild each run.

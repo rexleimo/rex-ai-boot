@@ -60,6 +60,19 @@ export interface SqliteTimelineInput {
   limit: number;
 }
 
+export interface SqliteSessionIndexedSeqs {
+  eventSeq: number;
+  checkpointSeq: number;
+}
+
+export interface SqliteCheckpointSearchInput {
+  project?: string;
+  sessionId?: string;
+  statuses?: string[];
+  query?: string;
+  limit: number;
+}
+
 interface EventSelectRow {
   event_id: string;
   session_id: string;
@@ -74,6 +87,16 @@ interface EventSelectRow {
   refs_json: string;
   text_hash: string;
   signature_hash: string;
+}
+
+interface SessionSelectRow {
+  session_id: string;
+  agent: string;
+  project: string;
+  goal: string;
+  tags_json: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface CheckpointSelectRow {
@@ -97,18 +120,38 @@ interface CheckpointSelectRow {
 }
 
 const dbConnections = new Map<string, Database.Database>();
+const WORD_RE = /[\p{L}\p{N}]+/gu;
+const CJK_CHAR_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 
 function tokenizeSearchQuery(query: string): string[] {
-  return Array.from(
-    new Set(
-      String(query || '')
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]+/g, ' ')
-        .split(/\s+/)
-        .map((token) => token.trim())
-        .filter((token) => token.length >= 2)
-    )
-  );
+  const chunks = String(query || '').toLowerCase().match(WORD_RE) ?? [];
+  const tokens: string[] = [];
+
+  for (const chunk of chunks) {
+    const token = chunk.trim();
+    if (!token) continue;
+
+    if (CJK_CHAR_RE.test(token)) {
+      const chars = Array.from(token).filter((char) => CJK_CHAR_RE.test(char));
+      if (chars.length === 1) {
+        tokens.push(chars[0]);
+        continue;
+      }
+      for (let index = 0; index < chars.length - 1; index += 1) {
+        tokens.push(`${chars[index]}${chars[index + 1]}`);
+      }
+      if (token.length <= 8) {
+        tokens.push(token);
+      }
+      continue;
+    }
+
+    if (token.length >= 2) {
+      tokens.push(token);
+    }
+  }
+
+  return Array.from(new Set(tokens));
 }
 
 function toFtsMatchQuery(tokens: string[]): string {
@@ -216,6 +259,56 @@ function ensureEventsFtsBackfill(db: Database.Database): void {
   `);
 }
 
+function ensureCheckpointsFtsBackfill(db: Database.Database): void {
+  db.exec(`
+    INSERT INTO checkpoints_fts (checkpoint_id, status, summary, next_actions, artifacts, failure_category)
+    SELECT
+      c.checkpoint_id,
+      c.status,
+      c.summary,
+      c.next_actions_json,
+      c.artifacts_json,
+      COALESCE(c.failure_category, '')
+    FROM checkpoints AS c
+    WHERE NOT EXISTS (
+      SELECT 1 FROM checkpoints_fts AS f WHERE f.checkpoint_id = c.checkpoint_id
+    );
+  `);
+}
+
+function ensureEventRefsBackfill(db: Database.Database): void {
+  try {
+    db.exec(`
+      INSERT OR IGNORE INTO event_refs (event_id, ref)
+      SELECT e.event_id, TRIM(j.value)
+      FROM events AS e, json_each(e.refs_json) AS j
+      WHERE json_valid(e.refs_json)
+        AND TRIM(j.value) <> '';
+    `);
+    return;
+  } catch {
+    // Fallback for SQLite builds without json_each.
+  }
+
+  const rows = db.prepare(`
+    SELECT event_id, refs_json
+    FROM events
+    WHERE refs_json IS NOT NULL AND refs_json != '[]';
+  `).all() as Array<{ event_id: string; refs_json: string }>;
+  const insert = db.prepare('INSERT OR IGNORE INTO event_refs (event_id, ref) VALUES (?, ?)');
+
+  const tx = db.transaction(() => {
+    for (const row of rows) {
+      const refs = parseJsonStringArray(row.refs_json);
+      for (const ref of refs) {
+        if (!ref.trim()) continue;
+        insert.run(row.event_id, ref.trim());
+      }
+    }
+  });
+  tx();
+}
+
 export function ensureSqliteSidecar(dbPath: string): void {
   const db = getConnection(dbPath);
   db.exec(`
@@ -248,6 +341,12 @@ export function ensureSqliteSidecar(dbPath: string): void {
       UNIQUE(session_id, seq)
     );
 
+    CREATE TABLE IF NOT EXISTS event_refs (
+      event_id TEXT NOT NULL,
+      ref TEXT NOT NULL,
+      PRIMARY KEY (event_id, ref)
+    );
+
     CREATE TABLE IF NOT EXISTS checkpoints (
       checkpoint_id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL,
@@ -278,6 +377,16 @@ export function ensureSqliteSidecar(dbPath: string): void {
       tokenize = 'unicode61'
     );
 
+    CREATE VIRTUAL TABLE IF NOT EXISTS checkpoints_fts USING fts5(
+      checkpoint_id UNINDEXED,
+      status,
+      summary,
+      next_actions,
+      artifacts,
+      failure_category,
+      tokenize = 'unicode61'
+    );
+
     CREATE INDEX IF NOT EXISTS idx_sessions_agent_project_updated
       ON sessions (agent, project, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_events_project_ts
@@ -286,6 +395,10 @@ export function ensureSqliteSidecar(dbPath: string): void {
       ON events (session_id, ts_epoch DESC);
     CREATE INDEX IF NOT EXISTS idx_events_role_kind_ts
       ON events (role, kind, ts_epoch DESC);
+    CREATE INDEX IF NOT EXISTS idx_event_refs_ref
+      ON event_refs (ref);
+    CREATE INDEX IF NOT EXISTS idx_event_refs_event_id
+      ON event_refs (event_id);
     CREATE INDEX IF NOT EXISTS idx_checkpoints_project_ts
       ON checkpoints (project, ts_epoch DESC);
     CREATE INDEX IF NOT EXISTS idx_checkpoints_session_ts
@@ -293,6 +406,8 @@ export function ensureSqliteSidecar(dbPath: string): void {
   `);
   ensureCheckpointTelemetryColumns(db);
   ensureEventsFtsBackfill(db);
+  ensureCheckpointsFtsBackfill(db);
+  ensureEventRefsBackfill(db);
 }
 
 export function recreateSqliteSidecar(dbPath: string): void {
@@ -329,6 +444,41 @@ export function upsertSessionRow(dbPath: string, row: SqliteSessionRow): void {
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   });
+}
+
+export function findLatestSessionRow(
+  dbPath: string,
+  input: { agent: string; project?: string }
+): SqliteSessionRow | null {
+  ensureSqliteSidecar(dbPath);
+  const db = getConnection(dbPath);
+  const clauses: string[] = ['agent = ?'];
+  const params: Array<string | number> = [input.agent];
+
+  if (input.project) {
+    clauses.push('project = ?');
+    params.push(input.project);
+  }
+
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+  const row = db.prepare(`
+    SELECT session_id, agent, project, goal, tags_json, created_at, updated_at
+    FROM sessions
+    ${where}
+    ORDER BY updated_at DESC
+    LIMIT 1;
+  `).get(...params) as SessionSelectRow | undefined;
+
+  if (!row) return null;
+  return {
+    sessionId: row.session_id,
+    agent: row.agent,
+    project: row.project,
+    goal: row.goal,
+    tags: parseJsonStringArray(row.tags_json),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 export function upsertEventRow(dbPath: string, row: SqliteEventRow): void {
@@ -368,6 +518,18 @@ export function upsertEventRow(dbPath: string, row: SqliteEventRow): void {
     text_hash: row.textHash,
     signature_hash: row.signatureHash,
   });
+  db.prepare('DELETE FROM event_refs WHERE event_id = ?').run(row.eventId);
+  if (row.refs.length > 0) {
+    const insertRef = db.prepare('INSERT OR IGNORE INTO event_refs (event_id, ref) VALUES (?, ?)');
+    const tx = db.transaction((refs: string[]) => {
+      for (const ref of refs) {
+        const normalized = ref.trim();
+        if (!normalized) continue;
+        insertRef.run(row.eventId, normalized);
+      }
+    });
+    tx(row.refs);
+  }
   db.prepare('DELETE FROM events_fts WHERE event_id = ?').run(row.eventId);
   db.prepare(`
     INSERT INTO events_fts (event_id, kind, text, refs)
@@ -425,6 +587,18 @@ export function upsertCheckpointRow(dbPath: string, row: SqliteCheckpointRow): v
     cost_json: row.telemetry?.cost ? JSON.stringify(row.telemetry.cost) : null,
     telemetry_json: row.telemetry ? JSON.stringify(row.telemetry) : null,
   });
+  db.prepare('DELETE FROM checkpoints_fts WHERE checkpoint_id = ?').run(row.checkpointId);
+  db.prepare(`
+    INSERT INTO checkpoints_fts (checkpoint_id, status, summary, next_actions, artifacts, failure_category)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    row.checkpointId,
+    row.status,
+    row.summary,
+    row.nextActions.join(' '),
+    row.artifacts.join(' '),
+    row.telemetry?.failureCategory ?? ''
+  );
 }
 
 export function searchEventRows(dbPath: string, input: SqliteSearchInput): SqliteEventRow[] {
@@ -432,27 +606,37 @@ export function searchEventRows(dbPath: string, input: SqliteSearchInput): Sqlit
   const db = getConnection(dbPath);
   const clauses: string[] = [];
   const params: Array<string | number> = [];
+  const alias = 'e';
 
   if (input.project) {
-    clauses.push('project = ?');
+    clauses.push(`${alias}.project = ?`);
     params.push(input.project);
   }
   if (input.sessionId) {
-    clauses.push('session_id = ?');
+    clauses.push(`${alias}.session_id = ?`);
     params.push(input.sessionId);
   }
   if (input.role) {
-    clauses.push('role = ?');
+    clauses.push(`${alias}.role = ?`);
     params.push(input.role);
   }
   if (input.kinds && input.kinds.length > 0) {
-    clauses.push(`kind IN (${input.kinds.map(() => '?').join(', ')})`);
+    clauses.push(`${alias}.kind IN (${input.kinds.map(() => '?').join(', ')})`);
     params.push(...input.kinds);
   }
   if (input.refs && input.refs.length > 0) {
-    const refClauses = input.refs.map(() => 'refs_flat LIKE ?');
-    clauses.push(`(${refClauses.join(' OR ')})`);
-    params.push(...input.refs.map((ref) => `%|${ref}|%`));
+    const refs = input.refs.map((ref) => ref.trim()).filter((ref) => ref.length > 0);
+    if (refs.length > 0) {
+      clauses.push(`
+        EXISTS (
+          SELECT 1
+          FROM event_refs AS er
+          WHERE er.event_id = ${alias}.event_id
+            AND er.ref IN (${refs.map(() => '?').join(', ')})
+        )
+      `.trim());
+      params.push(...refs);
+    }
   }
   const tokens = input.query && input.query.trim().length > 0
     ? tokenizeSearchQuery(input.query)
@@ -477,9 +661,15 @@ export function searchEventRows(dbPath: string, input: SqliteSearchInput): Sqlit
         LIMIT ?;
       `).all(...ftsParams) as EventSelectRow[];
     } catch {
+      rows = [];
+    }
+
+    if (rows.length === 0) {
       const fallbackClauses = [...clauses];
       const fallbackParams = [...params];
-      const tokenClauses = tokens.map(() => '(LOWER(text) LIKE ? OR LOWER(kind) LIKE ? OR LOWER(refs_flat) LIKE ?)');
+      const tokenClauses = tokens.map(
+        () => '(LOWER(e.text) LIKE ? OR LOWER(e.kind) LIKE ? OR LOWER(e.refs_flat) LIKE ?)'
+      );
       fallbackClauses.push(`(${tokenClauses.join(' OR ')})`);
       for (const token of tokens) {
         const pattern = `%${token}%`;
@@ -488,10 +678,10 @@ export function searchEventRows(dbPath: string, input: SqliteSearchInput): Sqlit
       fallbackParams.push(limit);
       rows = db.prepare(`
         SELECT
-          event_id, session_id, seq, ts, ts_epoch, project, agent, role, kind, text, refs_json, text_hash, signature_hash
-        FROM events
+          e.event_id, e.session_id, e.seq, e.ts, e.ts_epoch, e.project, e.agent, e.role, e.kind, e.text, e.refs_json, e.text_hash, e.signature_hash
+        FROM events AS e
         WHERE ${fallbackClauses.join(' AND ')}
-        ORDER BY ts_epoch DESC
+        ORDER BY e.ts_epoch DESC
         LIMIT ?;
       `).all(...fallbackParams) as EventSelectRow[];
     }
@@ -499,10 +689,10 @@ export function searchEventRows(dbPath: string, input: SqliteSearchInput): Sqlit
     params.push(limit);
     rows = db.prepare(`
       SELECT
-        event_id, session_id, seq, ts, ts_epoch, project, agent, role, kind, text, refs_json, text_hash, signature_hash
-      FROM events
+        e.event_id, e.session_id, e.seq, e.ts, e.ts_epoch, e.project, e.agent, e.role, e.kind, e.text, e.refs_json, e.text_hash, e.signature_hash
+      FROM events AS e
       ${where}
-      ORDER BY ts_epoch DESC
+      ORDER BY e.ts_epoch DESC
       LIMIT ?;
     `).all(...params) as EventSelectRow[];
   }
@@ -521,6 +711,102 @@ export function searchEventRows(dbPath: string, input: SqliteSearchInput): Sqlit
     refs: parseJsonStringArray(row.refs_json),
     textHash: row.text_hash,
     signatureHash: row.signature_hash,
+  }));
+}
+
+export function searchCheckpointRows(dbPath: string, input: SqliteCheckpointSearchInput): SqliteCheckpointRow[] {
+  ensureSqliteSidecar(dbPath);
+  const db = getConnection(dbPath);
+  const clauses: string[] = [];
+  const params: Array<string | number> = [];
+
+  if (input.project) {
+    clauses.push('project = ?');
+    params.push(input.project);
+  }
+  if (input.sessionId) {
+    clauses.push('session_id = ?');
+    params.push(input.sessionId);
+  }
+  if (input.statuses && input.statuses.length > 0) {
+    clauses.push(`status IN (${input.statuses.map(() => '?').join(', ')})`);
+    params.push(...input.statuses);
+  }
+
+  const tokens = input.query && input.query.trim().length > 0
+    ? tokenizeSearchQuery(input.query)
+    : [];
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+  const limit = Number.isFinite(input.limit) ? Math.max(1, Math.floor(input.limit)) : 20;
+  let rows: CheckpointSelectRow[] = [];
+
+  if (tokens.length > 0) {
+    try {
+      const ftsWhere = clauses.length > 0 ? `AND ${clauses.join(' AND ')}` : '';
+      const ftsParams: Array<string | number> = [toFtsMatchQuery(tokens), ...params, limit];
+      rows = db.prepare(`
+        SELECT
+          c.checkpoint_id, c.session_id, c.seq, c.ts, c.ts_epoch, c.project, c.agent, c.status, c.summary, c.next_actions_json, c.artifacts_json,
+          c.verification_result, c.retry_count, c.failure_category, c.elapsed_ms, c.cost_json, c.telemetry_json
+        FROM checkpoints_fts
+        INNER JOIN checkpoints AS c ON c.checkpoint_id = checkpoints_fts.checkpoint_id
+        WHERE checkpoints_fts MATCH ?
+        ${ftsWhere}
+        ORDER BY bm25(checkpoints_fts, 2.5, 4.5, 1.5, 1.0, 1.0), c.ts_epoch DESC
+        LIMIT ?;
+      `).all(...ftsParams) as CheckpointSelectRow[];
+    } catch {
+      rows = [];
+    }
+
+    if (rows.length === 0) {
+      const fallbackClauses = [...clauses];
+      const fallbackParams = [...params];
+      const tokenClauses = tokens.map(
+        () => '(LOWER(summary) LIKE ? OR LOWER(status) LIKE ? OR LOWER(next_actions_json) LIKE ? OR LOWER(artifacts_json) LIKE ? OR LOWER(COALESCE(failure_category, \'\')) LIKE ?)'
+      );
+      fallbackClauses.push(`(${tokenClauses.join(' OR ')})`);
+      for (const token of tokens) {
+        const pattern = `%${token}%`;
+        fallbackParams.push(pattern, pattern, pattern, pattern, pattern);
+      }
+      fallbackParams.push(limit);
+      rows = db.prepare(`
+        SELECT
+          checkpoint_id, session_id, seq, ts, ts_epoch, project, agent, status, summary, next_actions_json, artifacts_json,
+          verification_result, retry_count, failure_category, elapsed_ms, cost_json, telemetry_json
+        FROM checkpoints
+        WHERE ${fallbackClauses.join(' AND ')}
+        ORDER BY ts_epoch DESC
+        LIMIT ?;
+      `).all(...fallbackParams) as CheckpointSelectRow[];
+    }
+  } else {
+    params.push(limit);
+    rows = db.prepare(`
+      SELECT
+        checkpoint_id, session_id, seq, ts, ts_epoch, project, agent, status, summary, next_actions_json, artifacts_json,
+        verification_result, retry_count, failure_category, elapsed_ms, cost_json, telemetry_json
+      FROM checkpoints
+      ${where}
+      ORDER BY ts_epoch DESC
+      LIMIT ?;
+    `).all(...params) as CheckpointSelectRow[];
+  }
+
+  return rows.map((row) => ({
+    checkpointId: row.checkpoint_id,
+    sessionId: row.session_id,
+    seq: row.seq,
+    ts: row.ts,
+    tsEpoch: row.ts_epoch,
+    project: row.project,
+    agent: row.agent,
+    status: row.status,
+    summary: row.summary,
+    nextActions: parseJsonStringArray(row.next_actions_json),
+    artifacts: parseJsonStringArray(row.artifacts_json),
+    telemetry: parseCheckpointTelemetry(row),
   }));
 }
 
@@ -615,5 +901,25 @@ export function countSqliteRows(dbPath: string): { sessions: number; events: num
     sessions: sessions.count,
     events: events.count,
     checkpoints: checkpoints.count,
+  };
+}
+
+export function getSessionIndexedSeqs(dbPath: string, sessionId: string): SqliteSessionIndexedSeqs {
+  ensureSqliteSidecar(dbPath);
+  const db = getConnection(dbPath);
+  const eventRow = db.prepare(`
+    SELECT COALESCE(MAX(seq), 0) AS max_seq
+    FROM events
+    WHERE session_id = ?;
+  `).get(sessionId) as { max_seq?: number } | undefined;
+  const checkpointRow = db.prepare(`
+    SELECT COALESCE(MAX(seq), 0) AS max_seq
+    FROM checkpoints
+    WHERE session_id = ?;
+  `).get(sessionId) as { max_seq?: number } | undefined;
+
+  return {
+    eventSeq: Number.isFinite(eventRow?.max_seq) ? Math.max(0, Math.floor(eventRow?.max_seq ?? 0)) : 0,
+    checkpointSeq: Number.isFinite(checkpointRow?.max_seq) ? Math.max(0, Math.floor(checkpointRow?.max_seq ?? 0)) : 0,
   };
 }

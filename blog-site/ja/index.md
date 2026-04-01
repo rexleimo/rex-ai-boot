@@ -17,7 +17,7 @@ description: RexAI CLI エコシステム向けの成長・技術記事。
 ## 最新記事
 
 - [AIOS RL Training System: Multi-Environment Reinforcement Learning](rl-training-system.md)
-- [ContextDB Search Upgrade: FTS5/BM25 by Default](contextdb-fts-bm25-search.md)
+- [ContextDB 検索アップグレード: FTS5/BM25 + 増分インデックス同期（P1.5）](contextdb-fts-bm25-search.md)
 - [Windows CLI Startup Stability Update](windows-cli-startup-stability.md)
 - [Orchestrate Live: Subagent Runtime](orchestrate-live.md)
 - [もう手動で小红書をやらなくていい！AIで毎日2時間増やす自動化運用術](xiaohongshu-automation.md)

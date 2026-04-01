@@ -1,43 +1,52 @@
-# ContextDB 检索升级：默认走 FTS5/BM25
+# ContextDB 检索升级：FTS5/BM25 + 增量索引同步（P1.5）
 
-ContextDB 的 `search` 已从 lexical-first 路径升级为默认 SQLite FTS5 + BM25，同时保留兼容性回退与可选语义重排。
+ContextDB 在 P1 阶段将检索主路径切到 SQLite FTS5 + BM25。  
+现在 P1.5 继续补齐可观测与性能治理能力：
 
-## 为什么要改
+- 增量 sidecar 同步可观测（`index:sync --stats`）；
+- 同步指标 JSONL 持久化（`--jsonl-out`）；
+- `event_refs` 规范化表驱动 refs 精确过滤；
+- refs 查询基准与 CI gate 脚本。
 
-随着会话历史变大，纯 lexical 扫描在速度和排序质量上都会波动。我们需要：
+## 为什么继续升级
 
-- 在大事件集上更快命中；
-- 对精确/近似命中给出更稳定的排序；
-- 在本地环境 FTS 不可用时不影响可用性。
+FTS5/BM25 落地后，实际运行里还剩两个问题：
 
-## 现在的默认行为
+- 缺少每次同步的结构化指标，不利于追踪索引新鲜度与成本；
+- refs 过滤在大数据量下仍需要更严格的精确匹配保证。
 
-`contextdb search` 的执行路径为：
+P1.5 在不破坏现有使用方式的前提下补齐了这两点。
+
+## 当前生效路径
+
+`contextdb search` 和索引维护现在是：
 
 1. SQLite FTS5 `MATCH`
-2. BM25 排序（`bm25(...)`，覆盖 `kind/text/refs`）
-3. 若 FTS 不可用，自动回退 lexical 匹配
+2. BM25 排序（`bm25(...)`，作用于 `kind/text/refs`）
+3. FTS 不可用时回退 lexical
+4. `event_refs` 规范化表做 refs 精确匹配（避免子串歧义）
+5. `index:sync` 做增量同步（保留 `index:rebuild` 全量重建）
 
-日常使用无需迁移。
-
-## 语义重排也做了修正
-
-开启 `--semantic` 后，重排基于“当前 query 的 lexical 候选集”执行，而不是仅按最近事件取样。  
-这样可以降低“较早但命中非常精确”的结果被提前丢掉的概率。
-
-## 可直接复用的命令
+## 命令示例
 
 ```bash
 cd mcp-server
-npm run contextdb -- search --query "auth race" --project demo
-npm run contextdb -- search --query "auth race" --project demo --semantic
-npm run contextdb -- index:rebuild
+npm run contextdb -- search --query "auth race" --project demo --refs auth.ts
+npm run contextdb -- index:sync --stats
+npm run contextdb -- index:sync --stats --jsonl-out memory/context-db/exports/index-sync-stats.jsonl
+npm run bench:contextdb:refs:ci
+npm run bench:contextdb:refs:gate
+```
+
+本地调参可用：
+
+```bash
+npm run bench:contextdb:refs -- --events 2000 --refs-pool 200 --queries 300 --warmup 30 --json-out test-results/contextdb-refs-bench.local.json
 ```
 
 ## 实际价值
 
-- `contextdb search` 默认相关性更稳定
-- 在不同本地 SQLite 环境下行为更可预测
-- 长会话场景里，语义模式对“历史关键事件”更友好
-
-如果你在做长流程协作或跨 CLI 接力，这套默认路径建议直接使用。
+- 能持续观测同步质量与成本（`scanned/upserted`、耗时、throttle skip）。
+- refs 过滤在大规模数据下更稳定，误命中更少。
+- 通过 CI 阈值 gate 约束 refs 查询的延迟与命中率回归。
+- 长会话与跨 CLI 接力场景无需频繁全量重建。

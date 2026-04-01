@@ -1,43 +1,52 @@
-# ContextDB 検索アップグレード: デフォルトで FTS5/BM25
+# ContextDB 検索アップグレード: FTS5/BM25 + 増分インデックス同期（P1.5）
 
-ContextDB の検索は、語彙（lexical）優先のスキャンから、SQLite の FTS5 + BM25 をデフォルトとする経路へ移行しました。互換性のためのフォールバックと、任意のセマンティック再ランクも維持しています。
+ContextDB は P1 で検索の主経路を SQLite FTS5 + BM25 に移行しました。  
+P1.5 では運用面をさらに強化し、次を追加しています。
 
-## なぜ変更したのか
+- 増分 sidecar 同期の可観測化（`index:sync --stats`）
+- 同期メトリクスの JSONL 出力（`--jsonl-out`）
+- `event_refs` 正規化テーブルによる refs 完全一致フィルタ
+- refs クエリのベンチマーク/CI gate スクリプト
 
-セッション履歴が増えるほど、単純な文字列スキャンは速度面でもランキング品質面でも不安定になります。必要だったのは次の 3 点です。
+## なぜ拡張したのか
 
-- 大量のイベント集合に対する高速な検索
-- 完全一致/ほぼ一致に強いランキング
-- ローカル環境で FTS が使えない場合の安全なフォールバック
+FTS5/BM25 移行後も、実運用では次の課題が残りました。
 
-## 現在のデフォルト動作
+- 同期ごとの構造化メトリクスがなく、鮮度やコストを追跡しづらい
+- 大規模データで refs フィルタの精度保証をさらに強化したい
 
-`contextdb search` は次の順序で実行されます。
+P1.5 は既存ワークフローを壊さず、この 2 点を補完します。
 
-1. SQLite FTS5 の `MATCH` クエリ
-2. インデックス済みフィールド（`kind/text/refs`）に対する BM25（`bm25(...)`）
-3. FTS が利用できない場合は自動で語彙スキャンへフォールバック
+## 現在の動作
 
-通常利用ではマイグレーション不要です。
+`contextdb search` とインデックス保守は次の流れです。
 
-## セマンティック再ランクの調整
-
-`--semantic` を有効にした場合、再ランクは「直近優先の候補」ではなく、「クエリに対する語彙候補（lexical candidates）」を起点に行います。  
-これにより、古いが正確なヒットが早期に落ちる確率が下がります。
+1. SQLite FTS5 `MATCH`
+2. `kind/text/refs` に対する BM25（`bm25(...)`）
+3. FTS 非対応時は lexical へ自動フォールバック
+4. 正規化 `event_refs` による refs 完全一致（部分一致の曖昧さを排除）
+5. `index:sync` による増分更新（`index:rebuild` は引き続き利用可）
 
 ## コマンド
 
 ```bash
 cd mcp-server
-npm run contextdb -- search --query "auth race" --project demo
-npm run contextdb -- search --query "auth race" --project demo --semantic
-npm run contextdb -- index:rebuild
+npm run contextdb -- search --query "auth race" --project demo --refs auth.ts
+npm run contextdb -- index:sync --stats
+npm run contextdb -- index:sync --stats --jsonl-out memory/context-db/exports/index-sync-stats.jsonl
+npm run bench:contextdb:refs:ci
+npm run bench:contextdb:refs:gate
+```
+
+ローカル調整には:
+
+```bash
+npm run bench:contextdb:refs -- --events 2000 --refs-pool 200 --queries 300 --warmup 30 --json-out test-results/contextdb-refs-bench.local.json
 ```
 
 ## 実務上の効果
 
-- `contextdb search` のデフォルト関連度が向上
-- ローカル SQLite ビルド差異に対して予測可能な挙動
-- 長期セッションでのセマンティック検索がより安全
-
-長時間セッションやクロス CLI のハンドオフ運用を行う場合、このデフォルト経路を推奨します。
+- 同期品質/コスト（`scanned/upserted`、処理時間、throttle skip）を継続観測できる
+- 大規模データでも refs フィルタの誤検出を抑制
+- refs クエリの遅延/ヒット率を CI gate で回帰防止
+- 長時間セッションやクロス CLI 引き継ぎで、毎回フル再構築せず安定運用

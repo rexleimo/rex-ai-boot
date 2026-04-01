@@ -14,6 +14,9 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/**/*.test.ts",
     "test:contextdb": "tsx --test tests/contextdb.test.ts",
+    "bench:contextdb:refs": "tsx scripts/contextdb-refs-benchmark.ts",
+    "bench:contextdb:refs:ci": "tsx scripts/contextdb-refs-benchmark.ts --events 1200 --refs-pool 180 --queries 240 --warmup 40 --json-out test-results/contextdb-refs-bench.json",
+    "bench:contextdb:refs:gate": "tsx scripts/contextdb-refs-benchmark-gate.ts --input test-results/contextdb-refs-bench.json",
     "contextdb": "tsx src/contextdb/cli.ts"
   },
   "dependencies": {

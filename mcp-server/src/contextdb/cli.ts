@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import path from 'node:path';
+import { promises as fs } from 'node:fs';
 import {
   appendEvent,
   buildTimeline,
@@ -10,7 +11,10 @@ import {
   getEventById,
   rebuildContextIndex,
   resolveWorkspaceRoot,
+  searchCheckpoints,
+  searchMemory,
   searchEvents,
+  syncContextIndex,
   writeCheckpoint,
 } from './core.js';
 
@@ -26,10 +30,11 @@ function usage(): string {
     '  contextdb session:latest --agent <name> [--project <name>]',
     '  contextdb event:add --session <id> --role <user|assistant|tool|system> --text <text> [--kind <kind>] [--refs a,b]',
     '  contextdb checkpoint --session <id> --summary <text> [--status running|blocked|done] [--next a|b] [--artifacts a|b] [--verify-result unknown|passed|failed|partial] [--retry-count n] [--failure-category <label>] [--elapsed-ms n] [--cost-usd n]',
-    '  contextdb context:pack --session <id> [--limit 30] [--token-budget 1200] [--kinds prompt,response,error] [--refs a,b] [--no-dedupe] [--out memory/context-db/exports/<id>.md] [--stdout]',
-    '  contextdb search [--query <text>] [--project <name>] [--session <id>] [--role <role>] [--kinds a,b] [--refs a,b] [--limit 20] [--semantic]',
+    '  contextdb context:pack --session <id> [--limit 30] [--token-budget 1200] [--recall smart|tail] [--kinds prompt,response,error] [--refs a,b] [--no-dedupe] [--out memory/context-db/exports/<id>.md] [--stdout]',
+    '  contextdb search [--query <text>] [--project <name>] [--session <id>] [--scope events|checkpoints|all] [--role <role>] [--kinds a,b] [--refs a,b] [--statuses running,blocked,done] [--limit 20] [--semantic]',
     '  contextdb timeline [--project <name> | --session <id>] [--limit 50]',
     '  contextdb event:get --id <sessionId>#<seq>',
+    '  contextdb index:sync [--workspace <path>] [--force] [--stats] [--jsonl-out <path>]',
     '  contextdb index:rebuild [--workspace <path>]',
     '',
   ].join('\n');
@@ -94,6 +99,17 @@ function getWorkspace(options: Options): string {
     return path.isAbsolute(value) ? value : path.resolve(process.cwd(), value);
   }
   return resolveWorkspaceRoot(process.cwd());
+}
+
+function resolveOutputPath(workspaceRoot: string, outputPath: string): string {
+  return path.isAbsolute(outputPath)
+    ? outputPath
+    : path.resolve(workspaceRoot, outputPath);
+}
+
+async function appendJsonLineFile(filePath: string, value: unknown): Promise<void> {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.appendFile(filePath, `${JSON.stringify(value)}\n`, 'utf8');
 }
 
 async function main(): Promise<void> {
@@ -192,6 +208,7 @@ async function main(): Promise<void> {
         sessionId,
         eventLimit: Number.isFinite(limit) ? limit : 30,
         tokenBudget: tokenBudget !== undefined && Number.isFinite(tokenBudget) ? tokenBudget : undefined,
+        recallStrategy: typeof options.recall === 'string' && options.recall.trim() === 'tail' ? 'tail' : 'smart',
         kinds: getOptionalCsv(options, 'kinds'),
         refs: getOptionalCsv(options, 'refs'),
         dedupeEvents: options['no-dedupe'] === true ? false : true,
@@ -208,17 +225,48 @@ async function main(): Promise<void> {
 
     case 'search': {
       const limit = typeof options.limit === 'string' ? Number(options.limit) : 20;
-      const result = await searchEvents({
-        workspaceRoot,
-        query: typeof options.query === 'string' ? options.query : undefined,
-        project: typeof options.project === 'string' ? options.project : undefined,
-        sessionId: typeof options.session === 'string' ? options.session : undefined,
-        role: typeof options.role === 'string' ? (options.role as 'system' | 'user' | 'assistant' | 'tool') : undefined,
-        kinds: getOptionalCsv(options, 'kinds'),
-        refs: getOptionalCsv(options, 'refs'),
-        limit: Number.isFinite(limit) ? limit : 20,
-        semantic: options.semantic === true,
-      });
+      const scope = typeof options.scope === 'string' ? options.scope.trim().toLowerCase() : 'events';
+      const resolvedLimit = Number.isFinite(limit) ? limit : 20;
+      const query = typeof options.query === 'string' ? options.query : undefined;
+      const project = typeof options.project === 'string' ? options.project : undefined;
+      const sessionId = typeof options.session === 'string' ? options.session : undefined;
+      const semantic = options.semantic === true;
+
+      const result = scope === 'checkpoints'
+        ? await searchCheckpoints({
+          workspaceRoot,
+          query,
+          project,
+          sessionId,
+          statuses: getOptionalCsv(options, 'statuses') as Array<'running' | 'blocked' | 'done'>,
+          limit: resolvedLimit,
+          semantic,
+        })
+        : scope === 'all'
+          ? await searchMemory({
+            workspaceRoot,
+            query,
+            project,
+            sessionId,
+            role: typeof options.role === 'string' ? (options.role as 'system' | 'user' | 'assistant' | 'tool') : undefined,
+            kinds: getOptionalCsv(options, 'kinds'),
+            refs: getOptionalCsv(options, 'refs'),
+            statuses: getOptionalCsv(options, 'statuses') as Array<'running' | 'blocked' | 'done'>,
+            limit: resolvedLimit,
+            semantic,
+            scope: 'all',
+          })
+          : await searchEvents({
+            workspaceRoot,
+            query,
+            project,
+            sessionId,
+            role: typeof options.role === 'string' ? (options.role as 'system' | 'user' | 'assistant' | 'tool') : undefined,
+            kinds: getOptionalCsv(options, 'kinds'),
+            refs: getOptionalCsv(options, 'refs'),
+            limit: resolvedLimit,
+            semantic,
+          });
       console.log(JSON.stringify(result, null, 2));
       return;
     }
@@ -241,6 +289,35 @@ async function main(): Promise<void> {
         eventId: getOption(options, 'id'),
       });
       console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    case 'index:sync': {
+      const result = await syncContextIndex(workspaceRoot, {
+        force: options.force === true,
+      });
+      if (typeof options['jsonl-out'] === 'string') {
+        const filePath = resolveOutputPath(workspaceRoot, options['jsonl-out']);
+        await appendJsonLineFile(filePath, {
+          command: 'index:sync',
+          recordedAt: new Date().toISOString(),
+          ...result,
+        });
+      }
+      if (options.stats === true) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        console.log(JSON.stringify({
+          ok: result.ok,
+          mode: result.mode,
+          workspaceRoot: result.workspaceRoot,
+          dbPath: result.dbPath,
+          forced: result.forced,
+          skippedByThrottle: result.skippedByThrottle,
+          tookMs: result.tookMs,
+          syncedAt: result.syncedAt,
+        }, null, 2));
+      }
       return;
     }
 

@@ -11,7 +11,10 @@ import {
   buildContextPacket,
   createSession,
   ensureContextDb,
+  findLatestSession,
   getEventById,
+  searchCheckpoints,
+  searchMemory,
   searchEvents,
   writeCheckpoint,
 } from '../src/contextdb/core.js';
@@ -73,6 +76,114 @@ test('contextdb cli supports index:rebuild', async () => {
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse((result.stdout || '{}').trim()) as { ok?: boolean };
   assert.equal(payload.ok, true);
+});
+
+test('contextdb cli supports index:sync --stats with incremental counters', async () => {
+  const workspace = await makeWorkspace();
+  const session = await createSession({
+    workspaceRoot: workspace,
+    agent: 'codex-cli',
+    project: 'rex-cli',
+    goal: 'index sync stats smoke test',
+  });
+
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    role: 'assistant',
+    kind: 'response',
+    text: 'indexed event baseline',
+  });
+
+  const sessionDir = path.join(workspace, 'memory', 'context-db', 'sessions', session.sessionId);
+  const eventsPath = path.join(sessionDir, 'l2-events.jsonl');
+  const statePath = path.join(sessionDir, 'state.json');
+  const ts = new Date().toISOString();
+  await fs.appendFile(eventsPath, `${JSON.stringify({
+    seq: 2,
+    ts,
+    role: 'assistant',
+    kind: 'response',
+    text: 'pending event for incremental sync stats',
+    refs: ['docs/incremental.md'],
+  })}\n`, 'utf8');
+  const state = JSON.parse(await fs.readFile(statePath, 'utf8')) as { lastEventSeq?: number; lastEventAt?: string };
+  state.lastEventSeq = 2;
+  state.lastEventAt = ts;
+  await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+
+  const result = spawnSync(
+    'npx',
+    ['tsx', 'src/contextdb/cli.ts', 'index:sync', '--workspace', workspace, '--force', '--stats'],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    }
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse((result.stdout || '{}').trim()) as {
+    ok?: boolean;
+    mode?: string;
+    forced?: boolean;
+    skippedByThrottle?: boolean;
+    scannedSessions?: number;
+    upsertedEvents?: number;
+  };
+  assert.equal(payload.ok, true);
+  assert.equal(payload.mode, 'incremental');
+  assert.equal(payload.forced, true);
+  assert.equal(payload.skippedByThrottle, false);
+  assert.equal((payload.scannedSessions ?? 0) >= 1, true);
+  assert.equal((payload.upsertedEvents ?? 0) >= 1, true);
+});
+
+test('contextdb cli index:sync writes jsonl records with --jsonl-out', async () => {
+  const workspace = await makeWorkspace();
+  const session = await createSession({
+    workspaceRoot: workspace,
+    agent: 'codex-cli',
+    project: 'rex-cli',
+    goal: 'index sync jsonl output',
+  });
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    role: 'assistant',
+    kind: 'response',
+    text: 'jsonl record seed event',
+  });
+
+  const outputPath = path.join('memory', 'context-db', 'exports', 'index-sync-stats.jsonl');
+  const result = spawnSync(
+    'npx',
+    [
+      'tsx',
+      'src/contextdb/cli.ts',
+      'index:sync',
+      '--workspace',
+      workspace,
+      '--force',
+      '--stats',
+      '--jsonl-out',
+      outputPath,
+    ],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    }
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const absoluteOut = path.join(workspace, outputPath);
+  const raw = await fs.readFile(absoluteOut, 'utf8');
+  const lines = raw.trim().split('\n').filter(Boolean);
+  assert.equal(lines.length >= 1, true);
+  const record = JSON.parse(lines[lines.length - 1]) as { command?: string; mode?: string; ok?: boolean; syncedAt?: string };
+  assert.equal(record.command, 'index:sync');
+  assert.equal(record.mode, 'incremental');
+  assert.equal(record.ok, true);
+  assert.equal(typeof record.syncedAt, 'string');
 });
 
 test('contextdb cli checkpoint accepts telemetry flags', async () => {
@@ -840,4 +951,291 @@ test('searchEvents semantic mode keeps query-scoped candidates so older exact hi
       process.env.CONTEXTDB_SEMANTIC_PROVIDER = previousProvider;
     }
   }
+});
+
+test('findLatestSession prefers sidecar lookup and tolerates malformed sibling meta files', async () => {
+  const workspace = await makeWorkspace();
+  const latest = await createSession({
+    workspaceRoot: workspace,
+    agent: 'codex-cli',
+    project: 'rex-cli',
+    goal: 'latest session from sidecar',
+  });
+
+  const brokenSessionId = `codex-cli-broken-${Date.now()}`;
+  const brokenDir = path.join(workspace, 'memory', 'context-db', 'sessions', brokenSessionId);
+  await fs.mkdir(brokenDir, { recursive: true });
+  await fs.writeFile(path.join(brokenDir, 'meta.json'), '{this-is-not-json', 'utf8');
+
+  const resolved = await findLatestSession(workspace, 'codex-cli', 'rex-cli');
+  assert.equal(resolved?.sessionId, latest.sessionId);
+});
+
+test('searchEvents supports CJK queries via lexical fallback', async () => {
+  const workspace = await makeWorkspace();
+  const session = await createSession({
+    workspaceRoot: workspace,
+    agent: 'codex-cli',
+    project: 'rex-cli',
+    goal: 'CJK lexical retrieval',
+  });
+
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    role: 'assistant',
+    kind: 'analysis',
+    text: '记忆系统需要升级检索和召回策略',
+  });
+
+  const results = await searchEvents({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    query: '记忆系统 升级',
+    limit: 5,
+  });
+  assert.equal(results.results.length, 1);
+  assert.match(results.results[0].text, /记忆系统需要升级/);
+});
+
+test('searchCheckpoints and searchMemory can retrieve checkpoint evidence', async () => {
+  const workspace = await makeWorkspace();
+  const session = await createSession({
+    workspaceRoot: workspace,
+    agent: 'codex-cli',
+    project: 'rex-cli',
+    goal: 'cross-layer memory search',
+  });
+
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    role: 'assistant',
+    kind: 'response',
+    text: 'Investigate retry spikes in context pack stage',
+  });
+  await writeCheckpoint({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    status: 'blocked',
+    summary: 'Context pack retry spikes persisted after three attempts',
+    nextActions: ['Inspect checkpoint telemetry'],
+    telemetry: {
+      failureCategory: 'retry-spike',
+    },
+  });
+
+  const checkpointResults = await searchCheckpoints({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    query: 'retry spikes',
+    limit: 5,
+  });
+  assert.equal(checkpointResults.results.length, 1);
+  assert.match(checkpointResults.results[0].summary, /retry spikes/i);
+
+  const memoryResults = await searchMemory({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    query: 'retry spikes',
+    scope: 'all',
+    limit: 10,
+  });
+  assert.equal(memoryResults.results.some((item) => item.itemType === 'event'), true);
+  assert.equal(memoryResults.results.some((item) => item.itemType === 'checkpoint'), true);
+});
+
+test('contextdb cli search supports --scope checkpoints and --scope all', async () => {
+  const workspace = await makeWorkspace();
+  const session = await createSession({
+    workspaceRoot: workspace,
+    agent: 'codex-cli',
+    project: 'rex-cli',
+    goal: 'cli scope coverage',
+  });
+
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    role: 'assistant',
+    kind: 'response',
+    text: 'memory retrieval retry guidance',
+  });
+  await writeCheckpoint({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    status: 'blocked',
+    summary: 'retry guidance checkpoint',
+  });
+
+  const checkpointsOnly = spawnSync(
+    'npx',
+    [
+      'tsx',
+      'src/contextdb/cli.ts',
+      'search',
+      '--workspace',
+      workspace,
+      '--session',
+      session.sessionId,
+      '--query',
+      'retry guidance',
+      '--scope',
+      'checkpoints',
+      '--limit',
+      '5',
+    ],
+    { cwd: process.cwd(), encoding: 'utf8' }
+  );
+  assert.equal(checkpointsOnly.status, 0, checkpointsOnly.stderr || checkpointsOnly.stdout);
+  const checkpointPayload = JSON.parse((checkpointsOnly.stdout || '{}').trim()) as { results?: Array<{ checkpointId?: string }> };
+  assert.equal(Array.isArray(checkpointPayload.results), true);
+  assert.equal((checkpointPayload.results?.[0]?.checkpointId ?? '').includes('#C'), true);
+
+  const allScope = spawnSync(
+    'npx',
+    [
+      'tsx',
+      'src/contextdb/cli.ts',
+      'search',
+      '--workspace',
+      workspace,
+      '--session',
+      session.sessionId,
+      '--query',
+      'retry guidance',
+      '--scope',
+      'all',
+      '--limit',
+      '10',
+    ],
+    { cwd: process.cwd(), encoding: 'utf8' }
+  );
+  assert.equal(allScope.status, 0, allScope.stderr || allScope.stdout);
+  const allPayload = JSON.parse((allScope.stdout || '{}').trim()) as { results?: Array<{ itemType?: string }> };
+  assert.equal(Array.isArray(allPayload.results), true);
+  assert.equal(allPayload.results?.some((item) => item.itemType === 'event'), true);
+  assert.equal(allPayload.results?.some((item) => item.itemType === 'checkpoint'), true);
+});
+
+test('buildContextPacket smart recall includes relevant older checkpoint context', async () => {
+  const workspace = await makeWorkspace();
+  const session = await createSession({
+    workspaceRoot: workspace,
+    agent: 'codex-cli',
+    project: 'rex-cli',
+    goal: 'repair contextdb memory retrieval quality',
+  });
+
+  await writeCheckpoint({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    status: 'blocked',
+    summary: 'Failure triage points to contextdb retry loop in memory retrieval',
+    nextActions: ['fix memory retrieval'],
+    telemetry: { failureCategory: 'retry-loop' },
+  });
+
+  for (let i = 0; i < 10; i += 1) {
+    await appendEvent({
+      workspaceRoot: workspace,
+      sessionId: session.sessionId,
+      role: 'assistant',
+      kind: 'response',
+      text: `unrelated status update ${i}`,
+    });
+  }
+
+  const packet = await buildContextPacket({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    eventLimit: 6,
+    recallStrategy: 'smart',
+  });
+
+  assert.match(packet.markdown, /Relevant Checkpoints \(L1\+\)/);
+  assert.match(packet.markdown, /contextdb retry loop/i);
+});
+
+test('searchEvents refs filter uses normalized event_refs exact matching', async () => {
+  const workspace = await makeWorkspace();
+  const session = await createSession({
+    workspaceRoot: workspace,
+    agent: 'codex-cli',
+    project: 'rex-cli',
+    goal: 'refs exact matching',
+  });
+
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    role: 'assistant',
+    kind: 'response',
+    text: 'primary ref hit',
+    refs: ['mcp-server/src/contextdb/core.ts'],
+  });
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    role: 'assistant',
+    kind: 'response',
+    text: 'similar-looking ref should not match exact filter',
+    refs: ['mcp-server/src/contextdb/core.ts.bak'],
+  });
+
+  const found = await searchEvents({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    refs: ['mcp-server/src/contextdb/core.ts'],
+    limit: 10,
+  });
+
+  assert.equal(found.results.length, 1);
+  assert.match(found.results[0].text, /primary ref hit/);
+});
+
+test('searchEvents incrementally syncs sidecar rows from filesystem without full rebuild', async () => {
+  const workspace = await makeWorkspace();
+  const session = await createSession({
+    workspaceRoot: workspace,
+    agent: 'codex-cli',
+    project: 'rex-cli',
+    goal: 'incremental sync from files',
+  });
+
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    role: 'assistant',
+    kind: 'response',
+    text: 'existing indexed row',
+  });
+
+  const sessionDir = path.join(workspace, 'memory', 'context-db', 'sessions', session.sessionId);
+  const eventsPath = path.join(sessionDir, 'l2-events.jsonl');
+  const statePath = path.join(sessionDir, 'state.json');
+  const ts = new Date().toISOString();
+  await fs.appendFile(eventsPath, `${JSON.stringify({
+    seq: 2,
+    ts,
+    role: 'assistant',
+    kind: 'response',
+    text: 'filesystem-only event pending sidecar sync',
+    refs: ['docs/pending.md'],
+  })}\n`, 'utf8');
+
+  const state = JSON.parse(await fs.readFile(statePath, 'utf8')) as { lastEventSeq?: number; lastEventAt?: string };
+  state.lastEventSeq = 2;
+  state.lastEventAt = ts;
+  await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+
+  const found = await searchEvents({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    query: 'filesystem-only event pending sidecar sync',
+    limit: 5,
+  });
+
+  assert.equal(found.results.length, 1);
+  assert.match(found.results[0].text, /filesystem-only event pending sidecar sync/);
 });

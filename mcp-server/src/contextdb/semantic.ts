@@ -39,13 +39,38 @@ class TokenSemanticProvider implements SemanticProvider {
   }
 }
 
+const WORD_RE = /[\p{L}\p{N}]+/gu;
+const CJK_CHAR_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+
 function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]+/g, ' ')
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2);
+  const chunks = String(text || '').toLowerCase().match(WORD_RE) ?? [];
+  const tokens: string[] = [];
+
+  for (const chunk of chunks) {
+    const token = chunk.trim();
+    if (!token) continue;
+
+    if (CJK_CHAR_RE.test(token)) {
+      const chars = Array.from(token).filter((char) => CJK_CHAR_RE.test(char));
+      if (chars.length === 1) {
+        tokens.push(chars[0]);
+        continue;
+      }
+      for (let index = 0; index < chars.length - 1; index += 1) {
+        tokens.push(`${chars[index]}${chars[index + 1]}`);
+      }
+      if (token.length <= 8) {
+        tokens.push(token);
+      }
+      continue;
+    }
+
+    if (token.length >= 2) {
+      tokens.push(token);
+    }
+  }
+
+  return Array.from(new Set(tokens));
 }
 
 function scoreText(queryTokens: string[], text: string): number {

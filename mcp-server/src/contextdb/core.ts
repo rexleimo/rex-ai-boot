@@ -3,10 +3,12 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {
-  countSqliteRows,
   ensureSqliteSidecar,
+  findLatestSessionRow,
+  getSessionIndexedSeqs,
   getEventRowById,
   recreateSqliteSidecar,
+  searchCheckpointRows,
   searchEventRows,
   timelineCheckpointRows,
   timelineEventRows,
@@ -89,6 +91,8 @@ const SQLITE_NAME = 'context.db';
 const CHARS_PER_TOKEN_ESTIMATE = 4;
 const EVENT_DEDUP_WINDOW_MS = 30_000;
 const SESSION_LOCK_TIMEOUT_MS = 10_000;
+const INDEX_INCREMENTAL_SYNC_INTERVAL_MS = 1500;
+const lastIncrementalSyncByWorkspace = new Map<string, number>();
 
 export interface IndexedEvent {
   eventId: string;
@@ -183,6 +187,56 @@ function sanitizeInline(text: unknown): string {
   // ContextDB event logs may contain legacy or malformed records. Keep packet
   // generation resilient by treating non-string text as empty/printable text.
   return String(text ?? '').replace(/\s+/g, ' ').trim();
+}
+
+const WORD_RE = /[\p{L}\p{N}]+/gu;
+const CJK_CHAR_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+
+function tokenizeForRecall(text: string): string[] {
+  const chunks = String(text || '').toLowerCase().match(WORD_RE) ?? [];
+  const tokens: string[] = [];
+
+  for (const chunk of chunks) {
+    const token = chunk.trim();
+    if (!token) continue;
+
+    if (CJK_CHAR_RE.test(token)) {
+      const chars = Array.from(token).filter((char) => CJK_CHAR_RE.test(char));
+      if (chars.length === 1) {
+        tokens.push(chars[0]);
+        continue;
+      }
+      for (let index = 0; index < chars.length - 1; index += 1) {
+        tokens.push(`${chars[index]}${chars[index + 1]}`);
+      }
+      if (token.length <= 8) {
+        tokens.push(token);
+      }
+      continue;
+    }
+
+    if (token.length >= 2) {
+      tokens.push(token);
+    }
+  }
+
+  return Array.from(new Set(tokens));
+}
+
+function scoreRecallText(queryTokens: string[], text: string): number {
+  if (queryTokens.length === 0) return 0;
+  const textTokens = new Set(tokenizeForRecall(text));
+  let overlap = 0;
+  for (const token of queryTokens) {
+    if (textTokens.has(token)) {
+      overlap += 1;
+    }
+  }
+  if (overlap === 0) return 0;
+  const unionSize = new Set([...queryTokens, ...textTokens]).size || 1;
+  const jaccard = overlap / unionSize;
+  const containment = overlap / queryTokens.length;
+  return jaccard * 0.6 + containment * 0.4;
 }
 
 function estimateTokens(text: string): number {
@@ -772,6 +826,20 @@ export async function getSessionMeta(workspaceRoot: string, sessionId: string): 
 
 export async function findLatestSession(workspaceRoot: string, agent: string, project?: string): Promise<SessionMeta | null> {
   await ensureContextDb(workspaceRoot);
+  try {
+    const latestRow = await withSidecarReadFallback(workspaceRoot, () => {
+      return findLatestSessionRow(getSqlitePath(workspaceRoot), { agent, project });
+    });
+    if (latestRow) {
+      const metaPath = getSessionPaths(workspaceRoot, latestRow.sessionId).meta;
+      if (existsSync(metaPath)) {
+        return await readJson<SessionMeta>(metaPath);
+      }
+    }
+  } catch {
+    // Fall back to filesystem scan when sidecar lookup is unavailable.
+  }
+
   const sessionsRoot = path.join(getDbRoot(workspaceRoot), 'sessions');
   const entries = await fs.readdir(sessionsRoot, { withFileTypes: true });
   const metas: SessionMeta[] = [];
@@ -780,7 +848,12 @@ export async function findLatestSession(workspaceRoot: string, agent: string, pr
     if (!entry.isDirectory()) continue;
     const metaPath = path.join(sessionsRoot, entry.name, 'meta.json');
     if (!existsSync(metaPath)) continue;
-    const meta = await readJson<SessionMeta>(metaPath);
+    let meta: SessionMeta;
+    try {
+      meta = await readJson<SessionMeta>(metaPath);
+    } catch {
+      continue;
+    }
     if (meta.agent !== agent) continue;
     if (project && meta.project !== project) continue;
     metas.push(meta);
@@ -795,6 +868,7 @@ export interface BuildPacketInput {
   sessionId: string;
   eventLimit?: number;
   tokenBudget?: number;
+  recallStrategy?: 'tail' | 'smart';
   kinds?: string[];
   refs?: string[];
   dedupeEvents?: boolean;
@@ -857,16 +931,59 @@ export async function buildContextPacket(input: BuildPacketInput): Promise<Build
     filteredEvents = deduped.reverse();
   }
 
-  const cappedEvents = eventLimit > 0
-    ? filteredEvents.slice(Math.max(0, filteredEvents.length - eventLimit))
-    : filteredEvents;
+  const recallStrategy = input.recallStrategy === 'tail' ? 'tail' : 'smart';
+  let selectedEvents = filteredEvents;
+  if (eventLimit > 0) {
+    if (recallStrategy === 'tail') {
+      selectedEvents = filteredEvents.slice(Math.max(0, filteredEvents.length - eventLimit));
+    } else {
+      const poolWindow = Math.max(eventLimit * 6, 50);
+      const poolOffset = Math.max(0, filteredEvents.length - poolWindow);
+      const pool = filteredEvents.slice(poolOffset);
+      const recentCount = Math.min(pool.length, Math.max(2, Math.floor(eventLimit / 2)));
+      const selectedIndexes = new Set<number>();
+      for (let index = pool.length - recentCount; index < pool.length; index += 1) {
+        if (index >= 0) {
+          selectedIndexes.add(index);
+        }
+      }
 
-  let selectedEvents = cappedEvents;
+      const recallQuery = [
+        meta.goal,
+        latestCheckpoint?.summary ?? '',
+        checkpointNextActions.join(' '),
+        latestCheckpoint?.telemetry?.failureCategory ?? '',
+      ].join(' ');
+      const recallTokens = tokenizeForRecall(recallQuery);
+      const rankedPool = pool
+        .map((event, index) => ({
+          index,
+          score: scoreRecallText(
+            recallTokens,
+            `${event.role} ${event.kind} ${sanitizeInline(event.text)} ${normalizeRefs(event.refs).join(' ')}`
+          ),
+        }))
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          return b.index - a.index;
+        });
+
+      for (const candidate of rankedPool) {
+        if (selectedIndexes.size >= eventLimit) break;
+        selectedIndexes.add(candidate.index);
+      }
+
+      selectedEvents = Array.from(selectedIndexes)
+        .sort((a, b) => a - b)
+        .map((index) => pool[index]);
+    }
+  }
+
   let eventTokensUsed = 0;
   if (tokenBudget !== null) {
     const selectedFromTail: ContextEvent[] = [];
-    for (let index = cappedEvents.length - 1; index >= 0; index -= 1) {
-      const event = cappedEvents[index];
+    for (let index = selectedEvents.length - 1; index >= 0; index -= 1) {
+      const event = selectedEvents[index];
       const lineText = `${event.role}/${event.kind}: ${sanitizeInline(event.text)}`;
       const lineTokens = estimateTokens(lineText);
       if (selectedFromTail.length > 0 && eventTokensUsed + lineTokens > tokenBudget) {
@@ -891,6 +1008,24 @@ export async function buildContextPacket(input: BuildPacketInput): Promise<Build
     }, 0);
   }
 
+  const focusQuery = [
+    meta.goal,
+    latestCheckpoint?.summary ?? '',
+    checkpointNextActions.join(' '),
+    selectedEvents.map((event) => `${event.kind} ${sanitizeInline(event.text)}`).join(' '),
+  ].join(' ').trim();
+
+  const relevantCheckpointRows = recallStrategy === 'smart' && focusQuery.length > 0
+    ? await withSidecarReadFallback(input.workspaceRoot, () => {
+      return searchCheckpointRows(getSqlitePath(input.workspaceRoot), {
+        project: meta.project,
+        sessionId: input.sessionId,
+        query: focusQuery,
+        limit: 5,
+      });
+    })
+    : [];
+
   const checkpointBlock = latestCheckpoint
     ? [
       `- Status: ${latestCheckpoint.status}`,
@@ -911,6 +1046,17 @@ export async function buildContextPacket(input: BuildPacketInput): Promise<Build
         : ['- (none)']),
     ].join('\n')
     : 'No checkpoint yet.';
+
+  const currentCheckpointSeq = typeof latestCheckpoint?.seq === 'number' ? latestCheckpoint.seq : null;
+  const relevantCheckpointBlock = relevantCheckpointRows
+    .filter((row) => currentCheckpointSeq === null || row.seq !== currentCheckpointSeq)
+    .slice(0, 3)
+    .map((row, index) => {
+      const nextActions = row.nextActions.length > 0 ? row.nextActions.join('; ') : '(none)';
+      const failureCategory = row.telemetry?.failureCategory ? ` failure=${row.telemetry.failureCategory}` : '';
+      return `${index + 1}. [${row.ts}] (${row.checkpointId}) checkpoint/${row.status}${failureCategory}: ${sanitizeInline(row.summary)} | next=${nextActions}`;
+    })
+    .join('\n');
 
   const eventBlock = selectedEvents.length > 0
     ? selectedEvents
@@ -940,6 +1086,9 @@ export async function buildContextPacket(input: BuildPacketInput): Promise<Build
     '',
     '## L1 Snapshot',
     checkpointBlock,
+    '',
+    '## Relevant Checkpoints (L1+)',
+    relevantCheckpointBlock || '1. (none)',
     '',
     `## Recent Events (L2)`,
     eventBlock,
@@ -978,6 +1127,44 @@ export interface SearchEventsOutput {
   results: IndexedEvent[];
 }
 
+export interface SearchCheckpointsInput {
+  workspaceRoot: string;
+  query?: string;
+  project?: string;
+  sessionId?: string;
+  statuses?: SessionStatus[];
+  limit?: number;
+  semantic?: boolean;
+}
+
+export interface SearchCheckpointsOutput {
+  results: IndexedCheckpoint[];
+}
+
+export type SearchScope = 'events' | 'checkpoints' | 'all';
+
+export type SearchMemoryResult =
+  | ({ itemType: 'event' } & IndexedEvent)
+  | ({ itemType: 'checkpoint' } & IndexedCheckpoint);
+
+export interface SearchMemoryInput {
+  workspaceRoot: string;
+  query?: string;
+  project?: string;
+  sessionId?: string;
+  role?: EventRole;
+  kinds?: string[];
+  refs?: string[];
+  statuses?: SessionStatus[];
+  limit?: number;
+  semantic?: boolean;
+  scope?: SearchScope;
+}
+
+export interface SearchMemoryOutput {
+  results: SearchMemoryResult[];
+}
+
 function isRecoverableSidecarError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /sqlite|database|no such table|cannot open/i.test(message);
@@ -1004,6 +1191,205 @@ async function ensureManifestAndIndexes(workspaceRoot: string): Promise<void> {
   await ensureFile(getCheckpointsIndexPath(workspaceRoot), '');
 }
 
+function normalizeSeqFromUnknown(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  const seq = Math.floor(value);
+  return seq > 0 ? seq : 0;
+}
+
+export interface IndexSyncOutput {
+  ok: true;
+  mode: 'incremental';
+  workspaceRoot: string;
+  dbPath: string;
+  forced: boolean;
+  skippedByThrottle: boolean;
+  scannedSessions: number;
+  upsertedSessions: number;
+  scannedEvents: number;
+  upsertedEvents: number;
+  scannedCheckpoints: number;
+  upsertedCheckpoints: number;
+  tookMs: number;
+  syncedAt: string;
+}
+
+function shouldRunIncrementalIndexSync(workspaceRoot: string, force: boolean): boolean {
+  if (force) return true;
+  const now = Date.now();
+  const lastRun = lastIncrementalSyncByWorkspace.get(workspaceRoot) ?? 0;
+  return now - lastRun >= INDEX_INCREMENTAL_SYNC_INTERVAL_MS;
+}
+
+async function syncContextIndexIncremental(
+  workspaceRoot: string,
+  options?: { force?: boolean }
+): Promise<IndexSyncOutput> {
+  const startedAt = Date.now();
+  const force = options?.force === true;
+  const dbPath = getSqlitePath(workspaceRoot);
+  if (!shouldRunIncrementalIndexSync(workspaceRoot, force)) {
+    return {
+      ok: true,
+      mode: 'incremental',
+      workspaceRoot,
+      dbPath,
+      forced: force,
+      skippedByThrottle: true,
+      scannedSessions: 0,
+      upsertedSessions: 0,
+      scannedEvents: 0,
+      upsertedEvents: 0,
+      scannedCheckpoints: 0,
+      upsertedCheckpoints: 0,
+      tookMs: Date.now() - startedAt,
+      syncedAt: nowIso(),
+    };
+  }
+
+  await ensureManifestAndIndexes(workspaceRoot);
+  ensureSqliteSidecar(dbPath);
+  const sessionsRoot = path.join(getDbRoot(workspaceRoot), 'sessions');
+  const entries = await fs.readdir(sessionsRoot, { withFileTypes: true });
+  let scannedSessions = 0;
+  let upsertedSessions = 0;
+  let scannedEvents = 0;
+  let upsertedEvents = 0;
+  let scannedCheckpoints = 0;
+  let upsertedCheckpoints = 0;
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    scannedSessions += 1;
+    const sessionId = entry.name;
+    const paths = getSessionPaths(workspaceRoot, sessionId);
+    if (!existsSync(paths.meta)) continue;
+
+    let meta: SessionMeta;
+    try {
+      meta = await readJson<SessionMeta>(paths.meta);
+    } catch {
+      continue;
+    }
+
+    upsertSessionRow(dbPath, {
+      sessionId: meta.sessionId,
+      agent: meta.agent,
+      project: meta.project,
+      goal: meta.goal,
+      tags: meta.tags,
+      createdAt: meta.createdAt,
+      updatedAt: meta.updatedAt,
+    });
+    upsertedSessions += 1;
+
+    const indexedSeqs = getSessionIndexedSeqs(dbPath, meta.sessionId);
+    let stateLastEventSeq = indexedSeqs.eventSeq;
+    let stateLastCheckpointSeq = indexedSeqs.checkpointSeq;
+    let hasStateFile = false;
+    try {
+      const state = await readJson<Record<string, unknown>>(paths.state);
+      hasStateFile = true;
+      stateLastEventSeq = Math.max(stateLastEventSeq, normalizeSeqFromUnknown(state.lastEventSeq));
+      stateLastCheckpointSeq = Math.max(stateLastCheckpointSeq, normalizeSeqFromUnknown(state.lastCheckpointSeq));
+    } catch {
+      // Legacy sessions may not have a state file; continue with indexed maxima.
+    }
+
+    if (!hasStateFile || stateLastEventSeq > indexedSeqs.eventSeq) {
+      const eventRows = await readJsonLines<ContextEvent>(paths.events);
+      scannedEvents += eventRows.length;
+      for (let index = 0; index < eventRows.length; index += 1) {
+        const event = eventRows[index];
+        const seq = typeof event.seq === 'number' && Number.isFinite(event.seq) && event.seq > 0
+          ? Math.floor(event.seq)
+          : index + 1;
+        if (seq <= indexedSeqs.eventSeq) continue;
+        const refs = normalizeRefs(event.refs ?? []);
+        const ts = typeof event.ts === 'string' && event.ts.length > 0 ? event.ts : nowIso();
+        const indexed: IndexedEvent = {
+          eventId: `${meta.sessionId}#${seq}`,
+          sessionId: meta.sessionId,
+          seq,
+          ts,
+          tsEpoch: toEpoch(ts),
+          project: meta.project,
+          agent: meta.agent,
+          role: event.role,
+          kind: event.kind,
+          text: event.text,
+          refs,
+          textHash: hashText(sanitizeInline(event.text)),
+          signatureHash: eventSignature({
+            role: event.role,
+            kind: event.kind,
+            text: event.text,
+            refs,
+          }),
+        };
+        upsertEventRow(dbPath, indexed);
+        upsertedEvents += 1;
+      }
+    }
+
+    if (!hasStateFile || stateLastCheckpointSeq > indexedSeqs.checkpointSeq) {
+      const checkpointRows = await readJsonLines<Checkpoint>(paths.checkpoints);
+      scannedCheckpoints += checkpointRows.length;
+      for (let index = 0; index < checkpointRows.length; index += 1) {
+        const checkpoint = checkpointRows[index];
+        const seq = typeof checkpoint.seq === 'number' && Number.isFinite(checkpoint.seq) && checkpoint.seq > 0
+          ? Math.floor(checkpoint.seq)
+          : index + 1;
+        if (seq <= indexedSeqs.checkpointSeq) continue;
+        const ts = typeof checkpoint.ts === 'string' && checkpoint.ts.length > 0 ? checkpoint.ts : nowIso();
+        const indexed: IndexedCheckpoint = {
+          checkpointId: `${meta.sessionId}#C${seq}`,
+          sessionId: meta.sessionId,
+          seq,
+          ts,
+          tsEpoch: toEpoch(ts),
+          project: meta.project,
+          agent: meta.agent,
+          status: checkpoint.status,
+          summary: checkpoint.summary,
+          nextActions: checkpoint.nextActions ?? [],
+          artifacts: checkpoint.artifacts ?? [],
+          telemetry: normalizeCheckpointTelemetry(checkpoint.telemetry),
+        };
+        upsertCheckpointRow(dbPath, indexed);
+        upsertedCheckpoints += 1;
+      }
+    }
+  }
+
+  const finishedAt = Date.now();
+  lastIncrementalSyncByWorkspace.set(workspaceRoot, finishedAt);
+  return {
+    ok: true,
+    mode: 'incremental',
+    workspaceRoot,
+    dbPath,
+    forced: force,
+    skippedByThrottle: false,
+    scannedSessions,
+    upsertedSessions,
+    scannedEvents,
+    upsertedEvents,
+    scannedCheckpoints,
+    upsertedCheckpoints,
+    tookMs: finishedAt - startedAt,
+    syncedAt: nowIso(),
+  };
+}
+
+export async function syncContextIndex(
+  workspaceRoot: string,
+  options?: { force?: boolean }
+): Promise<IndexSyncOutput> {
+  await ensureContextDb(workspaceRoot);
+  return await syncContextIndexIncremental(workspaceRoot, options);
+}
+
 async function withSidecarReadFallback<T>(
   workspaceRoot: string,
   reader: () => T
@@ -1011,19 +1397,12 @@ async function withSidecarReadFallback<T>(
   const dbPath = getSqlitePath(workspaceRoot);
   if (!existsSync(dbPath)) {
     await rebuildContextIndex(workspaceRoot);
-  } else {
-    try {
-      const counts = countSqliteRows(dbPath);
-      if (counts.sessions === 0) {
-        const sessionsRoot = path.join(getDbRoot(workspaceRoot), 'sessions');
-        const entries = await fs.readdir(sessionsRoot, { withFileTypes: true });
-        if (entries.some((entry) => entry.isDirectory())) {
-          await rebuildContextIndex(workspaceRoot);
-        }
-      }
-    } catch {
-      // Fallback will be handled by the catch block below.
-    }
+  }
+
+  try {
+    await syncContextIndexIncremental(workspaceRoot);
+  } catch {
+    // Fallback handled below if reader still fails.
   }
 
   try {
@@ -1032,7 +1411,12 @@ async function withSidecarReadFallback<T>(
     if (!isRecoverableSidecarError(error)) {
       throw error;
     }
-    await rebuildContextIndex(workspaceRoot);
+    try {
+      await syncContextIndexIncremental(workspaceRoot, { force: true });
+      return reader();
+    } catch {
+      await rebuildContextIndex(workspaceRoot);
+    }
     return reader();
   }
 }
@@ -1142,6 +1526,8 @@ export async function rebuildContextIndex(workspaceRoot: string): Promise<Rebuil
     }
   }
 
+  const finishedAt = Date.now();
+  lastIncrementalSyncByWorkspace.set(workspaceRoot, finishedAt);
   return {
     ok: true,
     workspaceRoot,
@@ -1149,7 +1535,7 @@ export async function rebuildContextIndex(workspaceRoot: string): Promise<Rebuil
     sessions,
     events,
     checkpoints,
-    tookMs: Date.now() - startedAt,
+    tookMs: finishedAt - startedAt,
   };
 }
 
@@ -1230,6 +1616,115 @@ export async function searchEvents(input: SearchEventsInput): Promise<SearchEven
     signatureHash: row.signatureHash,
   }));
   return { results };
+}
+
+export async function searchCheckpoints(input: SearchCheckpointsInput): Promise<SearchCheckpointsOutput> {
+  await ensureContextDb(input.workspaceRoot);
+  const limit = input.limit && Number.isFinite(input.limit) ? Math.max(1, Math.floor(input.limit)) : 20;
+  const query = typeof input.query === 'string' ? input.query.trim() : '';
+  const semanticRequested = input.semantic === true && query.length > 0;
+  const candidateLimit = semanticRequested ? Math.max(limit * 10, 100) : limit;
+
+  const rows = await withSidecarReadFallback(input.workspaceRoot, () => {
+    return searchCheckpointRows(getSqlitePath(input.workspaceRoot), {
+      project: input.project,
+      sessionId: input.sessionId,
+      statuses: (input.statuses ?? []).map((status) => String(status).trim()).filter((status) => status.length > 0),
+      query: query.length > 0 ? query : undefined,
+      limit: candidateLimit,
+    });
+  });
+
+  let selectedRows = rows.slice(0, limit);
+  if (semanticRequested) {
+    try {
+      const reranked = await semanticRerank(
+        query,
+        rows.map((row) => ({
+          id: row.checkpointId,
+          text: `${row.status} ${row.summary} ${row.nextActions.join(' ')} ${row.artifacts.join(' ')}`,
+          value: row,
+        })),
+        limit
+      );
+      if (reranked && reranked.length > 0) {
+        selectedRows = reranked.map((item) => item.value);
+      } else {
+        selectedRows = await withSidecarReadFallback(input.workspaceRoot, () => {
+          return searchCheckpointRows(getSqlitePath(input.workspaceRoot), {
+            project: input.project,
+            sessionId: input.sessionId,
+            statuses: (input.statuses ?? []).map((status) => String(status).trim()).filter((status) => status.length > 0),
+            query,
+            limit,
+          });
+        });
+      }
+    } catch {
+      selectedRows = await withSidecarReadFallback(input.workspaceRoot, () => {
+        return searchCheckpointRows(getSqlitePath(input.workspaceRoot), {
+          project: input.project,
+          sessionId: input.sessionId,
+          statuses: (input.statuses ?? []).map((status) => String(status).trim()).filter((status) => status.length > 0),
+          query,
+          limit,
+        });
+      });
+    }
+  }
+
+  const results: IndexedCheckpoint[] = selectedRows.map((row) => ({
+    checkpointId: row.checkpointId,
+    sessionId: row.sessionId,
+    seq: row.seq,
+    ts: row.ts,
+    tsEpoch: row.tsEpoch,
+    project: row.project,
+    agent: row.agent,
+    status: row.status as SessionStatus,
+    summary: row.summary,
+    nextActions: row.nextActions,
+    artifacts: row.artifacts,
+    telemetry: row.telemetry,
+  }));
+  return { results };
+}
+
+export async function searchMemory(input: SearchMemoryInput): Promise<SearchMemoryOutput> {
+  const scope = input.scope ?? 'all';
+  const limit = input.limit && Number.isFinite(input.limit) ? Math.max(1, Math.floor(input.limit)) : 20;
+  const results: SearchMemoryResult[] = [];
+
+  if (scope === 'events' || scope === 'all') {
+    const events = await searchEvents({
+      workspaceRoot: input.workspaceRoot,
+      query: input.query,
+      project: input.project,
+      sessionId: input.sessionId,
+      role: input.role,
+      kinds: input.kinds,
+      refs: input.refs,
+      limit: scope === 'all' ? Math.max(limit * 2, 50) : limit,
+      semantic: input.semantic,
+    });
+    results.push(...events.results.map((item) => ({ itemType: 'event' as const, ...item })));
+  }
+
+  if (scope === 'checkpoints' || scope === 'all') {
+    const checkpoints = await searchCheckpoints({
+      workspaceRoot: input.workspaceRoot,
+      query: input.query,
+      project: input.project,
+      sessionId: input.sessionId,
+      statuses: input.statuses,
+      limit: scope === 'all' ? Math.max(limit * 2, 50) : limit,
+      semantic: input.semantic,
+    });
+    results.push(...checkpoints.results.map((item) => ({ itemType: 'checkpoint' as const, ...item })));
+  }
+
+  results.sort((a, b) => b.tsEpoch - a.tsEpoch);
+  return { results: results.slice(0, limit) };
 }
 
 export interface GetEventByIdInput {

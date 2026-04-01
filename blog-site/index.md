@@ -17,7 +17,7 @@ Product documentation lives on `/` and the localized docs roots.
 ## Latest Posts
 
 - [AIOS RL Training System: Multi-Environment Reinforcement Learning](rl-training-system.md)
-- [ContextDB Search Upgrade: FTS5/BM25 by Default](contextdb-fts-bm25-search.md)
+- [ContextDB Search Upgrade: FTS5/BM25 + Incremental Index Sync (P1.5)](contextdb-fts-bm25-search.md)
 - [Windows CLI Startup Stability Update](windows-cli-startup-stability.md)
 - [Orchestrate Live: Subagent Runtime](orchestrate-live.md)
 - [Xiaohongshu Automation](xiaohongshu-automation.md)

@@ -49,6 +49,7 @@ npm run contextdb -- session:new --agent codex-cli --project demo --goal "implem
 npm run contextdb -- event:add --session <id> --role user --kind prompt --text "start"
 npm run contextdb -- checkpoint --session <id> --summary "phase done" --status running --next "write tests|implement"
 npm run contextdb -- context:pack --session <id> --out memory/context-db/exports/<id>-context.md
+npm run contextdb -- index:sync --stats --jsonl-out memory/context-db/exports/index-sync-stats.jsonl
 npm run contextdb -- index:rebuild
 ```
 
@@ -77,15 +78,47 @@ ContextDB now provides SQLite-backed retrieval over sidecar indexes:
 npm run contextdb -- search --query "auth race" --project demo --kinds response --refs auth.ts
 npm run contextdb -- timeline --session <id> --limit 30
 npm run contextdb -- event:get --id <sessionId>#<seq>
+npm run contextdb -- index:sync --stats
 npm run contextdb -- index:rebuild
 ```
 
 - `search`: query indexed events.
 - `timeline`: merged event/checkpoint feed.
 - `event:get`: fetch a specific event by stable ID.
+- `index:sync`: incremental sync from canonical session files to sidecar index.
 - `index:rebuild`: rebuild SQLite sidecar from canonical session files.
 - Default ranking path: SQLite FTS5 `MATCH` + `bm25(...)` over `kind/text/refs`.
 - Backward compatibility: if FTS is unavailable, search automatically falls back to lexical matching.
+
+## Incremental Sync + Refs Normalization (P1.5)
+
+ContextDB now keeps a normalized `event_refs` table in SQLite.  
+`--refs` filtering uses exact normalized ref matches through this table, reducing false positives from substring matching.
+
+```bash
+npm run contextdb -- index:sync --stats
+npm run contextdb -- index:sync --force --stats
+npm run contextdb -- index:sync --stats --jsonl-out memory/context-db/exports/index-sync-stats.jsonl
+```
+
+- `--stats`: prints `scanned/upserted` counters for sessions/events/checkpoints, elapsed time, throttle skips, and force flag.
+- `--jsonl-out`: appends one JSON record per run (with timestamp) for trend analysis.
+- Use `index:rebuild` only when sidecar is missing/corrupted or a full schema rebuild is required.
+
+## Refs Query Benchmark
+
+Use benchmark scripts to track refs-query latency and gate regressions:
+
+```bash
+cd mcp-server
+npm run bench:contextdb:refs -- --events 2000 --refs-pool 200 --queries 300 --warmup 30 --json-out test-results/contextdb-refs-bench.local.json
+npm run bench:contextdb:refs:ci
+npm run bench:contextdb:refs:gate
+```
+
+- `bench:contextdb:refs`: local customizable dataset benchmark.
+- `bench:contextdb:refs:ci`: standard CI dataset profile.
+- `bench:contextdb:refs:gate`: fails when latency/hit-rate thresholds are not met.
 
 ## Optional Semantic Search (P2)
 
