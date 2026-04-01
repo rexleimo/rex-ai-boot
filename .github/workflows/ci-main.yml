@@ -32,8 +32,15 @@ jobs:
         run: npm run test:scripts
 
   mcp-server-quality:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -55,3 +62,32 @@ jobs:
           npm run typecheck
           npm run test
           npm run build
+
+  performance-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: mcp-server/package-lock.json
+
+      - name: Install mcp-server deps
+        working-directory: mcp-server
+        run: npm ci
+
+      - name: Run orchestrate/learn-eval perf smoke
+        run: npm run perf:orchestrate-learn-eval:smoke -- --json-out test-results/perf-smoke.json
+
+      - name: Upload perf smoke artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-smoke
+          path: test-results/perf-smoke.json
+          if-no-files-found: ignore

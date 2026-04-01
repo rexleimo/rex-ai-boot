@@ -38,11 +38,12 @@ npm run typecheck && npm run build
 - Repo-local discoverable skills must live under `.codex/skills/` or `.claude/skills/` (optionally `.agents/skills/` only when the target client actually supports it). Do not invent parallel skill roots such as `.baoyu-skills/*/SKILL.md`; those are non-discoverable and should be plain docs or extension config only.
 
 ## Testing Guidelines
-There is no dedicated automated test suite yet. Minimum verification for each change:
+Automated suites are available for both root AIOS workflows and `mcp-server`.
+Minimum verification for behavior changes:
 
-1. `npm run typecheck`
-2. `npm run build`
-3. Manual MCP smoke test (`browser_launch` -> `browser_navigate` -> `browser_snapshot`/`browser_auth_check` -> `browser_close`)
+1. `npm run test:scripts` (repo root)
+2. `cd mcp-server && npm run typecheck && npm run test && npm run build`
+3. Manual MCP smoke test (`browser_launch` -> `browser_navigate` -> `browser_snapshot`/`browser_auth_check` -> `browser_close`) when browser-flow behavior changes
 
 Document manual test steps in PRs when behavior changes.
 

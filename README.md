@@ -198,6 +198,7 @@ User -> codex/claude/gemini
 - `.claude/agents` / `.codex/agents`: generated repo-local agent catalogs owned by `node scripts/generate-orchestrator-agents.mjs`
 - `memory/context-db/`: Runtime session artifacts for this repo (ignored by git)
 - `config/browser-profiles.json`: Browser profile/CDP config
+- `examples/`: Minimal runnable examples for ContextDB, Browser MCP smoke, and orchestrate dry-run workflows
 
 Agent catalog note:
 

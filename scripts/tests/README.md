@@ -1,0 +1,53 @@
+# Test Overview
+
+This repository has two main automated test layers:
+
+- Root AIOS workflow tests under `scripts/tests/`
+- MCP server tests under `mcp-server/tests/`
+
+## Command Matrix
+
+Run from repo root:
+
+```bash
+npm run test:scripts
+```
+
+Run from `mcp-server/`:
+
+```bash
+npm run typecheck
+npm run test
+npm run build
+```
+
+ContextDB-focused checks:
+
+```bash
+npm run test:contextdb
+npm run bench:contextdb:refs:ci
+npm run bench:contextdb:refs:gate
+```
+
+Orchestrate/Learn-eval perf smoke (repo root):
+
+```bash
+npm run perf:orchestrate-learn-eval:smoke
+```
+
+## CI Mapping
+
+- `.github/workflows/ci-main.yml`
+  - `npm run test:scripts`
+  - `mcp-server` typecheck/test/build on Linux/macOS/Windows
+  - orchestrate/learn-eval performance smoke gate
+- `.github/workflows/contextdb-quality.yml`
+  - ContextDB focused tests + refs benchmark gate
+
+## Troubleshooting
+
+- If `better-sqlite3` fails on Node ABI mismatch: run `cd mcp-server && npm rebuild better-sqlite3`.
+- If `tsx` cannot be resolved in `mcp-server`: run `cd mcp-server && npm ci`.
+- If perf smoke fails intermittently in CI, review `test-results/perf-smoke.json` artifact and adjust thresholds via:
+  - `AIOS_PERF_ORCHESTRATE_MAX_MS`
+  - `AIOS_PERF_LEARN_EVAL_MAX_MS`
