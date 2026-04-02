@@ -7,6 +7,26 @@ import React from 'react';
 import { App } from './App';
 import type { CatalogSkill, InstalledSkills, Client } from './types';
 
+// ASCII art banner
+const REX_CLI_BANNER = `
+  ╔══════════════════════════════════════════╗
+  ║                                          ║
+  ║   ██████╗ ██╗  ██╗██╗██████╗  ██████╗    ║
+  ║   ██╔══██╗██║ ██╔╝██║██╔══██╗██╔════╝    ║
+  ║   ██████╔╝█████╔╝ ██║██████╔╝██║         ║
+  ║   ██╔══██╗██╔═██╗ ██║██╔══██╗██║         ║
+  ║   ██║  ██║██║  ██╗██║██║  ██║╚██████╗    ║
+  ║   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝ ╚═════╝    ║
+  ║                                          ║
+  ║          Hello, Rex CLI!                 ║
+  ║                                          ║
+  ╚══════════════════════════════════════════╝
+`;
+
+function printBanner(): void {
+  console.log('\x1b[36m' + REX_CLI_BANNER + '\x1b[0m'); // cyan color
+}
+
 // Import from existing modules
 // Note: These paths work because tui-ink is under scripts/lib/
 // and platform/paths.mjs is at scripts/lib/platform/paths.mjs
@@ -93,6 +113,9 @@ export async function runInteractiveSession({
   rootDir,
   onRun,
 }: RunInteractiveSessionOptions): Promise<void> {
+  // Print welcome banner
+  printBanner();
+
   const catalogSkills = loadSkillsCatalog(rootDir);
   const installedSkills = collectInstalledSkills(rootDir, process.cwd(), catalogSkills);
 
