@@ -40,7 +40,6 @@ export function ScrollableSelect({
   const groupedItems = [...coreItems, ...optionalItems];
 
   const maxOffset = Math.max(0, groupedItems.length - pageSize);
-  const visibleItems = groupedItems.slice(scrollOffset, scrollOffset + pageSize);
   const totalItems = groupedItems.length;
 
   // Footer actions cursor positions
@@ -88,9 +87,12 @@ export function ScrollableSelect({
     )
   );
 
-  const renderItem = (item: ScrollableSelectItem, index: number) => {
-    const globalIndex = scrollOffset + index;
-    const isActive = cursor === globalIndex;
+  const visibleItems = groupedItems.slice(scrollOffset, scrollOffset + pageSize);
+  const visibleCoreItems = visibleItems.filter(item => item.isCore);
+  const visibleOptionalItems = visibleItems.filter(item => !item.isCore);
+
+  const renderItem = (item: ScrollableSelectItem, globalIdx: number) => {
+    const isActive = cursor === globalIdx;
     const isSelected = selected.includes(item.name);
     const prefix = isActive ? '▸ ' : '  ';
     const mark = isSelected ? '[x]' : '[ ]';
@@ -122,10 +124,8 @@ export function ScrollableSelect({
     );
   };
 
-  // Calculate visible range for each group
-  const coreStart = 0;
-  const coreEnd = Math.min(coreItems.length, Math.max(0, scrollOffset));
-  const optionalStart = Math.max(0, coreItems.length - scrollOffset);
+  // Calculate the starting global index for optional items
+  const optionalStartIdx = coreItems.length;
 
   return (
     <Box flexDirection="column">
@@ -134,19 +134,23 @@ export function ScrollableSelect({
           <Text color="yellow" bold>
             Core
           </Text>
-          {visibleItems
-            .filter(item => item.isCore)
-            .map((item, idx) => renderItem(item, idx))}
+          {visibleCoreItems.map((item, idx) => {
+            const globalIdx = scrollOffset + idx;
+            return renderItem(item, globalIdx);
+          })}
         </Box>
       )}
-      {optionalItems.length > 0 && visibleItems.some(item => !item.isCore) && (
+      {optionalItems.length > 0 && (
         <Box flexDirection="column">
           <Text color="yellow" bold>
             Optional
           </Text>
-          {visibleItems
-            .filter(item => !item.isCore)
-            .map((item, idx) => renderItem(item, idx + visibleItems.filter(i => i.isCore).length))}
+          {visibleOptionalItems.map((item, idx) => {
+            // Calculate global index for this optional item
+            const visibleCoreCount = visibleCoreItems.length;
+            const globalIdx = scrollOffset + visibleCoreCount + idx;
+            return renderItem(item, globalIdx);
+          })}
         </Box>
       )}
       <Box marginTop={1} flexDirection="column">

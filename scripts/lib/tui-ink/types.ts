@@ -55,6 +55,9 @@ export interface CatalogSkill {
   };
 }
 
+// Alias for consistency with catalog naming
+export type CatalogSkillAlias = CatalogSkill;
+
 export interface InstalledSkills {
   global: Record<Client, string[]>;
   project: Record<Client, string[]>;
