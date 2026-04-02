@@ -6,6 +6,17 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-02
+
+- feat(tui): switch to React Ink + Ink UI component architecture for TUI installer
+- feat(tui-ink): add MemoryRouter-based screen navigation (MainScreen, SetupScreen, UpdateScreen, UninstallScreen, DoctorScreen, SkillPickerScreen, ConfirmScreen)
+- feat(tui-ink): add useSetupOptions hook for shared options state
+- feat(tui-ink): add custom ScrollableSelect component for skill-picker scrolling window
+- feat(tui-ink): add Header, Footer, Checkbox components
+- refactor(tui): remove old string-rendering TUI implementation
+- fix(tui-ink): add React imports and fix tsx execution
+- docs: add Ink TUI refactoring design and implementation plan
+
 ## [1.0.0] - 2026-03-17
 
 - feat(skills): adopt canonical skill source tree and standardize on node 22
