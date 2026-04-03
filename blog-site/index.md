@@ -16,6 +16,7 @@ Product documentation lives on `/` and the localized docs roots.
 
 ## Latest Posts
 
+- [RexCLI TUI Refactor: Modern Terminal UI with React Ink](2026-04-rexcli-ink-tui-refactor.md)
 - [AIOS RL Training System: Multi-Environment Reinforcement Learning](rl-training-system.md)
 - [ContextDB Search Upgrade: FTS5/BM25 + Incremental Index Sync (P1.5)](contextdb-fts-bm25-search.md)
 - [Windows CLI Startup Stability Update](windows-cli-startup-stability.md)

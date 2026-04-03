@@ -16,6 +16,7 @@ description: RexAI CLI エコシステム向けの成長・技術記事。
 
 ## 最新記事
 
+- [RexCLI TUI リファクタリング：React Ink によるモダンなターミナルUI](2026-04-rexcli-ink-tui-refactor.md)
 - [AIOS RL Training System: Multi-Environment Reinforcement Learning](rl-training-system.md)
 - [ContextDB 検索アップグレード: FTS5/BM25 + 増分インデックス同期（P1.5）](contextdb-fts-bm25-search.md)
 - [Windows CLI Startup Stability Update](windows-cli-startup-stability.md)

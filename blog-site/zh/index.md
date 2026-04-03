@@ -16,7 +16,7 @@ description: 面向 RexAI CLI 生态的工程与增长文章。
 
 ## 最新文章
 
-- [RexCli TUI 重构：基于 React Ink 的现代终端交互](2026-04-rexcli-ink-tui-refactor.md)
+- [RexCli TUI 重构：基于 React Ink 的现代终端交互](zh/2026-04-rexcli-ink-tui-refactor.md)
 - [RexCli Skills 安装体验更新：全局/项目范围、更清晰的选择器](2026-03-rexcli-skills-install-experience.md)
 - [AIOS RL 训练系统：从合成 BUG 修复到多环境联合学习](rl-training-system.md)
 - [ContextDB 检索升级：FTS5/BM25 + 增量索引同步（P1.5）](contextdb-fts-bm25-search.md)
