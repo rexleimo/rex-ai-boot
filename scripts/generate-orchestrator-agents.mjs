@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { renderCompatibilityExport } from './lib/agents/compat-export.mjs';
 import { loadCanonicalAgents } from './lib/agents/source-tree.mjs';
+import { writeFileAtomic } from './lib/fs/atomic-write.mjs';
 import { syncGeneratedAgents } from './lib/harness/orchestrator-agents.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -17,7 +17,7 @@ function hasFlag(flag) {
 async function main() {
   const source = await loadCanonicalAgents({ rootDir });
   const exportText = renderCompatibilityExport(source);
-  await writeFile(exportPath, exportText, 'utf8');
+  await writeFileAtomic(exportPath, exportText);
 
   const exportOnly = hasFlag('--export-only');
   const result = exportOnly

@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { renderCompatibilityExport } from './compat-export.mjs';
 import { renderClaudeAgent } from './emitters/claude.mjs';
+import { writeFileAtomic } from '../fs/atomic-write.mjs';
 import {
   ORCHESTRATOR_AGENT_MARKER,
   ORCHESTRATOR_AGENT_MARKER_END,
@@ -136,12 +137,10 @@ function createDefaultFsOps() {
       await rename(fromPath, toPath);
     },
     async replaceTargetFile(absPath, content) {
-      await mkdir(path.dirname(absPath), { recursive: true });
-      await writeFile(absPath, content, 'utf8');
+      await writeFileAtomic(absPath, content);
     },
     async writeCompatibilityExport(absPath, content) {
-      await mkdir(path.dirname(absPath), { recursive: true });
-      await writeFile(absPath, content, 'utf8');
+      await writeFileAtomic(absPath, content);
     },
   };
 }
@@ -268,7 +267,7 @@ export async function syncCanonicalAgents({
     } catch (error) {
       for (const writeOp of rollbackWrites.reverse()) {
         if (writeOp.type === 'restore') {
-          await writeFile(writeOp.absPath, writeOp.content, 'utf8');
+          await writeFileAtomic(writeOp.absPath, writeOp.content);
         } else {
           await removeOptional(writeOp.absPath);
         }
@@ -276,7 +275,7 @@ export async function syncCanonicalAgents({
 
       if (writeCompatibilityExport && previousExport) {
         if (previousExport.exists) {
-          await writeFile(exportPath, previousExport.content, 'utf8');
+          await writeFileAtomic(exportPath, previousExport.content);
         } else {
           await removeOptional(exportPath);
         }
