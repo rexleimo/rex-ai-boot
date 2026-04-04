@@ -26,7 +26,10 @@ function assertOk(result, message = '') {
   assert.equal(result.status, 0, message || result.stderr || result.stdout);
 }
 
-async function seedFixtureRepo(rootDir, { checkSkillsSyncScript = 'process.exit(0);\n' } = {}) {
+async function seedFixtureRepo(rootDir, {
+  checkSkillsSyncScript = 'process.exit(0);\n',
+  checkNativeSyncScript = 'process.exit(0);\n',
+} = {}) {
   const workspaceRoot = process.cwd();
 
   await writeFixtureFile(rootDir, 'AGENTS.md', '# fixture\n');
@@ -36,9 +39,11 @@ async function seedFixtureRepo(rootDir, { checkSkillsSyncScript = 'process.exit(
   await writeFixtureFile(rootDir, 'README-zh.md', '# README-ZH\n');
   await writeFixtureFile(rootDir, 'skills-lock.json', '{}\n');
   await writeFixtureFile(rootDir, 'config/skills-catalog.json', '{"version":1,"skills":[]}\n');
+  await writeFixtureFile(rootDir, 'config/native-sync-manifest.json', '{"schemaVersion":1,"managedBy":"aios","markers":{"markdownBegin":"<!-- AIOS NATIVE BEGIN -->","markdownEnd":"<!-- AIOS NATIVE END -->"},"clients":{"codex":{"tier":"deep","metadataRoot":".codex","outputs":["AGENTS.md",".codex/agents",".codex/skills"]},"claude":{"tier":"deep","metadataRoot":".claude","outputs":["CLAUDE.md",".claude/settings.local.json",".claude/agents",".claude/skills"]},"gemini":{"tier":"compatibility","metadataRoot":".gemini","outputs":[".gemini/AIOS.md",".gemini/skills"]},"opencode":{"tier":"compatibility","metadataRoot":".opencode","outputs":[".opencode/AIOS.md",".opencode/skills"]}}}\n');
   await writeFixtureFile(rootDir, 'mcp-server/package.json', '{"name":"fixture-mcp"}\n');
   await writeFixtureFile(rootDir, 'memory/README.md', '# memory\n');
   await writeFixtureFile(rootDir, 'skill-sources/sample-skill/SKILL.md', '# canonical\n');
+  await writeFixtureFile(rootDir, 'client-sources/native-base/gemini/project/AIOS.md', '# native gemini\n');
   await writeFixtureFile(rootDir, 'memory/specs/orchestrator-agents.json', '{}\n');
   await writeFixtureFile(rootDir, 'agent-sources/manifest.json', '{"schemaVersion":1,"generatedTargets":["claude","codex"]}\n');
   await writeFixtureFile(rootDir, 'agent-sources/roles/rex-planner.json', '{"schemaVersion":1,"id":"rex-planner","role":"planner","name":"rex-planner","description":"planner","tools":["Read"],"model":"sonnet","handoffTarget":"next-phase","systemPrompt":"plan"}\n');
@@ -59,6 +64,8 @@ async function seedFixtureRepo(rootDir, { checkSkillsSyncScript = 'process.exit(
   await writeFixtureFile(rootDir, 'scripts/aios-install.sh', '#!/usr/bin/env bash\n');
   await writeFixtureFile(rootDir, 'scripts/aios-install.ps1', "Write-Host 'fixture'\n");
   await writeFixtureFile(rootDir, 'scripts/check-skills-sync.mjs', checkSkillsSyncScript);
+  await writeFixtureFile(rootDir, 'scripts/check-native-sync.mjs', checkNativeSyncScript);
+  await writeFixtureFile(rootDir, 'scripts/sync-native.mjs', "console.log('[ok] native sync');\n");
   await writeFixtureFile(rootDir, 'scripts/lib/agents/source-tree.mjs', await readFile(path.join(workspaceRoot, 'scripts', 'lib', 'agents', 'source-tree.mjs'), 'utf8'));
   await writeFixtureFile(rootDir, 'scripts/lib/agents/compat-export.mjs', await readFile(path.join(workspaceRoot, 'scripts', 'lib', 'agents', 'compat-export.mjs'), 'utf8'));
   await writeFixtureFile(rootDir, 'scripts/lib/agents/sync.mjs', await readFile(path.join(workspaceRoot, 'scripts', 'lib', 'agents', 'sync.mjs'), 'utf8'));
@@ -74,7 +81,7 @@ async function seedFixtureRepo(rootDir, { checkSkillsSyncScript = 'process.exit(
   assertOk(run('git', ['commit', '-m', 'fixture'], { cwd: rootDir }));
 }
 
-test('package-release.sh emits stable assets that include skill-sources and agent-sources', async () => {
+test('package-release.sh emits stable assets that include native, skill, and agent assets', async () => {
   const rootDir = await makeTemp('rex-release-assets-fixture-');
   await seedFixtureRepo(rootDir);
 
@@ -100,12 +107,17 @@ test('package-release.sh emits stable assets that include skill-sources and agen
     run('test', ['-f', path.join(extractDir, 'rex-cli', 'agent-sources', 'manifest.json')]),
     'rex-cli.tar.gz did not include agent-sources/manifest.json'
   );
+  assertOk(
+    run('test', ['-f', path.join(extractDir, 'rex-cli', 'client-sources', 'native-base', 'gemini', 'project', 'AIOS.md')]),
+    'rex-cli.tar.gz did not include client-sources/native-base/gemini/project/AIOS.md'
+  );
 });
 
-test('release-preflight.sh validates matching tag, VERSION, changelog, and skills sync state', async () => {
+test('release-preflight.sh validates matching tag, VERSION, changelog, and native/skills sync state', async () => {
   const passingRoot = await makeTemp('rex-release-preflight-pass-');
   await seedFixtureRepo(passingRoot, {
     checkSkillsSyncScript: "console.log('[ok] skills sync clean');\nprocess.exit(0);\n",
+    checkNativeSyncScript: "console.log('[ok] native sync clean');\nprocess.exit(0);\n",
   });
 
   const ok = run('bash', ['scripts/release-preflight.sh', '--tag', 'v1.2.3'], {
@@ -113,18 +125,20 @@ test('release-preflight.sh validates matching tag, VERSION, changelog, and skill
   });
   assertOk(ok);
   assert.match(ok.stdout, /SKILLS:\s+generated roots match skill-sources\//);
+  assert.match(ok.stdout, /NATIVE:\s+generated native outputs match client-sources\/native-base\//);
   assert.match(ok.stdout, /AGENTS:\s+export-only regeneration passed/);
 
   const failingRoot = await makeTemp('rex-release-preflight-fail-');
   await seedFixtureRepo(failingRoot, {
-    checkSkillsSyncScript: "console.error('[drift] .claude/skills/sample-skill');\nprocess.exit(1);\n",
+    checkSkillsSyncScript: "console.log('[ok] skills sync clean');\nprocess.exit(0);\n",
+    checkNativeSyncScript: "console.error('[drift] AGENTS.md');\nprocess.exit(1);\n",
   });
 
   const drift = run('bash', ['scripts/release-preflight.sh', '--tag', 'v1.2.3'], {
     cwd: failingRoot,
   });
   assert.notEqual(drift.status, 0);
-  assert.match(`${drift.stderr}\n${drift.stdout}`, /skills sync drift detected/i);
+  assert.match(`${drift.stderr}\n${drift.stdout}`, /native sync drift detected/i);
 });
 
 test('release-stable.sh dry-run prints the exact tag from VERSION', () => {

@@ -101,3 +101,18 @@ For long tasks, announce the chosen route in the first progress update.
   5. If no clear message is available, use fallback `chore: cap snapshot <YYYY-MM-DD>`.
   6. `git push` (or set upstream once when required).
 - If there are no changes, report a no-op instead of creating an empty commit.
+
+<!-- AIOS NATIVE BEGIN -->
+AIOS native enhancements are active in this repository.
+
+Use repo-local skills, agents, and bootstrap docs before falling back to ad-hoc behavior.
+
+ContextDB remains the shared runtime layer for memory, checkpoints, and execution evidence.
+
+Browser MCP is available through the repo-local AIOS server and should be preferred for browser work.
+
+## AIOS Native Codex Layer
+
+- Prefer repo-local `.codex/skills` and `.codex/agents`.
+- Keep work grounded in the AIOS runtime and verification flow.
+<!-- AIOS NATIVE END -->

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "managedBy": "aios",
+  "kind": "native-sync",
+  "client": "gemini",
+  "tier": "compatibility",
+  "managedTargets": [
+    ".gemini/AIOS.md",
+    ".gemini/skills"
+  ],
+  "generatedAt": "2026-04-04T17:28:46.409Z",
+  "aiosVersion": ""
+}

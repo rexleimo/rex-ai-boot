@@ -15,6 +15,7 @@ Validates:
   - VERSION matches X.Y.Z
   - CHANGELOG.md contains ## [X.Y.Z] - YYYY-MM-DD
   - generated skill roots match skill-sources via scripts/check-skills-sync.mjs
+  - generated native outputs match client-sources/native-base via scripts/check-native-sync.mjs
 EOF
 }
 
@@ -80,6 +81,11 @@ if ! node "$ROOT_DIR/scripts/check-skills-sync.mjs" >/dev/null; then
   exit 1
 fi
 
+if ! node "$ROOT_DIR/scripts/check-native-sync.mjs" >/dev/null; then
+  echo "native sync drift detected; run: node scripts/sync-native.mjs" >&2
+  exit 1
+fi
+
 if [[ -f "$ROOT_DIR/agent-sources/manifest.json" ]]; then
   if ! node "$ROOT_DIR/scripts/generate-orchestrator-agents.mjs" --export-only >/dev/null; then
     echo "agent export regeneration failed; run: node scripts/generate-orchestrator-agents.mjs --export-only" >&2
@@ -91,6 +97,7 @@ echo "[ok] release preflight passed for $TAG"
 echo "  VERSION:   $VERSION"
 echo "  CHANGELOG: has ## [$EXPECTED_VERSION] - YYYY-MM-DD"
 echo "  SKILLS:    generated roots match skill-sources/"
+echo "  NATIVE:    generated native outputs match client-sources/native-base/"
 if [[ -f "$ROOT_DIR/agent-sources/manifest.json" ]]; then
   echo "  AGENTS:    export-only regeneration passed"
 fi

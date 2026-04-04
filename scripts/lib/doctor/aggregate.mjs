@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import { inspectBootstrapTask } from '../../doctor-bootstrap-task.mjs';
 import { doctorBrowserMcp } from '../components/browser.mjs';
+import { doctorNativeEnhancements } from '../components/native.mjs';
 import { doctorContextDbShell } from '../components/shell.mjs';
 import { doctorContextDbSkills } from '../components/skills.mjs';
 import { doctorSuperpowers } from '../components/superpowers.mjs';
@@ -53,7 +54,7 @@ function printDoctorCheckSummary(io, checks = []) {
   }
 }
 
-export async function runDoctorSuite({ rootDir, strict = false, globalSecurity = false, profile = 'standard', io = console, env = process.env } = {}) {
+export async function runDoctorSuite({ rootDir, strict = false, globalSecurity = false, nativeOnly = false, profile = 'standard', io = console, env = process.env } = {}) {
   let effectiveWarns = 0;
   const disabledGates = getDisabledGateIds(env);
   const checks = [];
@@ -63,6 +64,29 @@ export async function runDoctorSuite({ rootDir, strict = false, globalSecurity =
   io.log(`Repo: ${rootDir}`);
   io.log(`Strict: ${strict}`);
   io.log(`Profile: ${profile}`);
+
+  if (nativeOnly) {
+    io.log('');
+    io.log('== doctor-native ==');
+    const nativeResult = await doctorNativeEnhancements({ rootDir, client: 'all', io });
+    effectiveWarns += nativeResult.effectiveWarnings;
+    addDoctorCheck(checks, {
+      id: 'doctor:native',
+      item: 'Repo-local native enhancement surfaces',
+      status: nativeResult.errors > 0 ? 'error' : (nativeResult.effectiveWarnings > 0 ? 'warn' : 'ok'),
+      fix: 'Run: node scripts/aios.mjs update --components native --client all',
+      note: `errors=${nativeResult.errors}; effectiveWarnings=${nativeResult.effectiveWarnings}`,
+    });
+    printDoctorCheckSummary(io, checks);
+    io.log('');
+    io.log(`[summary] effective_warn=${effectiveWarns}`);
+    if (nativeResult.errors > 0 || nativeResult.effectiveWarnings > 0) {
+      io.log('[fail] native doctor found actionable issues');
+      return { effectiveWarns, exitCode: 1 };
+    }
+    io.log('[ok] verify-aios complete');
+    return { effectiveWarns, exitCode: 0 };
+  }
 
   io.log('');
   io.log('== doctor-contextdb-shell ==');
@@ -104,6 +128,29 @@ export async function runDoctorSuite({ rootDir, strict = false, globalSecurity =
     addDoctorCheck(checks, {
       id: 'doctor:skills',
       item: 'Skill install integrity and repo skill roots',
+      status: 'skip',
+      fix: 'Enable gate or run doctor with --profile standard/strict.',
+      note: `disabled for profile=${profile}`,
+    });
+  }
+
+  io.log('');
+  io.log('== doctor-native ==');
+  if (isHarnessGateEnabled('doctor:native', { profile, disabledGates, profiles: ['minimal', 'standard', 'strict'] })) {
+    const nativeResult = await doctorNativeEnhancements({ rootDir, client: 'all', io });
+    effectiveWarns += nativeResult.effectiveWarnings + nativeResult.errors;
+    addDoctorCheck(checks, {
+      id: 'doctor:native',
+      item: 'Repo-local native enhancement surfaces',
+      status: nativeResult.errors > 0 ? 'error' : (nativeResult.effectiveWarnings > 0 ? 'warn' : 'ok'),
+      fix: 'Run: node scripts/aios.mjs update --components native --client all',
+      note: `errors=${nativeResult.errors}; effectiveWarnings=${nativeResult.effectiveWarnings}`,
+    });
+  } else {
+    logSkippedGate(io, 'doctor:native', profile);
+    addDoctorCheck(checks, {
+      id: 'doctor:native',
+      item: 'Repo-local native enhancement surfaces',
       status: 'skip',
       fix: 'Enable gate or run doctor with --profile standard/strict.',
       note: `disabled for profile=${profile}`,

@@ -1,4 +1,5 @@
 import { syncNativeEnhancements } from '../native/sync.mjs';
+import { doctorNativeEnhancements as runNativeDoctor } from '../native/doctor.mjs';
 
 export async function installNativeEnhancements({
   rootDir,
@@ -37,16 +38,9 @@ export async function uninstallNativeEnhancements({
 }
 
 export async function doctorNativeEnhancements({
+  rootDir,
   client = 'all',
   io = console,
 } = {}) {
-  io.log(`[info] native doctor scaffold active for client=${client}`);
-  return {
-    ok: true,
-    client,
-    installed: 0,
-    updated: 0,
-    removed: 0,
-    effectiveWarnings: 0,
-  };
+  return runNativeDoctor({ rootDir, client, io });
 }

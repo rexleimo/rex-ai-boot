@@ -205,6 +205,7 @@ Agent catalog note:
 - Run `node scripts/generate-orchestrator-agents.mjs` to regenerate the compatibility export plus repo-local agent catalogs.
 - Run `node scripts/generate-orchestrator-agents.mjs --export-only` to refresh only `memory/specs/orchestrator-agents.json`.
 - `gemini` and `opencode` client selections still reuse the Claude/Codex compatibility catalogs in v1; they do not have native repo agent roots yet.
+- AIOS native enhancements now add compatibility-tier repo-local bootstrap docs for `gemini` and `opencode`, while deeper native integration stays focused on `codex` and `claude`.
 
 ## Prerequisites
 
@@ -428,6 +429,50 @@ npx skills update
 ```
 
 Note: avoid installing third-party skills that share the same name as repo-shipped skills (e.g. `debug`), otherwise skills doctor will report project/global collisions.
+
+### 3.2.1 Native enhancements (repo-local)
+
+`native` is the repo-local enhancement layer on top of shell wrapping and skill installs.
+
+- `skills` manages home/project skill installs from the catalog.
+- `agents` remains the direct repo-local agent sync surface for power users.
+- `native` composes repo-local skills + repo-local agents + managed bootstrap/config fragments into one client-facing layer.
+
+v1 tiers:
+
+- Deep tier: `codex`, `claude`
+- Compatibility tier: `gemini`, `opencode`
+
+Repo-local outputs owned by `native`:
+
+- `codex`: `AGENTS.md`, `.codex/agents`, `.codex/skills`, `.codex/.aios-native-sync.json`
+- `claude`: `CLAUDE.md`, `.claude/settings.local.json`, `.claude/agents`, `.claude/skills`, `.claude/.aios-native-sync.json`
+- `gemini`: `.gemini/AIOS.md`, `.gemini/skills`, `.gemini/.aios-native-sync.json`
+- `opencode`: `.opencode/AIOS.md`, `.opencode/skills`, `.opencode/.aios-native-sync.json`
+
+Commands:
+
+```bash
+# sync repo-local native enhancements for one client
+node scripts/aios.mjs setup --components native --client codex
+
+# refresh repo-local native enhancements
+node scripts/aios.mjs update --components native --client claude
+
+# run only native doctor checks
+node scripts/aios.mjs doctor --native
+
+# repo maintainer sync/check entrypoints
+node scripts/sync-native.mjs
+node scripts/check-native-sync.mjs
+```
+
+Conflict policy:
+
+- `AGENTS.md` and `CLAUDE.md` are updated through marker-bounded managed blocks; surrounding user text is preserved.
+- `.claude/settings.local.json` is merged under the `aiosNative` key; unrelated settings stay untouched.
+- Dedicated compatibility docs such as `.gemini/AIOS.md` and `.opencode/AIOS.md` are AIOS-owned files; if you overwrite them manually, `doctor --native` will report a conflict and tell you to rerun `node scripts/aios.mjs update --components native --client <client>`.
+- Run `node scripts/check-native-sync.mjs` before release work to verify repo-local native outputs still match `client-sources/native-base/`.
 
 ### 3.3 Privacy Guard (strict by default)
 

@@ -204,6 +204,7 @@ Agent 目录说明：
 - 运行 `node scripts/generate-orchestrator-agents.mjs` 会同时刷新兼容导出和仓库内 agent catalogs。
 - 运行 `node scripts/generate-orchestrator-agents.mjs --export-only` 只刷新 `memory/specs/orchestrator-agents.json`。
 - `gemini` 和 `opencode` 在 v1 里仍复用 Claude/Codex 的兼容 catalogs，还没有单独的仓库原生 agent 根目录。
+- AIOS 的 native enhancements 会先给 `gemini`、`opencode` 提供兼容层 repo-local bootstrap 文档，更深的原生接入仍然优先落在 `codex`、`claude`。
 
 ## 前置条件
 
@@ -427,6 +428,50 @@ npx skills update
 ```
 
 注：尽量避免安装与本仓库内置技能同名的第三方 skill（例如 `debug`），否则 skills doctor 会提示 project/global 冲突。
+
+### 3.2.1 Native enhancements（仓库本地）
+
+`native` 是在 shell 包装和 skill 安装之上的 repo-local 原生增强层。
+
+- `skills` 负责 catalog 驱动的 home/project 技能安装。
+- `agents` 仍然保留为面向高级用户的 repo-local agent 直连同步面。
+- `native` 则把 repo-local skills、repo-local agents、以及受管 bootstrap/config 片段组合成一个对客户端可感知的原生增强层。
+
+v1 分层：
+
+- 深度层：`codex`、`claude`
+- 兼容层：`gemini`、`opencode`
+
+`native` 当前会管理这些 repo-local 输出：
+
+- `codex`：`AGENTS.md`、`.codex/agents`、`.codex/skills`、`.codex/.aios-native-sync.json`
+- `claude`：`CLAUDE.md`、`.claude/settings.local.json`、`.claude/agents`、`.claude/skills`、`.claude/.aios-native-sync.json`
+- `gemini`：`.gemini/AIOS.md`、`.gemini/skills`、`.gemini/.aios-native-sync.json`
+- `opencode`：`.opencode/AIOS.md`、`.opencode/skills`、`.opencode/.aios-native-sync.json`
+
+命令示例：
+
+```bash
+# 为单个客户端同步 repo-local native 增强
+node scripts/aios.mjs setup --components native --client codex
+
+# 刷新 repo-local native 增强
+node scripts/aios.mjs update --components native --client claude
+
+# 只跑 native doctor
+node scripts/aios.mjs doctor --native
+
+# repo 维护者使用的 sync/check 入口
+node scripts/sync-native.mjs
+node scripts/check-native-sync.mjs
+```
+
+冲突策略：
+
+- `AGENTS.md` 和 `CLAUDE.md` 只会更新 marker 包围的受管片段，外层用户文本会保留。
+- `.claude/settings.local.json` 只会在 `aiosNative` key 下合并，不会覆盖无关配置。
+- `.gemini/AIOS.md`、`.opencode/AIOS.md` 这类兼容层文档属于 AIOS 受管文件；如果被手改，`doctor --native` 会报告冲突，并提示你重新执行 `node scripts/aios.mjs update --components native --client <client>`。
+- 发版前运行 `node scripts/check-native-sync.mjs`，确认 repo-local native 输出仍与 `client-sources/native-base/` 保持一致。
 
 ### 3.3 Privacy Guard（默认严格）
 
