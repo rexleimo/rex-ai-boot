@@ -23,12 +23,22 @@ test('planUninstall defaults to shell and skills only', () => {
 });
 
 test('planDoctor preserves strict and global security flags', () => {
-  const plan = planDoctor({ strict: true, globalSecurity: true, nativeOnly: true });
+  const plan = planDoctor({
+    strict: true,
+    globalSecurity: true,
+    nativeOnly: true,
+    verbose: true,
+    fix: true,
+    dryRun: true,
+  });
   assert.equal(plan.command, 'doctor');
   assert.equal(plan.options.strict, true);
   assert.equal(plan.options.globalSecurity, true);
   assert.equal(plan.options.nativeOnly, true);
-  assert.match(plan.preview, /doctor --strict --global-security --native/);
+  assert.equal(plan.options.verbose, true);
+  assert.equal(plan.options.fix, true);
+  assert.equal(plan.options.dryRun, true);
+  assert.match(plan.preview, /doctor --strict --global-security --native --verbose --fix --dry-run/);
 });
 
 test('planEntropyGc preserves explicit options', () => {

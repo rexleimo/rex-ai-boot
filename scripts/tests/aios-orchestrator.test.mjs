@@ -624,14 +624,14 @@ test('dispatch runtime registry blocks live subagent execution until explicitly 
   assert.match(String(result.error || ''), /AIOS_EXECUTE_LIVE/i);
 });
 
-test('dispatch runtime registry enforces codex-only subagent client in live mode', async () => {
+test('dispatch runtime registry rejects unsupported subagent client in live mode', async () => {
   const runtimes = await importDispatchRuntimes();
   assert.ok(runtimes, 'expected runtime registry module');
 
   const registry = runtimes.createDispatchRuntimeRegistry({ executeDryRunPlan: () => ({ mode: 'dry-run', ok: true, jobRuns: [] }) });
   const runtime = runtimes.resolveDispatchRuntime({ runtimeId: 'subagent-runtime', executionMode: 'live' }, registry);
 
-  const plan = buildOrchestrationPlan({ blueprint: 'feature', taskTitle: 'Reject non-codex client' });
+  const plan = buildOrchestrationPlan({ blueprint: 'feature', taskTitle: 'Reject unsupported client' });
   const dispatchPlan = buildLocalDispatchPlan(plan);
 
   const result = await runtime.execute({
@@ -640,15 +640,15 @@ test('dispatch runtime registry enforces codex-only subagent client in live mode
     dispatchPolicy: null,
     env: {
       AIOS_EXECUTE_LIVE: '1',
-      AIOS_SUBAGENT_CLIENT: 'claude-code',
+      AIOS_SUBAGENT_CLIENT: 'opencode-cli',
     },
   });
 
   assert.equal(result.mode, 'live');
   assert.equal(result.ok, false);
   assert.equal(Array.isArray(result.jobRuns), true);
-  assert.match(String(result.error || ''), /codex-only mode/i);
-  assert.match(String(result.error || ''), /AIOS_SUBAGENT_CLIENT=codex-cli/i);
+  assert.match(String(result.error || ''), /Unsupported AIOS_SUBAGENT_CLIENT/i);
+  assert.match(String(result.error || ''), /codex-cli, claude-code, gemini-cli/i);
 });
 
 test('dispatch runtime registry can simulate the subagent runtime when explicitly enabled', async () => {
@@ -1435,6 +1435,124 @@ test('runOrchestrate defaults to local dry-run execution when dispatch/execute a
   assert.equal(report.workItems.length >= 1, true);
   assert.equal(report.dispatchEvidence.persisted, false);
   assert.equal(report.dispatchEvidence.reason, 'session-required');
+});
+
+test('runOrchestrate --retry-blocked replays blocked jobs with seeded dependencies', async () => {
+  const rootDir = await makeRootDir();
+  const fakeBin = await createFakeCodexCommand();
+  await writeSession(
+    rootDir,
+    'retry-session',
+    { updatedAt: '2026-03-09T04:30:00.000Z', goal: 'Retry blocked implement phase' },
+    [
+      {
+        seq: 1,
+        ts: '2026-03-09T04:00:00.000Z',
+        status: 'running',
+        summary: 'Initial dispatch run',
+        nextActions: ['retry blocked implementer job'],
+        artifacts: [],
+        telemetry: {
+          verification: { result: 'partial', evidence: 'dispatch runtime blocked' },
+          retryCount: 0,
+          elapsedMs: 1000,
+        },
+      },
+    ]
+  );
+
+  const artifactRel = path.join(
+    'memory',
+    'context-db',
+    'sessions',
+    'retry-session',
+    'artifacts',
+    'dispatch-run-20260309T040000Z.json'
+  );
+  const artifactAbs = path.join(rootDir, artifactRel);
+  await fs.mkdir(path.dirname(artifactAbs), { recursive: true });
+  await fs.writeFile(
+    artifactAbs,
+    `${JSON.stringify({
+      schemaVersion: 1,
+      kind: 'orchestration.dispatch-run',
+      sessionId: 'retry-session',
+      persistedAt: '2026-03-09T04:00:00.000Z',
+      dispatchRun: {
+        mode: 'live',
+        ok: false,
+        executorRegistry: ['subagent-runtime'],
+        jobRuns: [
+          {
+            jobId: 'phase.plan',
+            jobType: 'phase',
+            role: 'planner',
+            status: 'completed',
+            output: {
+              outputType: 'handoff',
+              payload: {
+                schemaVersion: 1,
+                status: 'completed',
+                fromRole: 'planner',
+                toRole: 'next-phase',
+                taskTitle: 'Retry blocked implement phase',
+                contextSummary: 'Seed planner output',
+                findings: [],
+                filesTouched: [],
+                openQuestions: [],
+                recommendations: [],
+              },
+            },
+          },
+          {
+            jobId: 'phase.implement.wi.1',
+            jobType: 'phase',
+            role: 'implementer',
+            dependsOn: ['phase.plan'],
+            status: 'blocked',
+            output: {
+              outputType: 'handoff',
+              error: 'timeout',
+            },
+          },
+        ],
+        finalOutputs: [{ jobId: 'phase.plan', outputType: 'handoff' }],
+      },
+    }, null, 2)}\n`,
+    'utf8'
+  );
+
+  const logs = [];
+  await runOrchestrate(
+    {
+      sessionId: 'retry-session',
+      resumeSessionId: 'retry-session',
+      retryBlocked: true,
+      dispatchMode: 'local',
+      executionMode: 'live',
+      format: 'json',
+    },
+    {
+      rootDir,
+      io: { log: (line) => logs.push(line) },
+      env: {
+        ...process.env,
+        AIOS_EXECUTE_LIVE: '1',
+        AIOS_SUBAGENT_CLIENT: 'codex-cli',
+        PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
+      },
+    }
+  );
+
+  const report = JSON.parse(logs.at(-1));
+  assert.equal(report.retryReplay.sessionId, 'retry-session');
+  assert.equal(report.retryReplay.enabled, true);
+  assert.equal(report.retryReplay.blockedJobIds.includes('phase.implement.wi.1'), true);
+  assert.deepEqual(report.dispatchPlan.jobs.map((job) => job.jobId), ['phase.implement.wi.1']);
+  assert.equal(report.dispatchPlan.seedJobRuns.some((jobRun) => jobRun.jobId === 'phase.plan'), true);
+  assert.equal(report.dispatchRun.jobRuns.length, 1);
+  assert.equal(report.dispatchRun.jobRuns[0].jobId, 'phase.implement.wi.1');
+  assert.equal(report.dispatchRun.jobRuns[0].status, 'completed');
 });
 
 test('runOrchestrate resolves blueprint and context from learn-eval overlay', async () => {

@@ -54,7 +54,18 @@ function printDoctorCheckSummary(io, checks = []) {
   }
 }
 
-export async function runDoctorSuite({ rootDir, strict = false, globalSecurity = false, nativeOnly = false, profile = 'standard', io = console, env = process.env } = {}) {
+export async function runDoctorSuite({
+  rootDir,
+  strict = false,
+  globalSecurity = false,
+  nativeOnly = false,
+  verbose = false,
+  fix = false,
+  dryRun = false,
+  profile = 'standard',
+  io = console,
+  env = process.env,
+} = {}) {
   let effectiveWarns = 0;
   const disabledGates = getDisabledGateIds(env);
   const checks = [];
@@ -64,11 +75,14 @@ export async function runDoctorSuite({ rootDir, strict = false, globalSecurity =
   io.log(`Repo: ${rootDir}`);
   io.log(`Strict: ${strict}`);
   io.log(`Profile: ${profile}`);
+  io.log(`Verbose: ${verbose}`);
+  io.log(`Fix: ${fix}`);
+  io.log(`DryRun: ${dryRun}`);
 
   if (nativeOnly) {
     io.log('');
     io.log('== doctor-native ==');
-    const nativeResult = await doctorNativeEnhancements({ rootDir, client: 'all', io });
+    const nativeResult = await doctorNativeEnhancements({ rootDir, client: 'all', verbose, fix, dryRun, io });
     effectiveWarns += nativeResult.effectiveWarnings;
     addDoctorCheck(checks, {
       id: 'doctor:native',
@@ -137,7 +151,7 @@ export async function runDoctorSuite({ rootDir, strict = false, globalSecurity =
   io.log('');
   io.log('== doctor-native ==');
   if (isHarnessGateEnabled('doctor:native', { profile, disabledGates, profiles: ['minimal', 'standard', 'strict'] })) {
-    const nativeResult = await doctorNativeEnhancements({ rootDir, client: 'all', io });
+    const nativeResult = await doctorNativeEnhancements({ rootDir, client: 'all', verbose, fix, dryRun, io });
     effectiveWarns += nativeResult.effectiveWarnings + nativeResult.errors;
     addDoctorCheck(checks, {
       id: 'doctor:native',

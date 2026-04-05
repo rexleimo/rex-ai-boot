@@ -15,6 +15,9 @@ interface DoctorScreenProps {
   onToggleStrict: () => void;
   onToggleGlobalSecurity: () => void;
   onToggleNativeOnly: () => void;
+  onToggleVerbose: () => void;
+  onToggleFix: () => void;
+  onToggleDryRun: () => void;
   onRun: () => void;
 }
 
@@ -24,11 +27,14 @@ export function DoctorScreen({
   onToggleStrict,
   onToggleGlobalSecurity,
   onToggleNativeOnly,
+  onToggleVerbose,
+  onToggleFix,
+  onToggleDryRun,
   onRun,
 }: DoctorScreenProps) {
   const navigate = useNavigate();
   const [cursor, setCursor] = useState(0);
-  const maxCursor = 4;
+  const maxCursor = 7;
 
   useInput(
     useCallback(
@@ -44,18 +50,34 @@ export function DoctorScreen({
             onToggleGlobalSecurity();
           } else if (cursor === 2) {
             onToggleNativeOnly();
+          } else if (cursor === 3) {
+            onToggleVerbose();
+          } else if (cursor === 4) {
+            onToggleFix();
+          } else if (cursor === 5) {
+            onToggleDryRun();
           }
         } else if (key.return) {
-          if (cursor === 3) {
+          if (cursor === 6) {
             onRun();
-          } else if (cursor === 4) {
+          } else if (cursor === 7) {
             navigate('/');
           }
         } else if (input === 'b' || input === 'B') {
           navigate('/');
         }
       },
-      [cursor, onToggleStrict, onToggleGlobalSecurity, onToggleNativeOnly, onRun, navigate]
+      [
+        cursor,
+        onToggleStrict,
+        onToggleGlobalSecurity,
+        onToggleNativeOnly,
+        onToggleVerbose,
+        onToggleFix,
+        onToggleDryRun,
+        onRun,
+        navigate,
+      ]
     )
   );
 
@@ -73,14 +95,19 @@ export function DoctorScreen({
         <Checkbox label="Strict" checked={options.strict} active={cursor === 0} />
         <Checkbox label="Global security scan" checked={options.globalSecurity} active={cursor === 1} />
         <Checkbox label="Native only" checked={options.nativeOnly} active={cursor === 2} />
-        {renderActionItem('Run doctor', 3)}
-        {renderActionItem('Back', 4)}
+        <Checkbox label="Verbose output" checked={options.verbose} active={cursor === 3} />
+        <Checkbox label="Auto-fix native" checked={options.fix} active={cursor === 4} />
+        <Checkbox label="Dry-run auto-fix" checked={options.dryRun} active={cursor === 5} />
+        {renderActionItem('Run doctor', 6)}
+        {renderActionItem('Back', 7)}
       </Box>
       <Box marginBottom={1}>
         <Text dimColor>
           {options.nativeOnly
             ? 'Native only mode checks repo-local native surfaces only.'
             : 'Full doctor mode includes native plus shell, skills, browser, and superpowers gates.'}
+          {options.verbose ? ' Verbose mode prints extra diagnostics.' : ''}
+          {options.dryRun && !options.fix ? ' Dry-run is effective when auto-fix is enabled.' : ''}
         </Text>
       </Box>
       <Footer />

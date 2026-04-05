@@ -16,6 +16,9 @@ import {
   resolveGeneratedTargetPath,
   resolveGeneratedTargetRelativePath,
 } from './source-tree.mjs';
+import { withRepoLock } from '../fs/repo-lock.mjs';
+
+const SYNC_LOCK_NAME = 'native-skills-sync';
 
 function hashBuffer(buffer) {
   return crypto.createHash('sha1').update(buffer).digest('hex');
@@ -107,7 +110,7 @@ function materializeWithMetadata({ rootDir, entry, surface }) {
   return materialized;
 }
 
-export async function syncGeneratedSkills({ rootDir, io = console, manifest = null, surfaces = [] } = {}) {
+async function syncGeneratedSkillsUnlocked({ rootDir, io = console, manifest = null, surfaces = [] } = {}) {
   const resolvedManifest = manifest || loadSkillsSyncManifest(rootDir);
   const canonicalSkills = listCanonicalSkills(rootDir, resolvedManifest);
   const selectedSurfaces = Array.isArray(surfaces) && surfaces.length > 0
@@ -232,6 +235,22 @@ export async function syncGeneratedSkills({ rootDir, io = console, manifest = nu
     ok: true,
     results,
   };
+}
+
+export async function syncGeneratedSkills({
+  rootDir,
+  io = console,
+  manifest = null,
+  surfaces = [],
+  withLock = true,
+  lockOptions = {},
+} = {}) {
+  if (!withLock) {
+    return syncGeneratedSkillsUnlocked({ rootDir, io, manifest, surfaces });
+  }
+  return withRepoLock({ rootDir, lockName: SYNC_LOCK_NAME, io, ...lockOptions }, () => (
+    syncGeneratedSkillsUnlocked({ rootDir, io, manifest, surfaces })
+  ));
 }
 
 export async function checkGeneratedSkillsSync({ rootDir, io = console, manifest = null, surfaces = [] } = {}) {

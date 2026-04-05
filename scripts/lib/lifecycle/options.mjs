@@ -195,6 +195,9 @@ export function createDefaultDoctorOptions() {
     globalSecurity: false,
     profile: 'standard',
     nativeOnly: false,
+    verbose: false,
+    fix: false,
+    dryRun: false,
   };
 }
 

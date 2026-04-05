@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { syncCanonicalAgents } from '../agents/sync.mjs';
+import { withRepoLock } from '../fs/repo-lock.mjs';
 import { syncGeneratedSkills } from '../skills/sync.mjs';
 import {
   buildNativeSyncMetadata,
@@ -30,6 +31,7 @@ const EMITTERS = {
   gemini: renderGeminiNativeOutputs,
   opencode: renderOpencodeNativeOutputs,
 };
+const SYNC_LOCK_NAME = 'native-skills-sync';
 
 function createDefaultFsOps() {
   return {
@@ -95,6 +97,14 @@ function summarizeMutation(existsBefore, changed) {
   return existsBefore ? 'updated' : 'installed';
 }
 
+function normalizeRepairOptions(repair = {}) {
+  const force = Boolean(repair && (repair.force === true || repair.forceReplaceManagedFiles === true));
+  return {
+    forceReplaceManagedFiles: force || Boolean(repair?.forceReplaceManagedFiles),
+    resetInvalidJson: force || Boolean(repair?.resetInvalidJson),
+  };
+}
+
 async function applyMarkdownBlockOperation(targetPath, content, fsOps, backups) {
   const previous = await fsOps.readTextTarget(targetPath);
   const existsBefore = previous.length > 0 || await pathExists(targetPath);
@@ -107,16 +117,24 @@ async function applyMarkdownBlockOperation(targetPath, content, fsOps, backups) 
   return summarizeMutation(existsBefore, true);
 }
 
-async function applyManagedFileOperation(targetPath, content, fsOps, backups) {
+async function applyManagedFileOperation(targetPath, content, fsOps, backups, repair) {
   const previous = await fsOps.readTextTarget(targetPath);
   const existsBefore = previous.length > 0 || await pathExists(targetPath);
   const next = wrapManagedMarkdown(content);
 
   if (previous) {
-    if (!hasManagedMarkdownBlock(previous)) {
+    let managed = false;
+    try {
+      managed = hasManagedMarkdownBlock(previous);
+    } catch {
+      if (!repair.forceReplaceManagedFiles) {
+        throw new Error(`malformed managed block: ${path.basename(targetPath)}`);
+      }
+    }
+    if (!managed && !repair.forceReplaceManagedFiles) {
       throw new Error(`unmanaged conflict: ${path.basename(targetPath)}`);
     }
-    if (normalizeText(previous) === normalizeText(next)) {
+    if (managed && normalizeText(previous) === normalizeText(next)) {
       return 'reused';
     }
   }
@@ -126,10 +144,18 @@ async function applyManagedFileOperation(targetPath, content, fsOps, backups) {
   return summarizeMutation(existsBefore, true);
 }
 
-async function applyJsonMergeOperation(targetPath, fragment, fsOps, backups) {
+async function applyJsonMergeOperation(targetPath, fragment, fsOps, backups, repair) {
   const previous = await fsOps.readTextTarget(targetPath);
   const existsBefore = previous.length > 0 || await pathExists(targetPath);
-  const parsed = parseJsonObject(previous, targetPath);
+  let parsed;
+  try {
+    parsed = parseJsonObject(previous, targetPath);
+  } catch {
+    if (!repair.resetInvalidJson) {
+      throw new Error(`invalid json: ${path.basename(targetPath)}`);
+    }
+    parsed = {};
+  }
   const next = stringifyJsonObject(mergeManagedJsonFragment(parsed, fragment));
   if (normalizeText(previous) === normalizeText(next)) {
     return 'reused';
@@ -195,7 +221,7 @@ function resultBucket(client, tier) {
   };
 }
 
-async function applyRenderedOperations({ rootDir, client, mode, rendered, plan, fsOps }) {
+async function applyRenderedOperations({ rootDir, client, mode, rendered, plan, fsOps, repair }) {
   const backups = new Map();
   const result = resultBucket(client, plan.tier);
   try {
@@ -208,9 +234,9 @@ async function applyRenderedOperations({ rootDir, client, mode, rendered, plan, 
       } else if (operation.kind === 'markdown-block') {
         status = await applyMarkdownBlockOperation(targetPath, operation.content, fsOps, backups);
       } else if (operation.kind === 'managed-file') {
-        status = await applyManagedFileOperation(targetPath, operation.content, fsOps, backups);
+        status = await applyManagedFileOperation(targetPath, operation.content, fsOps, backups, repair);
       } else if (operation.kind === 'json-merge') {
-        status = await applyJsonMergeOperation(targetPath, operation.content, fsOps, backups);
+        status = await applyJsonMergeOperation(targetPath, operation.content, fsOps, backups, repair);
       } else {
         throw new Error(`unsupported native operation: ${operation.kind}`);
       }
@@ -240,21 +266,28 @@ async function applyRenderedOperations({ rootDir, client, mode, rendered, plan, 
   return result;
 }
 
-export async function syncNativeEnhancements({
+async function syncNativeEnhancementsUnlocked({
   rootDir,
   client = 'all',
   mode = 'install',
   io = console,
   fsOps,
+  repair = {},
 } = {}) {
   const manifest = loadNativeSyncManifest(rootDir);
   const selectedClients = resolveNativeClients(client);
   const ops = fsOps ? { ...createDefaultFsOps(), ...fsOps } : createDefaultFsOps();
+  const repairOptions = normalizeRepairOptions(repair);
   const results = [];
 
   for (const currentClient of selectedClients) {
     if (mode !== 'uninstall') {
-      await syncGeneratedSkills({ rootDir, io, surfaces: [currentClient] });
+      await syncGeneratedSkills({
+        rootDir,
+        io,
+        surfaces: [currentClient],
+        withLock: false,
+      });
       if (currentClient === 'codex' || currentClient === 'claude') {
         await syncCanonicalAgents({ rootDir, io, targets: [currentClient], mode: 'install' });
       }
@@ -269,6 +302,7 @@ export async function syncNativeEnhancements({
       rendered,
       plan,
       fsOps: ops,
+      repair: repairOptions,
     });
     results.push(result);
   }
@@ -277,4 +311,28 @@ export async function syncNativeEnhancements({
     ok: true,
     results,
   };
+}
+
+export async function syncNativeEnhancements({
+  rootDir,
+  client = 'all',
+  mode = 'install',
+  io = console,
+  fsOps,
+  repair = {},
+  withLock = true,
+  lockOptions = {},
+} = {}) {
+  const run = () => syncNativeEnhancementsUnlocked({
+    rootDir,
+    client,
+    mode,
+    io,
+    fsOps,
+    repair,
+  });
+  if (!withLock) {
+    return run();
+  }
+  return withRepoLock({ rootDir, lockName: SYNC_LOCK_NAME, io, ...lockOptions }, run);
 }

@@ -159,6 +159,50 @@ test('native sync writes compatibility docs for gemini and opencode', async () =
   assert.equal(readNativeSyncMetadata(path.join(rootDir, '.opencode')).tier, 'compatibility');
 });
 
+test('native sync repair mode can replace unmanaged compatibility docs', async () => {
+  const rootDir = await makeTemp('aios-native-sync-repair-managed-file-root-');
+  await seedNativeRoot(rootDir);
+  await mkdir(path.join(rootDir, '.gemini'), { recursive: true });
+  await writeFile(path.join(rootDir, '.gemini', 'AIOS.md'), 'manual compatibility doc\n', 'utf8');
+
+  await assert.rejects(
+    syncNativeEnhancements({ rootDir, client: 'gemini' }),
+    /unmanaged conflict/
+  );
+
+  await syncNativeEnhancements({
+    rootDir,
+    client: 'gemini',
+    repair: { force: true },
+  });
+
+  const repaired = await readFile(path.join(rootDir, '.gemini', 'AIOS.md'), 'utf8');
+  assert.match(repaired, /AIOS NATIVE BEGIN/);
+  assert.match(repaired, /Gemini compatibility/);
+});
+
+test('native sync repair mode can recover invalid claude settings.local.json', async () => {
+  const rootDir = await makeTemp('aios-native-sync-repair-json-root-');
+  await seedNativeRoot(rootDir);
+  await mkdir(path.join(rootDir, '.claude'), { recursive: true });
+  await writeFile(path.join(rootDir, '.claude', 'settings.local.json'), '{invalid-json', 'utf8');
+
+  await assert.rejects(
+    syncNativeEnhancements({ rootDir, client: 'claude' }),
+    /invalid json/
+  );
+
+  await syncNativeEnhancements({
+    rootDir,
+    client: 'claude',
+    repair: { force: true },
+  });
+
+  const repaired = JSON.parse(await readFile(path.join(rootDir, '.claude', 'settings.local.json'), 'utf8'));
+  assert.equal(typeof repaired.aiosNative, 'object');
+  assert.equal(Array.isArray(repaired.aiosNative.hooks.SessionStart), true);
+});
+
 test('native sync rolls back managed writes when a later target write fails', async () => {
   const rootDir = await makeTemp('aios-native-sync-rollback-root-');
   await seedNativeRoot(rootDir);

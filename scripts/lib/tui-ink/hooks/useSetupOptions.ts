@@ -67,6 +67,9 @@ export function useSetupOptions(
       strict: false,
       globalSecurity: false,
       nativeOnly: false,
+      verbose: false,
+      fix: false,
+      dryRun: false,
     },
   }));
 

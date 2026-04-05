@@ -76,7 +76,7 @@ test('parseArgs accepts install mode for skills workflows', () => {
   assert.equal(internalResult.options.installMode, 'link');
 });
 
-test('parseArgs accepts native component, internal native target, and native-only doctor', () => {
+test('parseArgs accepts native component, internal native target, and native-only doctor flags', () => {
   const setupResult = parseArgs([
     'setup',
     '--components',
@@ -99,9 +99,41 @@ test('parseArgs accepts native component, internal native target, and native-onl
   assert.equal(internalResult.options.target, 'native');
   assert.equal(internalResult.options.client, 'codex');
 
-  const doctorResult = parseArgs(['doctor', '--native']);
+  const doctorResult = parseArgs(['doctor', '--native', '--verbose', '--fix', '--dry-run']);
   assert.equal(doctorResult.command, 'doctor');
   assert.equal(doctorResult.options.nativeOnly, true);
+  assert.equal(doctorResult.options.verbose, true);
+  assert.equal(doctorResult.options.fix, true);
+  assert.equal(doctorResult.options.dryRun, true);
+
+  const internalDoctor = parseArgs(['internal', 'native', 'doctor', '--verbose', '--fix', '--dry-run']);
+  assert.equal(internalDoctor.command, 'internal');
+  assert.equal(internalDoctor.options.target, 'native');
+  assert.equal(internalDoctor.options.action, 'doctor');
+  assert.equal(internalDoctor.options.verbose, true);
+  assert.equal(internalDoctor.options.fix, true);
+  assert.equal(internalDoctor.options.dryRun, true);
+
+  const internalRollback = parseArgs(['internal', 'native', 'rollback', '--repair-id', 'latest', '--dry-run']);
+  assert.equal(internalRollback.command, 'internal');
+  assert.equal(internalRollback.options.target, 'native');
+  assert.equal(internalRollback.options.action, 'rollback');
+  assert.equal(internalRollback.options.repairId, 'latest');
+  assert.equal(internalRollback.options.dryRun, true);
+
+  const internalRepairList = parseArgs(['internal', 'native', 'repair', 'list', '--limit', '5']);
+  assert.equal(internalRepairList.command, 'internal');
+  assert.equal(internalRepairList.options.target, 'native');
+  assert.equal(internalRepairList.options.action, 'repair');
+  assert.equal(internalRepairList.options.repairAction, 'list');
+  assert.equal(internalRepairList.options.limit, 5);
+
+  const internalRepairShow = parseArgs(['internal', 'native', 'repair', 'show', '--repair-id', 'latest']);
+  assert.equal(internalRepairShow.command, 'internal');
+  assert.equal(internalRepairShow.options.target, 'native');
+  assert.equal(internalRepairShow.options.action, 'repair');
+  assert.equal(internalRepairShow.options.repairAction, 'show');
+  assert.equal(internalRepairShow.options.repairId, 'latest');
 });
 
 test('parseArgs rejects invalid install mode', () => {
@@ -118,10 +150,93 @@ test('parseArgs accepts doctor strict mode', () => {
   assert.equal(result.options.strict, true);
   assert.equal(result.options.globalSecurity, false);
   assert.equal(result.options.nativeOnly, false);
+  assert.equal(result.options.fix, false);
+  assert.equal(result.options.dryRun, false);
+});
+
+test('parseArgs accepts team shorthand and runtime overrides', () => {
+  const shorthand = parseArgs(['team', '2:claude', 'Ship team runtime']);
+  assert.equal(shorthand.command, 'team');
+  assert.equal(shorthand.options.workers, 2);
+  assert.equal(shorthand.options.provider, 'claude');
+  assert.equal(shorthand.options.clientId, 'claude-code');
+  assert.equal(shorthand.options.taskTitle, 'Ship team runtime');
+  assert.equal(shorthand.options.executionMode, 'live');
+
+  const explicit = parseArgs([
+    'team',
+    '--provider',
+    'gemini',
+    '--workers',
+    '4',
+    '--task',
+    'Refactor team flow',
+    '--dry-run',
+    '--format',
+    'json',
+  ]);
+  assert.equal(explicit.command, 'team');
+  assert.equal(explicit.options.provider, 'gemini');
+  assert.equal(explicit.options.clientId, 'gemini-cli');
+  assert.equal(explicit.options.workers, 4);
+  assert.equal(explicit.options.executionMode, 'dry-run');
+  assert.equal(explicit.options.format, 'json');
+
+  const resumeRetry = parseArgs([
+    'team',
+    '--resume',
+    'session-123',
+    '--retry-blocked',
+    '--provider',
+    'codex',
+  ]);
+  assert.equal(resumeRetry.command, 'team');
+  assert.equal(resumeRetry.options.resumeSessionId, 'session-123');
+  assert.equal(resumeRetry.options.sessionId, 'session-123');
+  assert.equal(resumeRetry.options.retryBlocked, true);
+  assert.equal(resumeRetry.options.clientId, 'codex-cli');
+});
+
+test('parseArgs accepts hud command options', () => {
+  const jsonResult = parseArgs(['hud', '--provider', 'codex', '--json']);
+  assert.equal(jsonResult.command, 'hud');
+  assert.equal(jsonResult.options.provider, 'codex');
+  assert.equal(jsonResult.options.json, true);
+
+  const sessionResult = parseArgs(['hud', '--session', 'session-123', '--preset', 'full']);
+  assert.equal(sessionResult.command, 'hud');
+  assert.equal(sessionResult.options.sessionId, 'session-123');
+  assert.equal(sessionResult.options.preset, 'full');
+
+  const watchResult = parseArgs(['hud', '--watch', '--interval-ms', '500']);
+  assert.equal(watchResult.command, 'hud');
+  assert.equal(watchResult.options.watch, true);
+  assert.equal(watchResult.options.intervalMs, 500);
+});
+
+test('parseArgs accepts team status/history subcommands', () => {
+  const status = parseArgs(['team', 'status', '--provider', 'codex', '--json']);
+  assert.equal(status.command, 'team');
+  assert.equal(status.options.subcommand, 'status');
+  assert.equal(status.options.provider, 'codex');
+  assert.equal(status.options.json, true);
+
+  const history = parseArgs(['team', 'history', '--provider', 'claude', '--limit', '5']);
+  assert.equal(history.command, 'team');
+  assert.equal(history.options.subcommand, 'history');
+  assert.equal(history.options.provider, 'claude');
+  assert.equal(history.options.limit, 5);
 });
 
 test('parseArgs rejects invalid mode', () => {
   assert.throws(() => parseArgs(['setup', '--mode', 'bad-value']), /--mode must be one of/);
+});
+
+test('parseArgs rejects team --retry-blocked without a session target', () => {
+  assert.throws(
+    () => parseArgs(['team', '--retry-blocked']),
+    /--retry-blocked requires --resume <session-id> or --session <session-id>/i
+  );
 });
 
 test('parseArgs accepts memo passthrough args', () => {
@@ -170,6 +285,7 @@ test('aios CLI prints help', () => {
   assert.match(result.stdout, /AIOS unified entry/i);
   assert.match(result.stdout, /setup/);
   assert.match(result.stdout, /doctor/);
+  assert.match(result.stdout, /team/);
   assert.match(result.stdout, /native/);
 });
 

@@ -1,3 +1,6 @@
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+
 import {
   buildDispatchPolicy,
   buildEffectiveDispatchPolicy,
@@ -275,10 +278,193 @@ async function executeDispatchPreflight(dispatchPolicy, {
   };
 }
 
+function normalizeJobRunStatus(rawValue = '') {
+  const value = String(rawValue || '').trim().toLowerCase();
+  if (value === 'blocked' || value === 'needs-input') return 'blocked';
+  return value || 'unknown';
+}
+
+function isDispatchArtifactFileName(fileName = '') {
+  return /^dispatch-run-.*\.json$/i.test(String(fileName || '').trim());
+}
+
+function uniq(items = []) {
+  return [...new Set(items)];
+}
+
+async function readJsonOptional(filePath) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, 'utf8'));
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function listDispatchArtifacts(rootDir, sessionId) {
+  const artifactsDir = path.join(rootDir, 'memory', 'context-db', 'sessions', sessionId, 'artifacts');
+  let entries = [];
+  try {
+    entries = await fs.readdir(artifactsDir, { withFileTypes: true });
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') {
+      return [];
+    }
+    throw error;
+  }
+
+  return entries
+    .filter((entry) => entry.isFile() && isDispatchArtifactFileName(entry.name))
+    .map((entry) => entry.name)
+    .sort((left, right) => String(right).localeCompare(String(left)))
+    .map((name) => ({
+      artifactPath: path.join('memory', 'context-db', 'sessions', sessionId, 'artifacts', name),
+      artifactAbsPath: path.join(rootDir, 'memory', 'context-db', 'sessions', sessionId, 'artifacts', name),
+    }));
+}
+
+function normalizeSeedJobRun(rawJobRun = {}) {
+  const jobId = String(rawJobRun?.jobId || '').trim();
+  if (!jobId) {
+    return null;
+  }
+  if (normalizeJobRunStatus(rawJobRun?.status) === 'blocked') {
+    return null;
+  }
+  return {
+    jobId,
+    jobType: String(rawJobRun?.jobType || '').trim(),
+    role: String(rawJobRun?.role || '').trim(),
+    executor: String(rawJobRun?.executor || '').trim(),
+    executorLabel: String(rawJobRun?.executorLabel || '').trim(),
+    dependsOn: Array.isArray(rawJobRun?.dependsOn)
+      ? rawJobRun.dependsOn.map((item) => String(item || '').trim()).filter(Boolean)
+      : [],
+    status: String(rawJobRun?.status || 'completed').trim() || 'completed',
+    inputSummary: rawJobRun?.inputSummary && typeof rawJobRun.inputSummary === 'object'
+      ? { ...rawJobRun.inputSummary }
+      : { dependencyCount: 0, inputTypes: [] },
+    output: rawJobRun?.output && typeof rawJobRun.output === 'object'
+      ? { ...rawJobRun.output }
+      : { outputType: 'handoff' },
+  };
+}
+
+async function loadLatestBlockedDispatchReplay(rootDir, sessionId) {
+  const artifactFiles = await listDispatchArtifacts(rootDir, sessionId);
+  for (const file of artifactFiles) {
+    const artifact = await readJsonOptional(file.artifactAbsPath);
+    const jobRuns = Array.isArray(artifact?.dispatchRun?.jobRuns) ? artifact.dispatchRun.jobRuns : [];
+    const blockedJobIds = uniq(
+      jobRuns
+        .filter((jobRun) => normalizeJobRunStatus(jobRun?.status) === 'blocked')
+        .map((jobRun) => String(jobRun?.jobId || '').trim())
+        .filter(Boolean)
+    );
+    if (blockedJobIds.length === 0) {
+      continue;
+    }
+    const seedJobRuns = jobRuns
+      .map((jobRun) => normalizeSeedJobRun(jobRun))
+      .filter(Boolean);
+    return {
+      artifactPath: file.artifactPath,
+      blockedJobIds,
+      seedJobRuns,
+    };
+  }
+  return null;
+}
+
+function applyRetryBlockedDispatchPlan(dispatchPlan, retryReplay) {
+  const blockedJobIds = Array.isArray(retryReplay?.blockedJobIds)
+    ? retryReplay.blockedJobIds.map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+  if (blockedJobIds.length === 0) {
+    return {
+      dispatchPlan,
+      replay: {
+        enabled: false,
+        reason: 'no-blocked-jobs',
+      },
+    };
+  }
+
+  const blockedSet = new Set(blockedJobIds);
+  const replayJobs = Array.isArray(dispatchPlan?.jobs)
+    ? dispatchPlan.jobs.filter((job) => blockedSet.has(String(job?.jobId || '').trim()))
+    : [];
+  if (replayJobs.length === 0) {
+    return {
+      dispatchPlan,
+      replay: {
+        enabled: false,
+        reason: 'blocked-jobs-not-found-in-current-plan',
+        blockedJobIds,
+      },
+    };
+  }
+
+  const replayJobIdSet = new Set(replayJobs.map((job) => String(job?.jobId || '').trim()).filter(Boolean));
+  const replayQueueEntries = Array.isArray(dispatchPlan?.workItemQueue?.entries)
+    ? dispatchPlan.workItemQueue.entries.filter((entry) => replayJobIdSet.has(String(entry?.jobId || '').trim()))
+    : [];
+  const replayExecutors = uniq(
+    replayJobs
+      .map((job) => String(job?.launchSpec?.executor || '').trim())
+      .filter(Boolean)
+  );
+  const replayExecutorDetails = Array.isArray(dispatchPlan?.executorDetails)
+    ? dispatchPlan.executorDetails.filter((item) => replayExecutors.includes(String(item?.id || '').trim()))
+    : [];
+  const replayExecutorRegistry = replayExecutorDetails.length > 0
+    ? replayExecutorDetails.map((item) => item.id)
+    : replayExecutors;
+  const seedJobRuns = Array.isArray(retryReplay?.seedJobRuns)
+    ? retryReplay.seedJobRuns
+      .filter((jobRun) => !replayJobIdSet.has(String(jobRun?.jobId || '').trim()))
+      .map((jobRun) => ({ ...jobRun }))
+    : [];
+
+  return {
+    dispatchPlan: {
+      ...dispatchPlan,
+      notes: [
+        ...(Array.isArray(dispatchPlan?.notes) ? dispatchPlan.notes : []),
+        `Retry-blocked replay from ${retryReplay.artifactPath}: jobs=${replayJobs.length}, seedDeps=${seedJobRuns.length}.`,
+      ],
+      executorRegistry: replayExecutorRegistry,
+      executorDetails: replayExecutorDetails,
+      workItemQueue: {
+        ...(dispatchPlan?.workItemQueue && typeof dispatchPlan.workItemQueue === 'object' ? dispatchPlan.workItemQueue : {}),
+        enabled: replayQueueEntries.length > 0,
+        entries: replayQueueEntries,
+      },
+      jobs: replayJobs,
+      seedJobRuns,
+    },
+    replay: {
+      enabled: true,
+      artifactPath: retryReplay.artifactPath,
+      blockedJobIds,
+      replayJobIds: replayJobs.map((job) => job.jobId),
+      seedJobIds: seedJobRuns.map((jobRun) => jobRun.jobId),
+    },
+  };
+}
+
 export function normalizeOrchestrateOptions(rawOptions = {}) {
   const blueprintRaw = String(rawOptions.blueprint || '').trim();
   const taskTitleRaw = String(rawOptions.taskTitle || '').trim();
-  const sessionId = String(rawOptions.sessionId || '').trim();
+  const resumeSessionIdRaw = String(rawOptions.resumeSessionId || '').trim();
+  let sessionId = String(rawOptions.sessionId || '').trim();
+  if (!sessionId && resumeSessionIdRaw) {
+    sessionId = resumeSessionIdRaw;
+  }
+  const resumeSessionId = resumeSessionIdRaw || sessionId;
+  const retryBlocked = rawOptions.retryBlocked === true;
   const recommendationId = String(rawOptions.recommendationId || '').trim();
   const dispatchModeRaw = String(rawOptions.dispatchMode ?? '').trim();
   const executionModeRaw = String(rawOptions.executionMode ?? '').trim();
@@ -320,6 +506,9 @@ export function normalizeOrchestrateOptions(rawOptions = {}) {
   if (preflightMode !== 'none' && !sessionId) {
     throw new Error('--preflight requires --session');
   }
+  if (retryBlocked && !resumeSessionId) {
+    throw new Error('--retry-blocked requires --resume <session-id> or --session <session-id>');
+  }
 
   return {
     blueprint: blueprintRaw ? normalizeOrchestratorBlueprint(blueprintRaw) : 'feature',
@@ -328,6 +517,8 @@ export function normalizeOrchestrateOptions(rawOptions = {}) {
     taskTitleExplicit: taskTitleRaw.length > 0,
     contextSummary: String(rawOptions.contextSummary || '').trim(),
     sessionId,
+    resumeSessionId,
+    retryBlocked,
     limit: normalizePositiveInteger(rawOptions.limit, 10),
     recommendationId,
     dispatchMode,
@@ -356,8 +547,14 @@ export function planOrchestrate(rawOptions = {}) {
       args.push('--limit', String(options.limit));
     }
   }
+  if (options.resumeSessionId && options.resumeSessionId !== options.sessionId) {
+    args.push('--resume', options.resumeSessionId);
+  }
   if (options.recommendationId) {
     args.push('--recommendation', options.recommendationId);
+  }
+  if (options.retryBlocked) {
+    args.push('--retry-blocked');
   }
   if (options.dispatchMode !== 'none') {
     args.push('--dispatch', options.dispatchMode);
@@ -463,9 +660,31 @@ export async function runOrchestrate(
     dispatchPolicy: effectiveDispatchPolicy,
   };
 
-  const dispatchPlan = options.dispatchMode === 'local'
+  let dispatchPlan = options.dispatchMode === 'local'
     ? buildLocalDispatchPlan(dagPlan)
     : null;
+  let retryReplay = null;
+  if (options.retryBlocked) {
+    const replaySessionId = options.resumeSessionId || options.sessionId;
+    const latestReplay = await loadLatestBlockedDispatchReplay(rootDir, replaySessionId);
+    if (!latestReplay) {
+      throw new Error(`No blocked dispatch artifact found for session: ${replaySessionId}`);
+    }
+    if (!dispatchPlan) {
+      throw new Error('--retry-blocked requires --dispatch local');
+    }
+    const replayResult = applyRetryBlockedDispatchPlan(dispatchPlan, latestReplay);
+    if (!replayResult.replay?.enabled) {
+      throw new Error(
+        `Cannot apply --retry-blocked for session ${replaySessionId}: ${replayResult.replay?.reason || 'unknown-reason'}`
+      );
+    }
+    dispatchPlan = replayResult.dispatchPlan;
+    retryReplay = {
+      sessionId: replaySessionId,
+      ...replayResult.replay,
+    };
+  }
   const dispatchRunStartedAt = Date.now();
   const dispatchRuntime = options.executionMode !== 'none'
     ? resolveDispatchRuntime({ executionMode: options.executionMode }, dispatchRuntimeRegistry)
@@ -594,6 +813,7 @@ export async function runOrchestrate(
         ...(resolvedClarityGate ? { clarityGate: resolvedClarityGate } : {}),
         ...(entropyGc ? { entropyGc } : {}),
         ...(workItemTelemetry ? { workItemTelemetry } : {}),
+        ...(retryReplay ? { retryReplay } : {}),
       },
       elapsedMs: Date.now() - dispatchRunStartedAt,
     })
@@ -609,6 +829,7 @@ export async function runOrchestrate(
     ...(resolvedClarityGate ? { clarityGate: resolvedClarityGate } : {}),
     ...(entropyGc ? { entropyGc } : {}),
     ...(workItemTelemetry ? { workItemTelemetry } : {}),
+    ...(retryReplay ? { retryReplay } : {}),
     ...(dispatchEvidence ? { dispatchEvidence } : {}),
   };
 

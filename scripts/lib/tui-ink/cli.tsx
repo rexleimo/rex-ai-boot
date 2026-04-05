@@ -108,13 +108,17 @@ export async function runInteractiveSession({
   onRun,
 }: {
   rootDir: string;
-  onRun: (action: string, options: unknown) => Promise<void>;
+  onRun: (action: string, options: unknown, hooks?: { onLog?: (line: string) => void }) => Promise<void>;
 }): Promise<void> {
   const catalogSkills = loadSkillsCatalog(rootDir);
   const installedSkills = collectInstalledSkills(rootDir, process.cwd(), catalogSkills);
 
-  const handleRun = async (action: string, options: unknown) => {
-    await onRun(action, options);
+  const handleRun = async (
+    action: string,
+    options: unknown,
+    hooks?: { onLog?: (line: string) => void }
+  ) => {
+    await onRun(action, options, hooks);
   };
 
   const { waitUntilExit } = render(
@@ -134,22 +138,37 @@ async function main() {
   // Print welcome banner first
   printBanner();
 
-  const onRun = async (action: string, options: unknown) => {
+  const onRun = async (
+    action: string,
+    options: unknown,
+    hooks?: { onLog?: (line: string) => void }
+  ) => {
+    const emit = (prefix: string, args: unknown[]) => {
+      const text = args.map((item) => String(item ?? '')).join(' ').trim();
+      if (!text) return;
+      hooks?.onLog?.(prefix ? `${prefix}${text}` : text);
+    };
+    const io = {
+      log: (...args: unknown[]) => emit('', args),
+      warn: (...args: unknown[]) => emit('[warn] ', args),
+      error: (...args: unknown[]) => emit('[err] ', args),
+    };
+
     // Import lifecycle modules
     if (action === 'setup') {
       const { runSetup } = await import('../lifecycle/setup.mjs');
-      await runSetup(options, { rootDir, projectRoot });
+      await runSetup(options, { rootDir, projectRoot, io });
     } else if (action === 'update') {
       const { runUpdate } = await import('../lifecycle/update.mjs');
-      await runUpdate(options, { rootDir, projectRoot });
+      await runUpdate(options, { rootDir, projectRoot, io });
     } else if (action === 'uninstall') {
       const { runUninstall } = await import('../lifecycle/uninstall.mjs');
-      await runUninstall(options, { rootDir, projectRoot });
+      await runUninstall(options, { rootDir, projectRoot, io });
     } else if (action === 'doctor') {
       const { runDoctor } = await import('../lifecycle/doctor.mjs');
-      await runDoctor(options, { rootDir });
+      await runDoctor(options, { rootDir, io });
     } else {
-      console.log(`Unknown action: ${action}`);
+      io.error(`Unknown action: ${action}`);
     }
   };
 

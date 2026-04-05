@@ -148,15 +148,40 @@ aios orchestrate --session <session-id> --format json
 aios orchestrate --session <session-id> --preflight auto --format json
 ```
 
-通过 CLI 子代理执行 live（会产生 token 成本，需显式 opt-in；当前仅支持 codex-cli）：
+一键 Team 运行时（推荐）：
+
+```bash
+aios team 3:codex "Ship X"
+aios team 2:claude "Ship X"
+aios team 2:gemini "Ship X" --dry-run
+aios team --resume <session-id> --retry-blocked --provider codex --workers 2
+```
+
+通过 orchestrate 手动执行 live（会产生 token 成本，需显式 opt-in）：
 
 ```bash
 export AIOS_EXECUTE_LIVE=1
-export AIOS_SUBAGENT_CLIENT=codex-cli  # 必须（live 当前仅支持 codex-cli）
+export AIOS_SUBAGENT_CLIENT=codex-cli  # 或 claude-code / gemini-cli
+export AIOS_SUBAGENT_CONCURRENCY=3
 aios orchestrate --session <session-id> --dispatch local --execute live --format json
 ```
 
 提示（codex-cli）：推荐 Codex CLI >= v0.114。AIOS 会在可用时自动使用 `codex exec` 的结构化输出（`--output-schema` + `--output-last-message` + stdin），旧版本会自动降级为 stdout 解析。
+
+### HUD（会话可见性）
+
+```bash
+aios hud --provider codex
+aios hud --watch --preset full
+aios hud --session <session-id> --json
+```
+
+### Team 运维（status/history）
+
+```bash
+aios team status --provider codex --watch
+aios team history --provider codex --limit 20
+```
 
 ### Context Pack Fail-Open（避免包装层硬崩）
 
@@ -299,9 +324,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-all.ps1 -Components
 
 TUI 可见变化提示：
 
+- 主菜单新增 `HUD`，用于快速查看最近会话状态（provider/preset/watch）。
 - `Setup`/`Update` 默认勾选 `Native enhancements`，并显示实时的 native 预览区块。
 - `Confirm` 页面会重复展示 native 分层和受管输出，并给出运行后校验提示。
-- `Doctor` 页面在开启 `Native only` 时会显示模式说明。
+- `Doctor` 页面新增 `Verbose output`、`Auto-fix native`、`Dry-run auto-fix`。
+- 执行 `doctor --native --fix` 后，`Confirm` 完成页会展示 `Repair ID`、`Repair Summary` 和回滚命令。
+- 在该完成页可按 `R` 一键回滚当前修复，并立即重新执行 native doctor 校验。
+- 运行页会实时显示生命周期日志，并在出现 `[wait] sync lock busy` 时即时提示正在等待同步锁。
 - `Client` / `Skills scope` / `Mode` 字段支持 `←/→` 前后切换。
 
 ### 3) 高级模式：分组件脚本
@@ -468,10 +497,30 @@ node scripts/aios.mjs update --components native --client claude
 # 只跑 native doctor
 node scripts/aios.mjs doctor --native
 
+# 输出每个 client 的 metadata/targets 解释信息
+node scripts/aios.mjs doctor --native --verbose
+
+# 自动修复 native 漂移/冲突
+node scripts/aios.mjs doctor --native --fix
+
+# 仅预览 auto-fix 变更，不落盘
+node scripts/aios.mjs doctor --native --fix --dry-run
+
+# 回滚最近一次已落盘的 native 修复包
+node scripts/aios.mjs internal native rollback --repair-id latest
+
+# 查看近期 native 修复会话列表
+node scripts/aios.mjs internal native repair list --limit 20
+
+# 查看单个 native 修复会话详情（改动文件 + 回滚状态）
+node scripts/aios.mjs internal native repair show --repair-id latest
+
 # repo 维护者使用的 sync/check 入口
 node scripts/sync-native.mjs
 node scripts/check-native-sync.mjs
 ```
+
+`sync-native` 与 `sync-skills` 现在共享仓库锁（`.aios/.locks/native-skills-sync.lock`），并发执行时会自动串行，避免互相覆盖。
 
 TUI 快速自检：
 
@@ -485,6 +534,10 @@ TUI 快速自检：
 - `AGENTS.md` 和 `CLAUDE.md` 只会更新 marker 包围的受管片段，外层用户文本会保留。
 - `.claude/settings.local.json` 只会在 `aiosNative` key 下合并，不会覆盖无关配置。
 - `.gemini/AIOS.md`、`.opencode/AIOS.md` 这类兼容层文档属于 AIOS 受管文件；如果被手改，`doctor --native` 会报告冲突，并提示你重新执行 `node scripts/aios.mjs update --components native --client <client>`。
+- `doctor --native --fix` 现在会在写入前对 native 受管目标做快照。修复成功后会输出 repair id（`[repair] id=...`）和回滚命令（`node scripts/aios.mjs internal native rollback --repair-id <id>`）。
+- `doctor --native --fix` 会输出具体改动文件清单（`[repair] changed ...`），方便直接核对修复影响。
+- `doctor --native --fix --dry-run` 会输出计划改动的目标文件清单（`[plan] native files ...`），且不会落盘。
+- `internal native repair list/show` 支持在事后找回 repair id、改动文件与回滚状态，不依赖当次执行日志。
 - 发版前运行 `node scripts/check-native-sync.mjs`，确认 repo-local native 输出仍与 `client-sources/native-base/` 保持一致。
 
 ### 3.3 Privacy Guard（默认严格）

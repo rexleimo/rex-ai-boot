@@ -66,7 +66,31 @@ async function runInternal(options) {
     if (action === 'install') return module.installNativeEnhancements({ rootDir, projectRoot, client: options.client ?? 'all' });
     if (action === 'update') return module.updateNativeEnhancements({ rootDir, projectRoot, client: options.client ?? 'all' });
     if (action === 'uninstall') return module.uninstallNativeEnhancements({ rootDir, projectRoot, client: options.client ?? 'all' });
-    if (action === 'doctor') return module.doctorNativeEnhancements({ rootDir, projectRoot, client: options.client ?? 'all' });
+    if (action === 'repair') {
+      return module.inspectNativeRepairHistory({
+        rootDir,
+        repairAction: options.repairAction ?? 'list',
+        repairId: options.repairId ?? 'latest',
+        limit: options.limit ?? 20,
+      });
+    }
+    if (action === 'rollback') {
+      return module.rollbackNativeEnhancements({
+        rootDir,
+        repairId: options.repairId ?? 'latest',
+        dryRun: Boolean(options.dryRun),
+      });
+    }
+    if (action === 'doctor') {
+      return module.doctorNativeEnhancements({
+        rootDir,
+        projectRoot,
+        client: options.client ?? 'all',
+        verbose: Boolean(options.verbose),
+        fix: Boolean(options.fix),
+        dryRun: Boolean(options.dryRun),
+      });
+    }
   }
 
   if (target === 'superpowers') {
@@ -88,6 +112,22 @@ async function runInternal(options) {
   }
 
   throw new Error(`Unsupported internal action: ${target} ${action}`);
+}
+
+function buildTeamRuntimeEnv(options = {}, baseEnv = process.env) {
+  const runtimeEnv = { ...baseEnv };
+  const clientId = String(options.clientId || '').trim();
+  if (clientId) {
+    runtimeEnv.AIOS_SUBAGENT_CLIENT = clientId;
+  }
+  const workers = Number.parseInt(String(options.workers ?? '').trim(), 10);
+  if (Number.isFinite(workers) && workers > 0) {
+    runtimeEnv.AIOS_SUBAGENT_CONCURRENCY = String(workers);
+  }
+  if (String(options.executionMode || '').trim().toLowerCase() === 'live') {
+    runtimeEnv.AIOS_EXECUTE_LIVE = '1';
+  }
+  return runtimeEnv;
 }
 
 async function main() {
@@ -175,6 +215,58 @@ async function main() {
   if (parsed.command === 'orchestrate') {
     const { runOrchestrate } = await import('./lib/lifecycle/orchestrate.mjs');
     const result = await runOrchestrate(parsed.options, { rootDir });
+    if (result.exitCode !== 0) {
+      process.exitCode = result.exitCode;
+    }
+    return;
+  }
+
+  if (parsed.command === 'team') {
+    if (parsed.options.subcommand === 'status') {
+      const { runTeamStatus } = await import('./lib/lifecycle/team-ops.mjs');
+      const result = await runTeamStatus(parsed.options, { rootDir });
+      if (result.exitCode !== 0) {
+        process.exitCode = result.exitCode;
+      }
+      return;
+    }
+    if (parsed.options.subcommand === 'history') {
+      const { runTeamHistory } = await import('./lib/lifecycle/team-ops.mjs');
+      const result = await runTeamHistory(parsed.options, { rootDir });
+      if (result.exitCode !== 0) {
+        process.exitCode = result.exitCode;
+      }
+      return;
+    }
+
+    const { runOrchestrate } = await import('./lib/lifecycle/orchestrate.mjs');
+    const runtimeEnv = buildTeamRuntimeEnv(parsed.options, process.env);
+    const result = await runOrchestrate({
+      blueprint: parsed.options.blueprint,
+      taskTitle: parsed.options.taskTitle,
+      contextSummary: parsed.options.contextSummary,
+      sessionId: parsed.options.sessionId,
+      resumeSessionId: parsed.options.resumeSessionId,
+      retryBlocked: Boolean(parsed.options.retryBlocked),
+      limit: parsed.options.limit,
+      recommendationId: parsed.options.recommendationId,
+      dispatchMode: 'local',
+      executionMode: parsed.options.executionMode,
+      preflightMode: parsed.options.preflightMode,
+      format: parsed.options.format,
+    }, {
+      rootDir,
+      env: runtimeEnv,
+    });
+    if (result.exitCode !== 0) {
+      process.exitCode = result.exitCode;
+    }
+    return;
+  }
+
+  if (parsed.command === 'hud') {
+    const { runHud } = await import('./lib/lifecycle/hud.mjs');
+    const result = await runHud(parsed.options, { rootDir });
     if (result.exitCode !== 0) {
       process.exitCode = result.exitCode;
     }

@@ -44,6 +44,9 @@ export interface DoctorOptions {
   strict: boolean;
   globalSecurity: boolean;
   nativeOnly: boolean;
+  verbose: boolean;
+  fix: boolean;
+  dryRun: boolean;
 }
 
 export interface CatalogSkill {
@@ -81,5 +84,5 @@ export interface TuiSessionProps {
   rootDir: string;
   catalogSkills: CatalogSkill[];
   installedSkills: InstalledSkills;
-  onRun: (action: Action, options: unknown) => Promise<void>;
+  onRun: (action: Action, options: unknown, hooks?: { onLog?: (line: string) => void }) => Promise<void>;
 }

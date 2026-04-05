@@ -148,15 +148,40 @@ aios orchestrate --session <session-id> --format json
 aios orchestrate --session <session-id> --preflight auto --format json
 ```
 
-Execute live via CLI subagents (token cost, opt-in; currently codex-only):
+One-click Team runtime (recommended):
+
+```bash
+aios team 3:codex "Ship X"
+aios team 2:claude "Ship X"
+aios team 2:gemini "Ship X" --dry-run
+aios team --resume <session-id> --retry-blocked --provider codex --workers 2
+```
+
+Manual live execution via orchestrate (token cost, opt-in):
 
 ```bash
 export AIOS_EXECUTE_LIVE=1
-export AIOS_SUBAGENT_CLIENT=codex-cli  # required (codex-only live runtime)
+export AIOS_SUBAGENT_CLIENT=codex-cli  # or claude-code / gemini-cli
+export AIOS_SUBAGENT_CONCURRENCY=3
 aios orchestrate --session <session-id> --dispatch local --execute live --format json
 ```
 
 Tip (codex-cli): Codex CLI v0.114+ supports structured exec outputs. AIOS will auto-use `codex exec` with `--output-schema` + `--output-last-message` + stdin when available, and fall back to stdout parsing for older versions.
+
+### HUD (session visibility)
+
+```bash
+aios hud --provider codex
+aios hud --watch --preset full
+aios hud --session <session-id> --json
+```
+
+### Team Ops (status/history)
+
+```bash
+aios team status --provider codex --watch
+aios team history --provider codex --limit 20
+```
 
 ### Context Pack Fail-Open (prevent wrapper hard failures)
 
@@ -300,9 +325,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-all.ps1 -Components
 
 TUI visibility tip:
 
+- Main menu now includes `HUD` for quick session visibility (provider/preset/watch).
 - `Setup`/`Update` now include `Native enhancements` by default and show a live native preview panel.
 - `Confirm` now repeats the native tier + managed outputs and prints a post-run verify hint.
-- `Doctor` now shows a mode hint when `Native only` is enabled.
+- `Doctor` now supports `Verbose output`, `Auto-fix native`, and `Dry-run auto-fix`.
+- After `doctor --native --fix`, the `Confirm` completion screen now shows `Repair ID`, `Repair Summary`, and rollback command.
+- In that completion screen, press `R` to rollback the repair and immediately re-run native doctor verification.
+- Running screen now streams lifecycle logs and surfaces lock wait status (`[wait] sync lock busy`) immediately.
 - `Client` / `Skills scope` / `Mode` fields now support `←/→` for previous/next cycling.
 
 ### 3) Advanced: component-specific scripts
@@ -469,10 +498,30 @@ node scripts/aios.mjs update --components native --client claude
 # run only native doctor checks
 node scripts/aios.mjs doctor --native
 
+# include per-client metadata/targets explainability
+node scripts/aios.mjs doctor --native --verbose
+
+# auto-repair native drift/conflicts
+node scripts/aios.mjs doctor --native --fix
+
+# preview auto-fix changes without writing files
+node scripts/aios.mjs doctor --native --fix --dry-run
+
+# rollback the latest applied native repair bundle
+node scripts/aios.mjs internal native rollback --repair-id latest
+
+# list recent native repair sessions
+node scripts/aios.mjs internal native repair list --limit 20
+
+# inspect one native repair session (changed files + rollback status)
+node scripts/aios.mjs internal native repair show --repair-id latest
+
 # repo maintainer sync/check entrypoints
 node scripts/sync-native.mjs
 node scripts/check-native-sync.mjs
 ```
+
+`sync-native` and `sync-skills` now share a repo lock (`.aios/.locks/native-skills-sync.lock`) so concurrent runs do not overwrite each other.
 
 TUI quick check:
 
@@ -486,6 +535,10 @@ Conflict policy:
 - `AGENTS.md` and `CLAUDE.md` are updated through marker-bounded managed blocks; surrounding user text is preserved.
 - `.claude/settings.local.json` is merged under the `aiosNative` key; unrelated settings stay untouched.
 - Dedicated compatibility docs such as `.gemini/AIOS.md` and `.opencode/AIOS.md` are AIOS-owned files; if you overwrite them manually, `doctor --native` will report a conflict and tell you to rerun `node scripts/aios.mjs update --components native --client <client>`.
+- `doctor --native --fix` now snapshots managed native targets before writing. On success it prints a repair id (`[repair] id=...`) and rollback command (`node scripts/aios.mjs internal native rollback --repair-id <id>`).
+- `doctor --native --fix` prints concrete changed files (`[repair] changed ...`) so operators can see what actually changed.
+- `doctor --native --fix --dry-run` prints planned target files (`[plan] native files ...`) without mutating the workspace.
+- `internal native repair list/show` lets operators recover repair id, changed files, and rollback status after the original run.
 - Run `node scripts/check-native-sync.mjs` before release work to verify repo-local native outputs still match `client-sources/native-base/`.
 
 ### 3.3 Privacy Guard (strict by default)

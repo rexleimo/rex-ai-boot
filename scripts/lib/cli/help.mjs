@@ -13,6 +13,8 @@ Commands:
   memo          Workspace memo + pinned memory helpers
   quality-gate  Run repo quality checks with harness profiles
   orchestrate   Preview reusable subagent workflow blueprints
+  team          One-click multi-client live team runtime (codex/claude/gemini)
+  hud           Show ContextDB + dispatch HUD (CLI/TUI)
   learn-eval    Turn checkpoint telemetry into operator recommendations
   entropy-gc    Auto-archive stale ContextDB artifacts with rollback manifests
 
@@ -20,10 +22,19 @@ Examples:
   node scripts/aios.mjs setup --components all --mode opt-in --client all
   node scripts/aios.mjs update --components shell,skills,native --skip-doctor
   node scripts/aios.mjs uninstall --components shell,skills,native
-  node scripts/aios.mjs doctor --strict --native --profile standard
+  node scripts/aios.mjs doctor --strict --native --verbose --profile standard
+  node scripts/aios.mjs doctor --native --fix --dry-run
+  node scripts/aios.mjs internal native repair list --limit 20
+  node scripts/aios.mjs internal native repair show --repair-id latest
+  node scripts/aios.mjs internal native rollback --repair-id latest
   node scripts/aios.mjs memo add "note #tag"
   node scripts/aios.mjs quality-gate pre-pr --profile strict
   node scripts/aios.mjs orchestrate feature --task "Ship orchestrator blueprints"
+  node scripts/aios.mjs team 3:codex "Ship orchestrator blueprints"
+  node scripts/aios.mjs team 2:claude --session codex-cli-20260303T080437-065e16c0 --dry-run
+  node scripts/aios.mjs hud --provider codex
+  node scripts/aios.mjs hud --watch --preset focused
+  node scripts/aios.mjs team status --provider codex --watch
   node scripts/aios.mjs orchestrate --session codex-cli-20260303T080437-065e16c0 --format json
   node scripts/aios.mjs learn-eval --limit 5
   node scripts/aios.mjs entropy-gc auto --session codex-cli-20260303T080437-065e16c0
@@ -81,6 +92,9 @@ Options:
   --strict
   --global-security
   --native
+  --verbose
+  --fix
+  --dry-run
   --profile <minimal|standard|strict>
   -h, --help
 `;
@@ -124,9 +138,57 @@ Options:
   --limit <n>                   Number of checkpoints to inspect when loading learn-eval
   --recommendation <targetId>   Pin a specific learn-eval recommendation to the overlay
   --dispatch <none|local>       Build a local dispatch skeleton (defaults to local when omitted)
-  --execute <none|dry-run|live> Execute dispatch through the selected runtime (defaults to dry-run; live is opt-in via AIOS_EXECUTE_LIVE=1 + AIOS_SUBAGENT_CLIENT=codex-cli)
+  --execute <none|dry-run|live> Execute dispatch through the selected runtime (defaults to dry-run; live is opt-in via AIOS_EXECUTE_LIVE=1 + AIOS_SUBAGENT_CLIENT=<codex-cli|claude-code|gemini-cli>)
   --preflight <none|auto>       Run supported local gate/runbook actions before final DAG selection
   --format <text|json>
+  -h, --help
+`;
+    case 'team':
+      return `Usage:
+  node scripts/aios.mjs team [<workers:provider>] [task] [options]
+  node scripts/aios.mjs team status [options]
+  node scripts/aios.mjs team history [options]
+
+Examples:
+  node scripts/aios.mjs team 3:codex "Ship X"
+  node scripts/aios.mjs team 2:claude --session <id>
+  node scripts/aios.mjs team --resume <id> --retry-blocked --provider codex --workers 2
+  node scripts/aios.mjs team --provider gemini --workers 2 --task "Refactor Y" --dry-run
+  node scripts/aios.mjs team status --provider codex --watch
+  node scripts/aios.mjs team history --provider claude --limit 10
+
+Options:
+  --workers <n>                 Team worker concurrency (default: 3)
+  --provider <codex|claude|gemini>
+  --blueprint <feature|bugfix|refactor|security>
+  --task <title>
+  --context <summary>
+  --session <id>
+  --resume <id>                 Resume from a prior orchestration session
+  --limit <n>
+  --recommendation <targetId>
+  --preflight <none|auto>
+  --retry-blocked               Replay only blocked jobs from latest dispatch artifact in the session
+  --format <text|json>
+  --dry-run                     Local dispatch dry-run (no model calls)
+  --live                        Force live execution (default)
+  --watch                       (team status) Refresh display on an interval (TTY-only)
+  --json                        (team status/history) Output structured JSON instead of text
+  --preset <minimal|focused|full> (team status) Rendering preset (default: focused)
+  --interval-ms <n>             (team status) Watch refresh interval in ms (default: 1000)
+  -h, --help
+`;
+    case 'hud':
+      return `Usage:
+  node scripts/aios.mjs hud [options]
+
+Options:
+  --session <id>                Explicit ContextDB session id
+  --provider <codex|claude|gemini>
+  --preset <minimal|focused|full>
+  --watch                       Refresh display on an interval (TTY-only)
+  --interval-ms <n>             Watch refresh interval in ms (default: 1000)
+  --json                        Output structured JSON instead of text
   -h, --help
 `;
     case 'learn-eval':
@@ -186,9 +248,27 @@ export function getInternalHelpText(target, action) {
 `;
   }
 
-  if (target === 'native' && (action === 'install' || action === 'update' || action === 'uninstall' || action === 'doctor')) {
+  if (target === 'native' && (action === 'install' || action === 'update' || action === 'uninstall')) {
     return `Usage:
   node scripts/aios.mjs internal native ${action} [--client <all|codex|claude|gemini|opencode>]
+`;
+  }
+
+  if (target === 'native' && action === 'doctor') {
+    return `Usage:
+  node scripts/aios.mjs internal native doctor [--client <all|codex|claude|gemini|opencode>] [--verbose] [--fix] [--dry-run]
+`;
+  }
+
+  if (target === 'native' && action === 'repair') {
+    return `Usage:
+  node scripts/aios.mjs internal native repair [list|show] [--repair-id <id|latest>] [--limit <n>]
+`;
+  }
+
+  if (target === 'native' && action === 'rollback') {
+    return `Usage:
+  node scripts/aios.mjs internal native rollback [--repair-id <id|latest>] [--dry-run]
 `;
   }
 

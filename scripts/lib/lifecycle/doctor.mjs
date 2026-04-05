@@ -7,6 +7,9 @@ export function normalizeDoctorOptions(rawOptions = {}) {
     strict: Boolean(rawOptions.strict ?? defaults.strict),
     globalSecurity: Boolean(rawOptions.globalSecurity ?? defaults.globalSecurity),
     nativeOnly: Boolean(rawOptions.nativeOnly ?? defaults.nativeOnly),
+    verbose: Boolean(rawOptions.verbose ?? defaults.verbose),
+    fix: Boolean(rawOptions.fix ?? defaults.fix),
+    dryRun: Boolean(rawOptions.dryRun ?? defaults.dryRun),
     profile: normalizeHarnessProfile(rawOptions.profile ?? defaults.profile),
   };
 }
@@ -17,6 +20,9 @@ export function planDoctor(rawOptions = {}) {
   if (options.strict) args.push('--strict');
   if (options.globalSecurity) args.push('--global-security');
   if (options.nativeOnly) args.push('--native');
+  if (options.verbose) args.push('--verbose');
+  if (options.fix) args.push('--fix');
+  if (options.dryRun) args.push('--dry-run');
   if (options.profile !== 'standard') args.push('--profile', options.profile);
   return {
     command: 'doctor',

@@ -26,6 +26,13 @@ import { normalizeOrchestratorBlueprint, normalizeOrchestratorFormat } from '../
 
 const INTERNAL_TARGETS = new Set(['shell', 'skills', 'native', 'superpowers', 'browser', 'privacy']);
 const PRIVACY_MODES = new Set(['regex', 'ollama', 'hybrid']);
+const TEAM_PROVIDERS = new Set(['codex', 'claude', 'gemini']);
+const HUD_PRESETS = new Set(['minimal', 'focused', 'full']);
+const TEAM_PROVIDER_CLIENT_MAP = Object.freeze({
+  codex: 'codex-cli',
+  claude: 'claude-code',
+  gemini: 'gemini-cli',
+});
 
 function takeValue(argv, index, flag) {
   const value = argv[index + 1];
@@ -51,6 +58,359 @@ function parsePrivacyMode(raw) {
   return value;
 }
 
+function normalizeTeamProvider(raw = 'codex') {
+  const value = String(raw || 'codex').trim().toLowerCase();
+  if (!TEAM_PROVIDERS.has(value)) {
+    throw new Error(`--provider must be one of: ${[...TEAM_PROVIDERS].join(', ')}`);
+  }
+  return value;
+}
+
+function parseTeamSpec(raw = '') {
+  const value = String(raw || '').trim().toLowerCase();
+  const match = /^(\d+):(codex|claude|gemini)$/u.exec(value);
+  if (!match) {
+    return null;
+  }
+  const workers = parsePositiveInteger(match[1], 'team workers');
+  return {
+    workers,
+    provider: normalizeTeamProvider(match[2]),
+  };
+}
+
+function normalizeHudPreset(raw = '') {
+  const value = String(raw || '').trim().toLowerCase();
+  if (!HUD_PRESETS.has(value)) {
+    throw new Error(`--preset must be one of: ${[...HUD_PRESETS].join(', ')}`);
+  }
+  return value;
+}
+
+function createDefaultHudOptions() {
+  return {
+    sessionId: '',
+    provider: 'codex',
+    preset: 'focused',
+    watch: false,
+    json: false,
+    intervalMs: 1000,
+  };
+}
+
+function parseHudArgs(argv) {
+  const rest = argv.slice(1);
+  const options = createDefaultHudOptions();
+  let help = false;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const arg = rest[index];
+    if (arg === '--') continue;
+    if (arg === '-h' || arg === '--help') {
+      help = true;
+      continue;
+    }
+
+    switch (arg) {
+      case '--session':
+        options.sessionId = takeValue(rest, index, '--session');
+        index += 1;
+        break;
+      case '--provider':
+        options.provider = normalizeTeamProvider(takeValue(rest, index, '--provider'));
+        index += 1;
+        break;
+      case '--preset':
+        options.preset = normalizeHudPreset(takeValue(rest, index, '--preset'));
+        index += 1;
+        break;
+      case '--watch':
+      case '-w':
+        options.watch = true;
+        break;
+      case '--json':
+        options.json = true;
+        break;
+      case '--interval-ms':
+        options.intervalMs = parsePositiveInteger(takeValue(rest, index, '--interval-ms'), '--interval-ms');
+        index += 1;
+        break;
+      default:
+        throw new Error(`Unknown option: ${arg}`);
+    }
+  }
+
+  options.provider = normalizeTeamProvider(options.provider);
+  return {
+    mode: help ? 'help' : 'command',
+    help,
+    command: 'hud',
+    options,
+  };
+}
+
+function createDefaultTeamOptions() {
+  return {
+    workers: 3,
+    provider: 'codex',
+    clientId: TEAM_PROVIDER_CLIENT_MAP.codex,
+    blueprint: 'feature',
+    taskTitle: '',
+    contextSummary: '',
+    sessionId: '',
+    limit: 10,
+    recommendationId: '',
+    preflightMode: 'none',
+    executionMode: 'live',
+    resumeSessionId: '',
+    retryBlocked: false,
+    format: 'text',
+    teamSpec: '3:codex',
+  };
+}
+
+function createDefaultTeamStatusOptions() {
+  return {
+    subcommand: 'status',
+    provider: 'codex',
+    clientId: TEAM_PROVIDER_CLIENT_MAP.codex,
+    sessionId: '',
+    resumeSessionId: '',
+    preset: 'focused',
+    watch: false,
+    json: false,
+    intervalMs: 1000,
+  };
+}
+
+function parseTeamStatusArgs(argv) {
+  const rest = argv.slice(2);
+  const options = createDefaultTeamStatusOptions();
+  let help = false;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const arg = rest[index];
+    if (arg === '--') continue;
+    if (arg === '-h' || arg === '--help') {
+      help = true;
+      continue;
+    }
+    if (!arg.startsWith('-')) {
+      if (!options.sessionId) {
+        options.sessionId = String(arg || '').trim();
+        continue;
+      }
+      throw new Error(`Unexpected argument: ${arg}`);
+    }
+
+    switch (arg) {
+      case '--provider':
+        options.provider = normalizeTeamProvider(takeValue(rest, index, '--provider'));
+        index += 1;
+        break;
+      case '--session':
+        options.sessionId = takeValue(rest, index, '--session');
+        index += 1;
+        break;
+      case '--resume':
+        options.resumeSessionId = takeValue(rest, index, '--resume');
+        index += 1;
+        break;
+      case '--preset':
+        options.preset = normalizeHudPreset(takeValue(rest, index, '--preset'));
+        index += 1;
+        break;
+      case '--watch':
+      case '-w':
+        options.watch = true;
+        break;
+      case '--json':
+        options.json = true;
+        break;
+      case '--interval-ms':
+        options.intervalMs = parsePositiveInteger(takeValue(rest, index, '--interval-ms'), '--interval-ms');
+        index += 1;
+        break;
+      default:
+        throw new Error(`Unknown option: ${arg}`);
+    }
+  }
+
+  options.provider = normalizeTeamProvider(options.provider);
+  options.clientId = TEAM_PROVIDER_CLIENT_MAP[options.provider];
+  if (!options.sessionId && options.resumeSessionId) {
+    options.sessionId = options.resumeSessionId;
+  }
+
+  return {
+    mode: help ? 'help' : 'command',
+    help,
+    command: 'team',
+    options,
+  };
+}
+
+function createDefaultTeamHistoryOptions() {
+  return {
+    subcommand: 'history',
+    provider: 'codex',
+    clientId: TEAM_PROVIDER_CLIENT_MAP.codex,
+    limit: 10,
+    json: false,
+  };
+}
+
+function parseTeamHistoryArgs(argv) {
+  const rest = argv.slice(2);
+  const options = createDefaultTeamHistoryOptions();
+  let help = false;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const arg = rest[index];
+    if (arg === '--') continue;
+    if (arg === '-h' || arg === '--help') {
+      help = true;
+      continue;
+    }
+
+    switch (arg) {
+      case '--provider':
+        options.provider = normalizeTeamProvider(takeValue(rest, index, '--provider'));
+        index += 1;
+        break;
+      case '--limit':
+        options.limit = parsePositiveInteger(takeValue(rest, index, '--limit'), '--limit');
+        index += 1;
+        break;
+      case '--json':
+        options.json = true;
+        break;
+      default:
+        throw new Error(`Unknown option: ${arg}`);
+    }
+  }
+
+  options.provider = normalizeTeamProvider(options.provider);
+  options.clientId = TEAM_PROVIDER_CLIENT_MAP[options.provider];
+
+  return {
+    mode: help ? 'help' : 'command',
+    help,
+    command: 'team',
+    options,
+  };
+}
+
+function parseTeamArgs(argv) {
+  const rest = argv.slice(1);
+  const subcommand = rest[0] && !rest[0].startsWith('-') ? String(rest[0]).trim().toLowerCase() : '';
+  if (subcommand === 'status') {
+    return parseTeamStatusArgs(argv);
+  }
+  if (subcommand === 'history') {
+    return parseTeamHistoryArgs(argv);
+  }
+
+  const options = createDefaultTeamOptions();
+  let help = false;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const arg = rest[index];
+    if (arg === '--') continue;
+    if (arg === '-h' || arg === '--help') {
+      help = true;
+      continue;
+    }
+    if (!arg.startsWith('-')) {
+      const teamSpec = parseTeamSpec(arg);
+      if (teamSpec) {
+        options.workers = teamSpec.workers;
+        options.provider = teamSpec.provider;
+        continue;
+      }
+      options.taskTitle = options.taskTitle
+        ? `${options.taskTitle} ${arg}`
+        : arg;
+      continue;
+    }
+
+    switch (arg) {
+      case '--workers':
+        options.workers = parsePositiveInteger(takeValue(rest, index, '--workers'), '--workers');
+        index += 1;
+        break;
+      case '--provider':
+        options.provider = normalizeTeamProvider(takeValue(rest, index, '--provider'));
+        index += 1;
+        break;
+      case '--blueprint':
+        options.blueprint = normalizeOrchestratorBlueprint(takeValue(rest, index, '--blueprint'));
+        index += 1;
+        break;
+      case '--task':
+        options.taskTitle = takeValue(rest, index, '--task');
+        index += 1;
+        break;
+      case '--context':
+        options.contextSummary = takeValue(rest, index, '--context');
+        index += 1;
+        break;
+      case '--session':
+        options.sessionId = takeValue(rest, index, '--session');
+        index += 1;
+        break;
+      case '--resume':
+        options.resumeSessionId = takeValue(rest, index, '--resume');
+        index += 1;
+        break;
+      case '--limit':
+        options.limit = parsePositiveInteger(takeValue(rest, index, '--limit'), '--limit');
+        index += 1;
+        break;
+      case '--recommendation':
+        options.recommendationId = takeValue(rest, index, '--recommendation');
+        index += 1;
+        break;
+      case '--preflight':
+        options.preflightMode = normalizeOrchestratePreflightMode(takeValue(rest, index, '--preflight'));
+        index += 1;
+        break;
+      case '--format':
+        options.format = normalizeOrchestratorFormat(takeValue(rest, index, '--format'));
+        index += 1;
+        break;
+      case '--retry-blocked':
+        options.retryBlocked = true;
+        break;
+      case '--dry-run':
+        options.executionMode = 'dry-run';
+        break;
+      case '--live':
+        options.executionMode = 'live';
+        break;
+      default:
+        throw new Error(`Unknown option: ${arg}`);
+    }
+  }
+
+  options.provider = normalizeTeamProvider(options.provider);
+  options.clientId = TEAM_PROVIDER_CLIENT_MAP[options.provider];
+  options.teamSpec = `${options.workers}:${options.provider}`;
+  if (!options.sessionId && options.resumeSessionId) {
+    options.sessionId = options.resumeSessionId;
+  }
+  if (options.retryBlocked && !options.sessionId) {
+    throw new Error('--retry-blocked requires --resume <session-id> or --session <session-id>');
+  }
+
+  return {
+    mode: help ? 'help' : 'command',
+    help,
+    command: 'team',
+    options,
+  };
+}
+
 function parseInternalArgs(argv) {
   const target = String(argv[0] || '').trim().toLowerCase();
   const action = String(argv[1] || '').trim().toLowerCase();
@@ -64,12 +424,23 @@ function parseInternalArgs(argv) {
   const rest = argv.slice(2);
   let help = false;
   const options = { target, action };
+  if (target === 'native' && action === 'repair') {
+    options.repairAction = 'list';
+  }
 
   for (let index = 0; index < rest.length; index += 1) {
     const arg = rest[index];
     if (arg === '--') continue;
     if (arg === '-h' || arg === '--help') {
       help = true;
+      continue;
+    }
+    if (target === 'native' && action === 'repair' && !arg.startsWith('-')) {
+      const repairAction = String(arg || '').trim().toLowerCase();
+      if (!['list', 'show'].includes(repairAction)) {
+        throw new Error('native repair action must be one of: list, show');
+      }
+      options.repairAction = repairAction;
       continue;
     }
 
@@ -109,6 +480,20 @@ function parseInternalArgs(argv) {
         options.repoUrl = takeValue(rest, index, '--repo');
         index += 1;
         break;
+      case '--repair-id':
+        if (target !== 'native' || (action !== 'rollback' && action !== 'repair')) {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.repairId = takeValue(rest, index, '--repair-id');
+        index += 1;
+        break;
+      case '--limit':
+        if (target !== 'native' || action !== 'repair') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.limit = parsePositiveInteger(takeValue(rest, index, '--limit'), '--limit');
+        index += 1;
+        break;
       case '--force':
         options.force = true;
         break;
@@ -117,6 +502,18 @@ function parseInternalArgs(argv) {
         break;
       case '--dry-run':
         options.dryRun = true;
+        break;
+      case '--verbose':
+        if (target !== 'native' || action !== 'doctor') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.verbose = true;
+        break;
+      case '--fix':
+        if (target !== 'native' || action !== 'doctor') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.fix = true;
         break;
       case '--skip-playwright-install':
         options.skipPlaywrightInstall = true;
@@ -263,6 +660,24 @@ function parseTopLevelArgs(command, argv) {
         }
         options.nativeOnly = true;
         break;
+      case '--verbose':
+        if (command !== 'doctor') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.verbose = true;
+        break;
+      case '--fix':
+        if (command !== 'doctor') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.fix = true;
+        break;
+      case '--dry-run':
+        if (command !== 'doctor') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.dryRun = true;
+        break;
       case '--profile':
         options.profile = normalizeHarnessProfile(takeValue(rest, index, '--profile'));
         index += 1;
@@ -386,6 +801,14 @@ export function parseArgs(argv = []) {
     return parseInternalArgs(argv.slice(1));
   }
 
+  if (first === 'team') {
+    return parseTeamArgs(argv);
+  }
+
+  if (first === 'hud') {
+    return parseHudArgs(argv);
+  }
+
   const command = first === 'verify'
     ? 'doctor'
     : first === 'quality' || first === 'quality-gate'
@@ -394,7 +817,7 @@ export function parseArgs(argv = []) {
         ? 'entropy-gc'
       : first;
 
-  if (!['setup', 'update', 'uninstall', 'doctor', 'quality-gate', 'orchestrate', 'learn-eval', 'entropy-gc'].includes(command)) {
+  if (!['setup', 'update', 'uninstall', 'doctor', 'quality-gate', 'orchestrate', 'team', 'hud', 'learn-eval', 'entropy-gc'].includes(command)) {
     throw new Error(`Unknown command: ${argv[0]}`);
   }
 

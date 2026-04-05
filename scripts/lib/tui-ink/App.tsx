@@ -8,6 +8,7 @@ import { SetupScreen } from './screens/SetupScreen';
 import { UpdateScreen } from './screens/UpdateScreen';
 import { UninstallScreen } from './screens/UninstallScreen';
 import { DoctorScreen } from './screens/DoctorScreen';
+import { HudScreen } from './screens/HudScreen';
 import { SkillPickerScreen } from './screens/SkillPickerScreen';
 import { ConfirmScreen } from './screens/ConfirmScreen';
 import { useSetupOptions } from './hooks/useSetupOptions';
@@ -52,8 +53,12 @@ function AppContent({
     navigate(`/confirm?action=${action}`);
   }, [navigate]);
 
-  const handleRun = useCallback(async (action: Action, actionOptions: unknown) => {
-    await onRun(action, actionOptions);
+  const handleRun = useCallback(async (
+    action: Action,
+    actionOptions: unknown,
+    hooks?: { onLog?: (line: string) => void }
+  ) => {
+    await onRun(action, actionOptions, hooks);
   }, [onRun]);
 
   return (
@@ -61,6 +66,10 @@ function AppContent({
       <Route
         path="/"
         element={<MainScreen rootDir={rootDir} onExit={onExit} />}
+      />
+      <Route
+        path="/hud"
+        element={<HudScreen rootDir={rootDir} />}
       />
       <Route
         path="/setup"
@@ -127,6 +136,9 @@ function AppContent({
             onToggleStrict={() => toggleSkipFlag('doctor', 'strict')}
             onToggleGlobalSecurity={() => toggleSkipFlag('doctor', 'globalSecurity')}
             onToggleNativeOnly={() => toggleSkipFlag('doctor', 'nativeOnly')}
+            onToggleVerbose={() => toggleSkipFlag('doctor', 'verbose')}
+            onToggleFix={() => toggleSkipFlag('doctor', 'fix')}
+            onToggleDryRun={() => toggleSkipFlag('doctor', 'dryRun')}
             onRun={() => handleRunConfirm('doctor')}
           />
         }

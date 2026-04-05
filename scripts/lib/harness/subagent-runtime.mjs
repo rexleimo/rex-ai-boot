@@ -18,9 +18,11 @@ export const SUBAGENT_CONTEXT_TOKEN_BUDGET_ENV = 'AIOS_SUBAGENT_CONTEXT_TOKEN_BU
 export const SUBAGENT_UPSTREAM_MAX_ATTEMPTS_ENV = 'AIOS_SUBAGENT_UPSTREAM_MAX_ATTEMPTS';
 export const SUBAGENT_UPSTREAM_BACKOFF_MS_ENV = 'AIOS_SUBAGENT_UPSTREAM_BACKOFF_MS';
 
-const SUPPORTED_CLIENTS = new Set(['codex-cli']);
+const SUPPORTED_CLIENTS = new Set(['codex-cli', 'claude-code', 'gemini-cli']);
 const CLIENT_COMMAND = {
   'codex-cli': 'codex',
+  'claude-code': 'claude',
+  'gemini-cli': 'gemini',
 };
 
 const CODEX_OUTPUT_SCHEMA_REL = path.join('memory', 'specs', 'agent-handoff.schema.json');
@@ -852,6 +854,38 @@ function buildFailureReason({ baseReason, exitCode, rawCommandOutput }) {
   return `exit=${exitCode}; ${firstLine}`;
 }
 
+function normalizeSeededJobRun(rawJobRun = {}) {
+  const jobId = normalizeText(rawJobRun?.jobId);
+  if (!jobId) {
+    return null;
+  }
+  const status = normalizeText(rawJobRun?.status).toLowerCase();
+  if (status === 'blocked' || status === 'needs-input') {
+    return null;
+  }
+  const output = rawJobRun?.output && typeof rawJobRun.output === 'object'
+    ? { ...rawJobRun.output }
+    : { outputType: 'handoff' };
+  return {
+    jobId,
+    jobType: normalizeText(rawJobRun?.jobType) || 'phase',
+    role: normalizeText(rawJobRun?.role) || 'seed',
+    executor: normalizeText(rawJobRun?.executor) || 'seed',
+    executorLabel: normalizeText(rawJobRun?.executorLabel) || normalizeText(rawJobRun?.executor) || 'seed',
+    dependsOn: Array.isArray(rawJobRun?.dependsOn)
+      ? rawJobRun.dependsOn.map((item) => normalizeText(item)).filter(Boolean)
+      : [],
+    status: status || 'completed',
+    inputSummary: rawJobRun?.inputSummary && typeof rawJobRun.inputSummary === 'object'
+      ? { ...rawJobRun.inputSummary }
+      : {
+        dependencyCount: 0,
+        inputTypes: [],
+      },
+    output,
+  };
+}
+
 async function executePhaseJob(plan, job, phase, dependencyRuns, {
   clientId,
   contextText,
@@ -1070,13 +1104,13 @@ export async function executeSubagentDispatchPlan(
   const normalizedClient = normalizeText(env?.[SUBAGENT_CLIENT_ENV]).toLowerCase();
   const clientId = normalizedClient || '';
   if (!SUPPORTED_CLIENTS.has(clientId)) {
-    const codexOnlyHint = `This repository runs subagent live execution in codex-only mode (set ${SUBAGENT_CLIENT_ENV}=codex-cli).`;
+    const supportedHint = `Set ${SUBAGENT_CLIENT_ENV} to one of: codex-cli, claude-code, gemini-cli.`;
     return {
       mode: 'live',
       ok: false,
       error: clientId
-        ? `Unsupported ${SUBAGENT_CLIENT_ENV}: ${clientId}. ${codexOnlyHint}`
-        : `Missing ${SUBAGENT_CLIENT_ENV}. ${codexOnlyHint}`,
+        ? `Unsupported ${SUBAGENT_CLIENT_ENV}: ${clientId}. ${supportedHint}`
+        : `Missing ${SUBAGENT_CLIENT_ENV}. ${supportedHint}`,
       executorRegistry: Array.isArray(dispatchPlan?.executorRegistry) ? [...dispatchPlan.executorRegistry] : [],
       executorDetails: Array.isArray(dispatchPlan?.executorDetails) ? dispatchPlan.executorDetails.map((item) => ({ ...item })) : [],
       jobRuns: [],
@@ -1107,9 +1141,24 @@ export async function executeSubagentDispatchPlan(
     ? await fs.mkdtemp(path.join(os.tmpdir(), 'aios-codex-last-message-'))
     : null;
 
-  const pending = new Map(jobs.map((job) => [job.jobId, job]));
-  const running = new Map();
+  const seedJobRuns = Array.isArray(dispatchPlan?.seedJobRuns)
+    ? dispatchPlan.seedJobRuns.map((jobRun) => normalizeSeededJobRun(jobRun)).filter(Boolean)
+    : [];
+
   const jobRunMap = new Map();
+  for (const seedJobRun of seedJobRuns) {
+    jobRunMap.set(seedJobRun.jobId, seedJobRun);
+  }
+  if (seedJobRuns.length > 0) {
+    io?.log?.(`[subagent-runtime] seeded dependency runs=${seedJobRuns.length}`);
+  }
+
+  const pending = new Map(
+    jobs
+      .filter((job) => !jobRunMap.has(job.jobId))
+      .map((job) => [job.jobId, job])
+  );
+  const running = new Map();
 
   const startJob = async (job) => {
     const dependencyRuns = Array.isArray(job.dependsOn)
