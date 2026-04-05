@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { readHudState, selectHudSessionId } from '../lib/hud/state.mjs';
+import { renderHud } from '../lib/hud/render.mjs';
 
 async function writeJson(filePath, value) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -101,6 +102,37 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
       },
     },
   ]);
+  await writeJson(path.join(sessionDir, 'artifacts', 'dispatch-run-20260405T005900Z.json'), {
+    schemaVersion: 1,
+    kind: 'orchestration.dispatch-run',
+    sessionId,
+    persistedAt: '2026-04-05T00:59:00.000Z',
+    dispatchRun: {
+      ok: false,
+      mode: 'dry-run',
+      executorRegistry: ['local-dry-run'],
+      jobRuns: [
+        {
+          jobId: 'phase.implement.wi.1',
+          jobType: 'phase',
+          role: 'implementer',
+          status: 'blocked',
+          turnId: '20260405T005900Z:phase.implement.wi.1:a1',
+          workItemRefs: ['wi.1'],
+          attempts: 1,
+          output: { error: 'File policy violation' },
+        },
+        {
+          jobId: 'phase.plan',
+          jobType: 'phase',
+          role: 'planner',
+          status: 'simulated',
+          output: { payload: { status: 'completed' } },
+        },
+      ],
+      finalOutputs: [],
+    },
+  });
   await writeJson(path.join(sessionDir, 'artifacts', 'dispatch-run-20260405T010000Z.json'), {
     schemaVersion: 1,
     kind: 'orchestration.dispatch-run',
@@ -149,6 +181,15 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
   assert.equal(state.latestDispatch?.blocked?.[0]?.turnId, '20260405T010000Z:phase.implement.wi.1:a2');
   assert.deepEqual(state.latestDispatch?.blocked?.[0]?.workItemRefs, ['wi.1']);
   assert.equal(state.latestDispatch?.blocked?.[0]?.attempts, 2);
+  assert.equal(state.dispatchHindsight?.pairsAnalyzed, 1);
+  assert.equal(state.dispatchHindsight?.repeatedBlockedTurns, 1);
+  assert.equal(state.dispatchHindsight?.topRepeatedFailureClasses?.[0]?.failureClass, 'ownership-policy');
+  assert.equal(state.dispatchFixHint?.targetId, 'runbook.dispatch-merge-triage');
   assert.ok(Array.isArray(state.suggestedCommands));
   assert.ok(state.suggestedCommands.some((cmd) => cmd.includes('orchestrate') && cmd.includes(sessionId)));
+  assert.ok(state.suggestedCommands.some((cmd) => cmd.includes('doctor')));
+
+  const rendered = renderHud(state, { preset: 'focused' });
+  assert.match(rendered, /Dispatch Hindsight: pairs=1/);
+  assert.match(rendered, /FixHint: \[runbook\.dispatch-merge-triage\]/);
 });

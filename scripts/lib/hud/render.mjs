@@ -99,6 +99,74 @@ function formatDispatchLine(state) {
   ].filter(Boolean).join(' ');
 }
 
+function formatDispatchHindsightLine(state) {
+  const hindsight = state?.dispatchHindsight && typeof state.dispatchHindsight === 'object'
+    ? state.dispatchHindsight
+    : null;
+  if (!hindsight) return '';
+
+  const pairs = Number.isFinite(hindsight.pairsAnalyzed) ? Math.max(0, Math.floor(hindsight.pairsAnalyzed)) : 0;
+  if (pairs <= 0) return '';
+
+  const comparedJobs = Number.isFinite(hindsight.comparedJobs) ? Math.max(0, Math.floor(hindsight.comparedJobs)) : 0;
+  const repeatBlocked = Number.isFinite(hindsight.repeatedBlockedTurns) ? Math.max(0, Math.floor(hindsight.repeatedBlockedTurns)) : 0;
+  const regressions = Number.isFinite(hindsight.regressions) ? Math.max(0, Math.floor(hindsight.regressions)) : 0;
+  const resolved = Number.isFinite(hindsight.resolvedBlockedTurns) ? Math.max(0, Math.floor(hindsight.resolvedBlockedTurns)) : 0;
+  const topFailures = Array.isArray(hindsight.topRepeatedFailureClasses) && hindsight.topRepeatedFailureClasses.length > 0
+    ? hindsight.topRepeatedFailureClasses
+      .slice(0, 3)
+      .map((item) => `${normalizeText(item.failureClass) || 'unknown'}=${Number.isFinite(item.count) ? Math.max(0, Math.floor(item.count)) : 0}`)
+      .join(', ')
+    : 'none';
+
+  return clipLine(
+    `Dispatch Hindsight: pairs=${pairs} comparedJobs=${comparedJobs} repeatBlocked=${repeatBlocked} regressions=${regressions} resolved=${resolved} topFailures=${topFailures}`,
+    200
+  );
+}
+
+function formatDispatchFixHintLine(state) {
+  const fixHint = state?.dispatchFixHint && typeof state.dispatchFixHint === 'object'
+    ? state.dispatchFixHint
+    : null;
+  if (!fixHint) return '';
+
+  const targetId = normalizeText(fixHint.targetId);
+  if (!targetId) return '';
+  const title = normalizeText(fixHint.title) || targetId;
+  const evidence = normalizeText(fixHint.evidence);
+  const nextCommand = normalizeText(fixHint.nextCommand);
+  const suffixParts = [];
+  if (evidence) suffixParts.push(`(${evidence})`);
+  if (nextCommand) suffixParts.push(`Next: ${nextCommand}`);
+  const suffix = suffixParts.length > 0 ? ` ${suffixParts.join(' ')}` : '';
+  return clipLine(`FixHint: [${targetId}] ${title}${suffix}`, 200);
+}
+
+function formatDispatchHindsightLessons(state) {
+  const hindsight = state?.dispatchHindsight && typeof state.dispatchHindsight === 'object'
+    ? state.dispatchHindsight
+    : null;
+  if (!hindsight) return [];
+
+  const lessons = Array.isArray(hindsight.lessons) ? hindsight.lessons : [];
+  if (lessons.length === 0) return [];
+
+  const lines = ['Hindsight lessons:'];
+  for (const lesson of lessons.slice(0, 3)) {
+    const kind = normalizeText(lesson?.kind) || 'unknown';
+    const jobId = normalizeText(lesson?.jobId) || 'unknown';
+    const failureClass = normalizeText(lesson?.from?.failureClass) || 'unknown';
+    const workItemRefs = Array.isArray(lesson?.workItemRefs)
+      ? lesson.workItemRefs.map((ref) => normalizeText(ref)).filter(Boolean)
+      : [];
+    const wiLabel = workItemRefs.length > 0 ? ` wi=${workItemRefs.join(',')}` : '';
+    const hint = normalizeText(lesson?.hint);
+    lines.push(`- ${kind} job=${jobId} fail=${failureClass}${wiLabel}${hint ? `: ${clipLine(hint, 120)}` : ''}`);
+  }
+  return lines;
+}
+
 function formatWorkItemsLine(state) {
   const totals = state?.latestDispatch?.workItems || null;
   if (!totals) return '';
@@ -177,6 +245,15 @@ export function renderHud(state, { preset = 'focused' } = {}) {
     formatDispatchLine(state),
   ];
 
+  const hindsight = formatDispatchHindsightLine(state);
+  if (hindsight) {
+    lines.push(hindsight);
+  }
+  const fixHint = formatDispatchFixHintLine(state);
+  if (fixHint) {
+    lines.push(fixHint);
+  }
+
   const workItems = formatWorkItemsLine(state);
   if (workItems) {
     lines.push(workItems);
@@ -185,6 +262,11 @@ export function renderHud(state, { preset = 'focused' } = {}) {
   if (resolvedPreset === 'full') {
     lines.push('');
     lines.push(...formatBlockedJobs(state));
+    const lessons = formatDispatchHindsightLessons(state);
+    if (lessons.length > 0) {
+      lines.push('');
+      lines.push(...lessons);
+    }
   }
 
   const warnings = formatWarnings(state);

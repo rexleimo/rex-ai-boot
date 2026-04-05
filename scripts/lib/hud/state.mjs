@@ -3,6 +3,9 @@ import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { buildHindsightEval } from '../harness/hindsight-eval.mjs';
+import { getHarnessTarget } from '../harness/targets.mjs';
+
 export const HUD_PROVIDER_AGENT_MAP = Object.freeze({
   codex: 'codex-cli',
   claude: 'claude-code',
@@ -15,6 +18,15 @@ const AGENT_PROVIDER_MAP = Object.freeze(
 
 const DEFAULT_SESSION_SCAN_LIMIT = 200;
 const DEFAULT_CHECKPOINT_TAIL_BYTES = 1_000_000;
+const DISPATCH_HINDSIGHT_FIX_HINT_ACTIONS = Object.freeze({
+  'ownership-policy': 'runbook.dispatch-merge-triage',
+  contract: 'runbook.dispatch-merge-triage',
+  timeout: 'gate.timeout-budget',
+  'dependency-blocked': 'runbook.failure-triage',
+  'unsupported-job': 'runbook.tool-repair',
+  'runtime-error': 'runbook.tool-repair',
+  default: 'runbook.failure-triage',
+});
 
 function nowIso() {
   return new Date().toISOString();
@@ -286,12 +298,90 @@ function inferProviderFromAgent(agent = '') {
   return AGENT_PROVIDER_MAP[normalizeText(agent)] || '';
 }
 
-function buildSuggestedCommands({ sessionId, provider, latestDispatch }) {
+async function collectRecentDispatchEvidence(rootDir, sessionId, { limit = 6 } = {}) {
+  const normalizedSessionId = normalizeText(sessionId);
+  if (!normalizedSessionId) return [];
+
+  const artifactsDir = path.join(getSessionsRoot(rootDir), normalizedSessionId, 'artifacts');
+  if (!existsSync(artifactsDir)) return [];
+
+  let files = [];
+  try {
+    files = await fs.readdir(artifactsDir);
+  } catch {
+    return [];
+  }
+
+  const max = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 6;
+  const candidates = files
+    .filter((name) => /^dispatch-run-.*\.json$/i.test(String(name || '').trim()))
+    .sort((left, right) => String(right).localeCompare(String(left)))
+    .slice(0, max);
+
+  return candidates.map((name) => ({
+    artifactPath: toPosixPath(path.join('memory', 'context-db', 'sessions', normalizedSessionId, 'artifacts', name)),
+  }));
+}
+
+function formatErrorMessage(error) {
+  if (!error) return '';
+  if (error instanceof Error) return error.message || error.stack || String(error);
+  return String(error);
+}
+
+function buildDispatchFixHint({ sessionId, dispatchHindsight, latestDispatchArtifactPath }) {
+  if (!dispatchHindsight || typeof dispatchHindsight !== 'object') return null;
+
+  const pairsAnalyzed = Number.isFinite(dispatchHindsight.pairsAnalyzed) ? Math.max(0, Math.floor(dispatchHindsight.pairsAnalyzed)) : 0;
+  if (pairsAnalyzed <= 0) return null;
+
+  const regressions = Number.isFinite(dispatchHindsight.regressions) ? Math.max(0, Math.floor(dispatchHindsight.regressions)) : 0;
+  const repeatBlockedTurns = Number.isFinite(dispatchHindsight.repeatedBlockedTurns) ? Math.max(0, Math.floor(dispatchHindsight.repeatedBlockedTurns)) : 0;
+  if (regressions === 0 && repeatBlockedTurns === 0) return null;
+
+  const topRepeatedFailure = repeatBlockedTurns > 0 && Array.isArray(dispatchHindsight.topRepeatedFailureClasses)
+    ? dispatchHindsight.topRepeatedFailureClasses[0]
+    : null;
+  const topFailureClass = normalizeText(topRepeatedFailure?.failureClass);
+  const targetId = normalizeText(
+    (repeatBlockedTurns > 0 && topFailureClass && DISPATCH_HINDSIGHT_FIX_HINT_ACTIONS[topFailureClass])
+      ? DISPATCH_HINDSIGHT_FIX_HINT_ACTIONS[topFailureClass]
+      : DISPATCH_HINDSIGHT_FIX_HINT_ACTIONS.default
+  );
+  if (!targetId) return null;
+
+  const target = getHarnessTarget(targetId);
+  const evidenceParts = [];
+  evidenceParts.push(`pairs=${pairsAnalyzed}`);
+  if (repeatBlockedTurns > 0) evidenceParts.push(`repeatBlocked=${repeatBlockedTurns}`);
+  if (regressions > 0) evidenceParts.push(`regressions=${regressions}`);
+  if (topFailureClass) evidenceParts.push(`topFailure=${topFailureClass}`);
+
+  return {
+    schemaVersion: 1,
+    generatedAt: nowIso(),
+    sessionId: normalizeText(sessionId) || null,
+    targetId,
+    targetType: target?.targetType || null,
+    title: target?.title || targetId,
+    evidence: evidenceParts.join(' '),
+    nextCommand: target?.nextCommand || null,
+    nextArtifact: normalizeText(latestDispatchArtifactPath) || null,
+  };
+}
+
+function buildSuggestedCommands({ sessionId, provider, latestDispatch, dispatchHindsight = null }) {
   const commands = [];
   if (!sessionId) return commands;
 
   commands.push(`node scripts/aios.mjs orchestrate --session ${sessionId} --dispatch local --execute dry-run`);
   commands.push(`node scripts/aios.mjs learn-eval --session ${sessionId}`);
+
+  const regressions = Number.isFinite(dispatchHindsight?.regressions) ? Math.max(0, Math.floor(dispatchHindsight.regressions)) : 0;
+  const repeatBlockedTurns = Number.isFinite(dispatchHindsight?.repeatedBlockedTurns) ? Math.max(0, Math.floor(dispatchHindsight.repeatedBlockedTurns)) : 0;
+  if (regressions > 0 || repeatBlockedTurns > 0) {
+    commands.push('node scripts/aios.mjs doctor');
+  }
 
   const effectiveProvider = provider || inferProviderFromAgent(latestDispatch?.raw?.dispatchEvidence?.agent) || '';
   if (latestDispatch?.blockedJobs > 0 && (effectiveProvider === 'codex' || effectiveProvider === 'claude' || effectiveProvider === 'gemini')) {
@@ -324,11 +414,12 @@ export async function readHudState({ rootDir, sessionId = '', provider = '' } = 
   const sessionsRoot = getSessionsRoot(rootDir);
   const sessionDir = path.join(sessionsRoot, selection.sessionId);
 
-  const [meta, state, checkpoint, dispatch] = await Promise.all([
+  const [meta, state, checkpoint, dispatch, dispatchEvidence] = await Promise.all([
     safeReadJson(path.join(sessionDir, 'meta.json')),
     safeReadJson(path.join(sessionDir, 'state.json')),
     readLastJsonLine(path.join(sessionDir, 'l1-checkpoints.jsonl')),
     findLatestDispatchArtifact(rootDir, selection.sessionId),
+    collectRecentDispatchEvidence(rootDir, selection.sessionId),
   ]);
 
   const agent = normalizeText(meta?.agent) || normalizeText(selection.agent);
@@ -351,10 +442,28 @@ export async function readHudState({ rootDir, sessionId = '', provider = '' } = 
     }
     : null;
 
+  let dispatchHindsight = null;
+  try {
+    dispatchHindsight = await buildHindsightEval({
+      rootDir,
+      meta,
+      dispatchEvidence,
+    });
+  } catch (error) {
+    warnings.push(`Dispatch hindsight eval failed: ${clipText(formatErrorMessage(error), 160)}`);
+    dispatchHindsight = null;
+  }
+
   const suggestedCommands = buildSuggestedCommands({
     sessionId: effectiveSelection.sessionId,
     provider: providerInferred,
     latestDispatch,
+    dispatchHindsight,
+  });
+  const dispatchFixHint = buildDispatchFixHint({
+    sessionId: effectiveSelection.sessionId,
+    dispatchHindsight,
+    latestDispatchArtifactPath: latestDispatch?.artifactPath,
   });
 
   return {
@@ -365,6 +474,8 @@ export async function readHudState({ rootDir, sessionId = '', provider = '' } = 
     sessionState: state,
     latestCheckpoint: checkpoint,
     latestDispatch,
+    dispatchHindsight,
+    dispatchFixHint,
     suggestedCommands,
     warnings,
   };

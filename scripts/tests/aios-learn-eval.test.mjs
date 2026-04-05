@@ -764,6 +764,16 @@ test('buildLearnEvalReport compares consecutive dispatch artifacts to surface hi
   assert.equal(hindsight.lessons.some((item) => item.kind === 'regression' && item.jobId === 'merge.final-checks'), true);
   assert.equal(hindsight.lessons.some((item) => Array.isArray(item.suggestedCommands) && item.suggestedCommands.some((cmd) => cmd.includes('team --resume'))), true);
 
+  const fix = report.recommendations.fix.find((item) => item.targetId === 'runbook.dispatch-merge-triage');
+  assertRecommendationShape(fix, {
+    kind: 'fix',
+    targetType: 'runbook',
+    targetId: 'runbook.dispatch-merge-triage',
+  });
+  assert.match(fix?.evidence ?? '', /repeatBlocked=1/);
+  assert.match(fix?.nextCommand ?? '', /orchestrate --session/);
+  assert.equal(fix?.nextArtifact, report.signals.dispatch.latestArtifactPath);
+
   const rendered = renderLearnEvalReport(report);
   assert.match(rendered, /dispatch hindsight pairs=3 comparedJobs=6/);
   assert.match(rendered, /repeatBlocked=1 regressions=1/);

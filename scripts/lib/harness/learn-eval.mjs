@@ -18,6 +18,50 @@ const RECOMMENDATION_SECTION_LABELS = {
   promote: 'Promote',
 };
 const ORCHESTRATION_DISPATCH_EVENT_KIND = 'orchestration.dispatch-run';
+const DISPATCH_HINDSIGHT_FAILURE_ACTIONS = {
+  'ownership-policy': {
+    targetType: 'runbook',
+    targetId: 'runbook.dispatch-merge-triage',
+    reason: 'Dispatch hindsight shows repeated ownership/policy blockage; fix file ownership boundaries before retrying parallel execution.',
+    priority: 50,
+  },
+  contract: {
+    targetType: 'runbook',
+    targetId: 'runbook.dispatch-merge-triage',
+    reason: 'Dispatch hindsight shows repeated handoff contract blockage; ensure subagents emit a single JSON handoff conforming to the schema before retrying.',
+    priority: 50,
+  },
+  timeout: {
+    targetType: 'gate',
+    targetId: 'gate.timeout-budget',
+    reason: 'Dispatch hindsight shows repeated timeouts; add wait/timeout budgets or split work-items before retrying.',
+    priority: 45,
+  },
+  'dependency-blocked': {
+    targetType: 'runbook',
+    targetId: 'runbook.failure-triage',
+    reason: 'Dispatch hindsight shows repeat blocked-by-dependency turns; ensure dependencies complete and unblock the merge gate before retrying.',
+    priority: 40,
+  },
+  'unsupported-job': {
+    targetType: 'runbook',
+    targetId: 'runbook.tool-repair',
+    reason: 'Dispatch hindsight shows repeated unsupported job errors; repair orchestrator tooling/runtime before retrying.',
+    priority: 40,
+  },
+  'runtime-error': {
+    targetType: 'runbook',
+    targetId: 'runbook.tool-repair',
+    reason: 'Dispatch hindsight shows repeated runtime errors; stabilize tooling and capture a recovery path before retrying.',
+    priority: 40,
+  },
+  default: {
+    targetType: 'runbook',
+    targetId: 'runbook.failure-triage',
+    reason: 'Dispatch hindsight shows recurring regressions or repeated blocked turns; stabilize the failing jobs before retrying.',
+    priority: 45,
+  },
+};
 
 function getQualityGateFixCommand() {
   return 'node scripts/aios.mjs quality-gate pre-pr';
@@ -587,6 +631,50 @@ function buildRecommendations(summary) {
     }));
   }
 
+  const dispatchHindsight = summary.signals.dispatch.hindsight && typeof summary.signals.dispatch.hindsight === 'object'
+    ? summary.signals.dispatch.hindsight
+    : null;
+  const dispatchHindsightPairs = Number.isFinite(dispatchHindsight?.pairsAnalyzed)
+    ? Math.max(0, Math.floor(dispatchHindsight.pairsAnalyzed))
+    : 0;
+  const dispatchHindsightRegressions = Number.isFinite(dispatchHindsight?.regressions)
+    ? Math.max(0, Math.floor(dispatchHindsight.regressions))
+    : 0;
+  const dispatchHindsightRepeatBlocked = Number.isFinite(dispatchHindsight?.repeatedBlockedTurns)
+    ? Math.max(0, Math.floor(dispatchHindsight.repeatedBlockedTurns))
+    : 0;
+
+  if (dispatchHindsightPairs > 0 && (dispatchHindsightRegressions > 0 || dispatchHindsightRepeatBlocked > 0)) {
+    const topRepeatedFailure = Array.isArray(dispatchHindsight?.topRepeatedFailureClasses)
+      ? dispatchHindsight.topRepeatedFailureClasses[0]
+      : null;
+    const topFailureClass = String(topRepeatedFailure?.failureClass || '').trim() || '';
+    const action = (dispatchHindsightRepeatBlocked > 0 && topFailureClass && DISPATCH_HINDSIGHT_FAILURE_ACTIONS[topFailureClass])
+      ? DISPATCH_HINDSIGHT_FAILURE_ACTIONS[topFailureClass]
+      : DISPATCH_HINDSIGHT_FAILURE_ACTIONS.default;
+    const alreadyRecommended = recommendations.some((item) => item.kind === 'fix' && item.targetId === action.targetId);
+    if (!alreadyRecommended) {
+      const evidenceParts = [];
+      evidenceParts.push(`pairs=${dispatchHindsightPairs}`);
+      if (dispatchHindsightRepeatBlocked > 0) evidenceParts.push(`repeatBlocked=${dispatchHindsightRepeatBlocked}`);
+      if (dispatchHindsightRegressions > 0) evidenceParts.push(`regressions=${dispatchHindsightRegressions}`);
+      if (topFailureClass) evidenceParts.push(`topFailure=${topFailureClass}`);
+
+      recommendations.push(createRecommendation({
+        kind: 'fix',
+        targetType: action.targetType,
+        targetId: action.targetId,
+        reason: action.reason,
+        evidence: evidenceParts.join(' '),
+        ...(action.targetType === 'runbook'
+          ? { nextCommand: getDispatchReplayCommand(summary.session.sessionId) }
+          : {}),
+        nextArtifact: summary.signals.dispatch.latestArtifactPath || undefined,
+        priority: action.priority,
+      }));
+    }
+  }
+
   if (
     summary.sample.telemetryCheckpoints >= 3
     && summary.signals.verification.knownCount >= 3
@@ -594,7 +682,10 @@ function buildRecommendations(summary) {
     && summary.signals.verification.counts.failed === 0
     && summary.signals.verification.counts.partial === 0
     && summary.status.counts.blocked === 0
+    && summary.signals.dispatch.blockedRuns === 0
     && summary.signals.retry.average <= 1
+    && dispatchHindsightRegressions === 0
+    && dispatchHindsightRepeatBlocked === 0
   ) {
     const blueprint = inferPromotionBlueprint(summary);
     recommendations.push(createRecommendation({
