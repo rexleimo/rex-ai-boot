@@ -272,6 +272,10 @@ test('runTeamHistory includes dispatch hindsight summary and fix hint', async ()
     { rootDir, io: { log: (line) => logs.push(line) } }
   );
   const report = JSON.parse(logs.at(-1));
+  assert.equal(report.summary.total, 1);
+  assert.equal(report.summary.dispatchBlocked, 1);
+  assert.equal(report.summary.hindsightUnstable, 1);
+  assert.equal(report.summary.topFailures?.[0]?.failureClass, 'ownership-policy');
   const record = report.records.find((item) => item.sessionId === sessionId);
   assert.ok(record, 'expected history record');
   assert.equal(record.dispatchHindsight.pairsAnalyzed, 1);

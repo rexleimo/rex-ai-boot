@@ -52,6 +52,14 @@ function normalizeCounter(value) {
   return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }
 
+function inferProviderFromClientId(clientId = '') {
+  const normalized = String(clientId || '').trim().toLowerCase();
+  if (normalized === 'codex-cli') return 'codex';
+  if (normalized === 'claude-code') return 'claude';
+  if (normalized === 'gemini-cli') return 'gemini';
+  return '';
+}
+
 function extractDispatchHindsightSummary(learnEvalReport) {
   const hindsight = learnEvalReport?.signals?.dispatch?.hindsight && typeof learnEvalReport.signals.dispatch.hindsight === 'object'
     ? learnEvalReport.signals.dispatch.hindsight
@@ -68,6 +76,29 @@ function isRetryBlockedDispatchUnstable(hindsightSummary) {
   if (!hindsightSummary || typeof hindsightSummary !== 'object') return false;
   if (hindsightSummary.pairsAnalyzed <= 0) return false;
   return hindsightSummary.repeatedBlockedTurns > 0 || hindsightSummary.regressions > 0;
+}
+
+function buildRetryBlockedRecoveryCommands(sessionId, env = process.env) {
+  const normalizedSessionId = String(sessionId || '').trim();
+  if (!normalizedSessionId) return [];
+
+  const commands = [
+    `node scripts/aios.mjs learn-eval --session ${normalizedSessionId}`,
+    `node scripts/aios.mjs orchestrate --session ${normalizedSessionId} --dispatch local --execute dry-run --format json`,
+    `node scripts/aios.mjs hud --session ${normalizedSessionId} --preset full`,
+  ];
+
+  const provider = inferProviderFromClientId(env?.AIOS_SUBAGENT_CLIENT || '');
+  const workers = normalizePositiveInteger(env?.AIOS_SUBAGENT_CONCURRENCY, 2);
+  if (provider) {
+    commands.splice(
+      2,
+      0,
+      `node scripts/aios.mjs team --resume ${normalizedSessionId} --retry-blocked --provider ${provider} --workers ${workers} --dry-run`
+    );
+  }
+
+  return commands;
 }
 
 function writeWarning(io, message) {
@@ -662,7 +693,8 @@ export async function runOrchestrate(
 
   if (retryBlockedDispatchUnstable && options.executionMode === 'live' && !options.force) {
     const message = `[guard] refusing live --retry-blocked for session ${replaySessionId}: dispatch hindsight pairs=${dispatchHindsightSummary.pairsAnalyzed} repeatBlocked=${dispatchHindsightSummary.repeatedBlockedTurns} regressions=${dispatchHindsightSummary.regressions}`;
-    const suggestion = `Run: node scripts/aios.mjs learn-eval --session ${replaySessionId} (or retry with --dry-run / --force)`;
+    const recoveryCommands = buildRetryBlockedRecoveryCommands(replaySessionId, env);
+    const suggestion = `Run: ${recoveryCommands[0] || `node scripts/aios.mjs learn-eval --session ${replaySessionId}`} (or retry with --dry-run / --force)`;
 
     if (options.format === 'json') {
       const report = {
@@ -675,16 +707,13 @@ export async function runOrchestrate(
         force: false,
         dispatchHindsight: dispatchHindsightSummary,
         message: `${message}. ${suggestion}`,
-        suggestedCommands: [
-          `node scripts/aios.mjs learn-eval --session ${replaySessionId}`,
-          `node scripts/aios.mjs hud --session ${replaySessionId} --preset full`,
-        ],
+        suggestedCommands: recoveryCommands,
       };
       io.log(JSON.stringify(report, null, 2));
       return { exitCode: 1, report };
     }
 
-    writeWarning(io, `${message}\n${suggestion}`);
+    writeWarning(io, `${message}\n${suggestion}\nSuggested:\n- ${recoveryCommands.slice(0, 4).join('\n- ')}`);
     return { exitCode: 1 };
   }
 

@@ -1557,6 +1557,7 @@ test('runOrchestrate --retry-blocked replays blocked jobs with seeded dependenci
 
 test('runOrchestrate refuses live --retry-blocked when dispatch hindsight is unstable', async () => {
   const rootDir = await makeRootDir();
+  const fakeBin = await createFakeCodexCommand();
   const sessionId = 'retry-guardrail';
   await writeSession(
     rootDir,
@@ -1607,6 +1608,12 @@ test('runOrchestrate refuses live --retry-blocked when dispatch hindsight is uns
     {
       rootDir,
       io: { log: (line) => logs.push(line) },
+      env: {
+        ...process.env,
+        AIOS_SUBAGENT_CLIENT: 'codex-cli',
+        AIOS_SUBAGENT_CONCURRENCY: '2',
+        PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
+      },
     }
   );
 
@@ -1616,6 +1623,10 @@ test('runOrchestrate refuses live --retry-blocked when dispatch hindsight is uns
   assert.equal(report.sessionId, sessionId);
   assert.equal(report.dispatchHindsight.regressions, 1);
   assert.match(report.message, /refusing live --retry-blocked/i);
+  assert.ok(Array.isArray(report.suggestedCommands));
+  assert.ok(report.suggestedCommands.some((cmd) => cmd.includes('learn-eval') && cmd.includes(sessionId)));
+  assert.ok(report.suggestedCommands.some((cmd) => cmd.includes('orchestrate') && cmd.includes('--execute dry-run')));
+  assert.ok(report.suggestedCommands.some((cmd) => cmd.includes('team') && cmd.includes('--retry-blocked') && cmd.includes('--dry-run')));
 });
 
 test('runOrchestrate resolves blueprint and context from learn-eval overlay', async () => {

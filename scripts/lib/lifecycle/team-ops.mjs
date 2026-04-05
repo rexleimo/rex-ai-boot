@@ -99,6 +99,47 @@ function formatHistoryLine(record) {
   return `- ${bits.join(' | ')}`;
 }
 
+function summarizeHistory(records = []) {
+  const total = Array.isArray(records) ? records.length : 0;
+  let dispatchBlocked = 0;
+  let hindsightUnstable = 0;
+  const topFailureCounts = new Map();
+
+  for (const record of Array.isArray(records) ? records : []) {
+    const dispatch = record?.dispatch && typeof record.dispatch === 'object' ? record.dispatch : null;
+    if (dispatch && dispatch.ok === false) {
+      dispatchBlocked += 1;
+    }
+
+    const hindsight = record?.dispatchHindsight && typeof record.dispatchHindsight === 'object'
+      ? record.dispatchHindsight
+      : null;
+    const pairs = normalizeCounter(hindsight?.pairsAnalyzed);
+    const repeatBlocked = normalizeCounter(hindsight?.repeatedBlockedTurns);
+    const regressions = normalizeCounter(hindsight?.regressions);
+    if (pairs > 0 && (repeatBlocked > 0 || regressions > 0)) {
+      hindsightUnstable += 1;
+    }
+
+    const topFailure = normalizeText(hindsight?.topFailureClass);
+    if (topFailure) {
+      topFailureCounts.set(topFailure, (topFailureCounts.get(topFailure) || 0) + 1);
+    }
+  }
+
+  const topFailures = Array.from(topFailureCounts.entries())
+    .map(([failureClass, count]) => ({ failureClass, count }))
+    .sort((left, right) => right.count - left.count || left.failureClass.localeCompare(right.failureClass))
+    .slice(0, 5);
+
+  return {
+    total,
+    dispatchBlocked,
+    hindsightUnstable,
+    topFailures,
+  };
+}
+
 export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } = {}) {
   const provider = normalizeProvider(rawOptions.provider);
   const limit = Number.isFinite(rawOptions.limit) ? Math.max(1, Math.floor(rawOptions.limit)) : Number.parseInt(String(rawOptions.limit ?? '').trim(), 10);
@@ -159,6 +200,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
     });
   }
 
+  const summary = summarizeHistory(records);
   if (json) {
     io.log(JSON.stringify({
       schemaVersion: 1,
@@ -166,6 +208,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
       provider,
       agent,
       limit: resolvedLimit,
+      summary,
       records,
     }, null, 2));
     return { exitCode: 0 };
@@ -173,6 +216,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
 
   const lines = [
     `AIOS Team History (provider=${provider} agent=${agent})`,
+    `Summary: sessions=${summary.total} dispatchBlocked=${summary.dispatchBlocked} hindsightUnstable=${summary.hindsightUnstable} topFailures=${summary.topFailures.map((item) => `${item.failureClass}=${item.count}`).join(', ') || 'none'}`,
     ...(records.length > 0 ? records.map((record) => formatHistoryLine(record)) : ['- (none)']),
   ];
   io.log(lines.join('\n') + '\n');
