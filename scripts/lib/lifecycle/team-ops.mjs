@@ -74,12 +74,14 @@ function formatHistoryLine(record) {
   const hindsightRepeatBlocked = normalizeCounter(hindsight?.repeatedBlockedTurns);
   const hindsightRegressions = normalizeCounter(hindsight?.regressions);
   const hindsightTopFailure = normalizeText(hindsight?.topFailureClass);
+  const hindsightTopJob = normalizeText(hindsight?.topRepeatedJobId);
   const hindsightLabel = hindsightPairs > 0
     ? [
       `hindsight pairs=${hindsightPairs}`,
       hindsightRepeatBlocked > 0 ? `repeatBlocked=${hindsightRepeatBlocked}` : '',
       hindsightRegressions > 0 ? `regressions=${hindsightRegressions}` : '',
       hindsightTopFailure ? `topFailure=${hindsightTopFailure}` : '',
+      hindsightTopJob ? `topJob=${hindsightTopJob}` : '',
     ].filter(Boolean).join(' ')
     : '';
   const fixHint = record.dispatchFixHint && typeof record.dispatchFixHint === 'object'
@@ -104,6 +106,8 @@ function summarizeHistory(records = []) {
   let dispatchBlocked = 0;
   let hindsightUnstable = 0;
   const topFailureCounts = new Map();
+  const fixHintCounts = new Map();
+  const topJobCounts = new Map();
 
   for (const record of Array.isArray(records) ? records : []) {
     const dispatch = record?.dispatch && typeof record.dispatch === 'object' ? record.dispatch : null;
@@ -125,11 +129,32 @@ function summarizeHistory(records = []) {
     if (topFailure) {
       topFailureCounts.set(topFailure, (topFailureCounts.get(topFailure) || 0) + 1);
     }
+
+    const topJob = normalizeText(hindsight?.topRepeatedJobId);
+    if (topJob) {
+      topJobCounts.set(topJob, (topJobCounts.get(topJob) || 0) + 1);
+    }
+
+    const fixHint = record?.dispatchFixHint && typeof record.dispatchFixHint === 'object'
+      ? record.dispatchFixHint
+      : null;
+    const fixHintId = normalizeText(fixHint?.targetId);
+    if (fixHintId) {
+      fixHintCounts.set(fixHintId, (fixHintCounts.get(fixHintId) || 0) + 1);
+    }
   }
 
   const topFailures = Array.from(topFailureCounts.entries())
     .map(([failureClass, count]) => ({ failureClass, count }))
     .sort((left, right) => right.count - left.count || left.failureClass.localeCompare(right.failureClass))
+    .slice(0, 5);
+  const topFixHints = Array.from(fixHintCounts.entries())
+    .map(([targetId, count]) => ({ targetId, count }))
+    .sort((left, right) => right.count - left.count || left.targetId.localeCompare(right.targetId))
+    .slice(0, 5);
+  const topJobs = Array.from(topJobCounts.entries())
+    .map(([jobId, count]) => ({ jobId, count }))
+    .sort((left, right) => right.count - left.count || left.jobId.localeCompare(right.jobId))
     .slice(0, 5);
 
   return {
@@ -137,6 +162,8 @@ function summarizeHistory(records = []) {
     dispatchBlocked,
     hindsightUnstable,
     topFailures,
+    topFixHints,
+    topJobs,
   };
 }
 
@@ -163,6 +190,9 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
     const topFailure = Array.isArray(hindsight?.topRepeatedFailureClasses) && hindsight.topRepeatedFailureClasses.length > 0
       ? hindsight.topRepeatedFailureClasses[0]
       : null;
+    const topJob = Array.isArray(hindsight?.topRepeatedJobs) && hindsight.topRepeatedJobs.length > 0
+      ? hindsight.topRepeatedJobs[0]
+      : null;
     const fixHint = state.dispatchFixHint && typeof state.dispatchFixHint === 'object'
       ? state.dispatchFixHint
       : null;
@@ -187,6 +217,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
           repeatedBlockedTurns: normalizeCounter(hindsight.repeatedBlockedTurns),
           regressions: normalizeCounter(hindsight.regressions),
           topFailureClass: normalizeText(topFailure?.failureClass) || null,
+          topRepeatedJobId: normalizeText(topJob?.jobId) || null,
         }
         : null,
       dispatchFixHint: fixHint
@@ -216,7 +247,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
 
   const lines = [
     `AIOS Team History (provider=${provider} agent=${agent})`,
-    `Summary: sessions=${summary.total} dispatchBlocked=${summary.dispatchBlocked} hindsightUnstable=${summary.hindsightUnstable} topFailures=${summary.topFailures.map((item) => `${item.failureClass}=${item.count}`).join(', ') || 'none'}`,
+    `Summary: sessions=${summary.total} dispatchBlocked=${summary.dispatchBlocked} hindsightUnstable=${summary.hindsightUnstable} topFailures=${summary.topFailures.map((item) => `${item.failureClass}=${item.count}`).join(', ') || 'none'} topFixHints=${summary.topFixHints.map((item) => `${item.targetId}=${item.count}`).join(', ') || 'none'} topJobs=${summary.topJobs.map((item) => `${item.jobId}=${item.count}`).join(', ') || 'none'}`,
     ...(records.length > 0 ? records.map((record) => formatHistoryLine(record)) : ['- (none)']),
   ];
   io.log(lines.join('\n') + '\n');

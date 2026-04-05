@@ -118,9 +118,15 @@ function formatDispatchHindsightLine(state) {
       .map((item) => `${normalizeText(item.failureClass) || 'unknown'}=${Number.isFinite(item.count) ? Math.max(0, Math.floor(item.count)) : 0}`)
       .join(', ')
     : 'none';
+  const topJobs = Array.isArray(hindsight.topRepeatedJobs) && hindsight.topRepeatedJobs.length > 0
+    ? hindsight.topRepeatedJobs
+      .slice(0, 3)
+      .map((item) => `${normalizeText(item.jobId) || 'unknown'}=${Number.isFinite(item.count) ? Math.max(0, Math.floor(item.count)) : 0}`)
+      .join(', ')
+    : 'none';
 
   return clipLine(
-    `Dispatch Hindsight: pairs=${pairs} comparedJobs=${comparedJobs} repeatBlocked=${repeatBlocked} regressions=${regressions} resolved=${resolved} topFailures=${topFailures}`,
+    `Dispatch Hindsight: pairs=${pairs} comparedJobs=${comparedJobs} repeatBlocked=${repeatBlocked} regressions=${regressions} resolved=${resolved} topFailures=${topFailures} topJobs=${topJobs}`,
     200
   );
 }
