@@ -19,6 +19,27 @@ export function compactRlDecisionEvidence(raw = {}) {
   };
 }
 
+function normalizeText(value) {
+  return String(value ?? '').trim();
+}
+
+function uniqueStrings(values = []) {
+  const seen = new Set();
+  const results = [];
+  for (const value of values) {
+    const text = normalizeText(value);
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    results.push(text);
+  }
+  return results;
+}
+
+function normalizeStringArray(raw = []) {
+  if (!Array.isArray(raw)) return [];
+  return uniqueStrings(raw);
+}
+
 function formatArtifactTimestamp(ts = new Date()) {
   return ts.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
 }
@@ -30,6 +51,10 @@ function buildArtifactPath(sessionId, stamp) {
 function normalizeDispatchMode(dispatchRun = {}) {
   const mode = String(dispatchRun?.mode || '').trim();
   return mode || 'dry-run';
+}
+
+function formatRefsCsv(refs = []) {
+  return normalizeStringArray(refs).join(',');
 }
 
 function normalizeDispatchCost(raw = {}) {
@@ -119,6 +144,92 @@ function buildNextActions(report, artifactPath) {
   ];
 }
 
+function parseAttemptCount(jobRun) {
+  const raw = Number.isFinite(jobRun?.attempts) ? Math.floor(jobRun.attempts) : 0;
+  return raw > 0 ? raw : 1;
+}
+
+function buildTurnId({ stamp, jobId, attempt }) {
+  const safeStamp = normalizeText(stamp);
+  const safeJobId = normalizeText(jobId);
+  const safeAttempt = Number.isFinite(attempt) ? Math.max(1, Math.floor(attempt)) : 1;
+  if (!safeStamp || !safeJobId) {
+    return '';
+  }
+  return `${safeStamp}:${safeJobId}:a${safeAttempt}`;
+}
+
+function buildJobWorkItemRefMap(dispatchPlan = null) {
+  const jobs = Array.isArray(dispatchPlan?.jobs) ? dispatchPlan.jobs : [];
+  const map = new Map();
+  for (const job of jobs) {
+    const jobId = normalizeText(job?.jobId);
+    if (!jobId) continue;
+    const refs = normalizeStringArray(job?.launchSpec?.workItemRefs);
+    if (refs.length > 0) {
+      map.set(jobId, refs);
+    }
+  }
+  return map;
+}
+
+function buildTurnRefs({ stamp, jobId, turnId, workItemRefs }) {
+  const refs = [
+    'env:orchestrate',
+    stamp ? `dispatch:${stamp}` : '',
+    turnId ? `turn:${turnId}` : '',
+    jobId ? `job:${jobId}` : '',
+    ...(Array.isArray(workItemRefs) ? workItemRefs.map((ref) => `work-item:${normalizeText(ref)}`) : []),
+  ];
+  return normalizeStringArray(refs);
+}
+
+function enrichDispatchRunForArtifact(dispatchRun, dispatchPlan, stamp) {
+  if (!dispatchRun || typeof dispatchRun !== 'object') {
+    return dispatchRun || null;
+  }
+
+  const workItemRefsByJobId = buildJobWorkItemRefMap(dispatchPlan);
+  const rawJobRuns = Array.isArray(dispatchRun.jobRuns) ? dispatchRun.jobRuns : [];
+  const jobRuns = rawJobRuns.map((jobRun) => {
+    if (!jobRun || typeof jobRun !== 'object') return jobRun;
+    const jobId = normalizeText(jobRun.jobId);
+    if (!jobId) return { ...jobRun };
+
+    const existingWorkItemRefs = normalizeStringArray(jobRun.workItemRefs);
+    const resolvedWorkItemRefs = existingWorkItemRefs.length > 0
+      ? existingWorkItemRefs
+      : (workItemRefsByJobId.get(jobId) || []);
+
+    const existingTurnId = normalizeText(jobRun.turnId);
+    const attempt = parseAttemptCount(jobRun);
+    const resolvedTurnId = existingTurnId || buildTurnId({ stamp, jobId, attempt });
+
+    const existingRefs = normalizeStringArray(jobRun.refs);
+    const resolvedRefs = uniqueStrings([
+      ...existingRefs,
+      ...buildTurnRefs({
+        stamp,
+        jobId,
+        turnId: resolvedTurnId,
+        workItemRefs: resolvedWorkItemRefs,
+      }),
+    ]);
+
+    return {
+      ...jobRun,
+      turnId: resolvedTurnId,
+      workItemRefs: resolvedWorkItemRefs,
+      refs: resolvedRefs,
+    };
+  });
+
+  return {
+    ...dispatchRun,
+    jobRuns,
+  };
+}
+
 async function writeArtifact(absPath, payload) {
   await fs.mkdir(path.dirname(absPath), { recursive: true });
   await fs.writeFile(absPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
@@ -144,6 +255,7 @@ export async function persistDispatchEvidence({ rootDir, sessionId, report, elap
   const stamp = formatArtifactTimestamp();
   const artifactPath = buildArtifactPath(sessionId, stamp);
   const artifactAbsPath = path.join(rootDir, artifactPath);
+  const dispatchRunForArtifact = enrichDispatchRunForArtifact(report.dispatchRun, report.dispatchPlan, stamp);
   const artifactPayload = {
     schemaVersion: 1,
     kind: ORCHESTRATION_DISPATCH_EVENT_KIND,
@@ -155,7 +267,7 @@ export async function persistDispatchEvidence({ rootDir, sessionId, report, elap
     workItems: Array.isArray(report.workItems) ? report.workItems.map((item) => ({ ...item })) : [],
     learnEvalOverlay: report.learnEvalOverlay || null,
     dispatchPlan: report.dispatchPlan || null,
-    dispatchRun: report.dispatchRun || null,
+    dispatchRun: dispatchRunForArtifact,
     workItemTelemetry: withWorkItemArtifactRef(report.workItemTelemetry || null, artifactPath),
   };
 
@@ -163,6 +275,11 @@ export async function persistDispatchEvidence({ rootDir, sessionId, report, elap
 
   try {
     const dispatchCost = normalizeDispatchCost(report.dispatchRun.cost);
+    const eventRefs = [
+      artifactPath,
+      'env:orchestrate',
+      `dispatch:${stamp}`,
+    ];
     const event = runContextDbCli([
       'event:add',
       '--workspace',
@@ -176,7 +293,7 @@ export async function persistDispatchEvidence({ rootDir, sessionId, report, elap
       '--text',
       buildEventText(report, artifactPath),
       '--refs',
-      artifactPath,
+      formatRefsCsv(eventRefs),
     ]);
     const eventId = `${sessionId}#${event.seq}`;
 

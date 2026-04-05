@@ -238,6 +238,11 @@ async function findLatestDispatchArtifact(rootDir, sessionId) {
       jobId: normalizeText(jobRun?.jobId),
       jobType: normalizeText(jobRun?.jobType) || 'unknown',
       role: normalizeText(jobRun?.role) || 'unknown',
+      turnId: normalizeText(jobRun?.turnId),
+      workItemRefs: Array.isArray(jobRun?.workItemRefs)
+        ? jobRun.workItemRefs.map((ref) => normalizeText(ref)).filter(Boolean)
+        : [],
+      attempts: Number.isFinite(jobRun?.attempts) ? Math.max(0, Math.floor(jobRun.attempts)) : 0,
       error: clipText(jobRun?.output?.error || jobRun?.output?.rawOutput || ''),
     }))
     .filter((row) => row.jobId);

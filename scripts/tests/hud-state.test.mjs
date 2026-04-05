@@ -116,6 +116,9 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
           jobType: 'phase',
           role: 'implementer',
           status: 'blocked',
+          turnId: '20260405T010000Z:phase.implement.wi.1:a2',
+          workItemRefs: ['wi.1'],
+          attempts: 2,
           output: { error: 'File policy violation' },
         },
         {
@@ -143,6 +146,9 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
   assert.equal(state.latestCheckpoint?.telemetry?.verification?.result, 'passed');
   assert.equal(state.latestDispatch?.ok, false);
   assert.equal(state.latestDispatch?.blockedJobs, 1);
+  assert.equal(state.latestDispatch?.blocked?.[0]?.turnId, '20260405T010000Z:phase.implement.wi.1:a2');
+  assert.deepEqual(state.latestDispatch?.blocked?.[0]?.workItemRefs, ['wi.1']);
+  assert.equal(state.latestDispatch?.blocked?.[0]?.attempts, 2);
   assert.ok(Array.isArray(state.suggestedCommands));
   assert.ok(state.suggestedCommands.some((cmd) => cmd.includes('orchestrate') && cmd.includes(sessionId)));
 });
