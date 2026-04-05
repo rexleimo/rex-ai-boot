@@ -360,6 +360,7 @@ export async function buildHindsightEval({
   rootDir,
   meta = null,
   dispatchEvidence = [],
+  artifactCache = null,
   maxArtifacts = 6,
   maxPairs = 3,
   maxLessons = 12,
@@ -424,7 +425,12 @@ export async function buildHindsightEval({
   const loaded = [];
   for (const entry of artifacts) {
     const artifactAbsPath = path.join(rootDir, entry.artifactPath);
-    const artifact = await readJsonOptional(artifactAbsPath);
+    const cachedArtifact = artifactCache && typeof artifactCache === 'object'
+      ? artifactCache[entry.artifactPath]
+      : null;
+    const artifact = cachedArtifact && typeof cachedArtifact === 'object'
+      ? cachedArtifact
+      : await readJsonOptional(artifactAbsPath);
     if (!artifact) continue;
     const record = extractDispatchRunRecord({
       artifactPath: entry.artifactPath,

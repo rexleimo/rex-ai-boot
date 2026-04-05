@@ -326,12 +326,16 @@ async function collectDispatchEvidence(rootDir, sessionId, checkpoints = [], eve
   }
 
   const records = [];
+  const artifactCache = {};
   for (const candidate of candidates.values()) {
     const artifact = await readJsonOptional(path.join(rootDir, candidate.artifactPath));
     const dispatchRun = artifact?.dispatchRun;
     const jobRuns = Array.isArray(dispatchRun?.jobRuns) ? dispatchRun.jobRuns : [];
     const blockedJobs = jobRuns.filter((jobRun) => jobRun.status === 'blocked').length;
     const workItems = extractWorkItemEvidence(artifact);
+    if (artifact && typeof artifact === 'object') {
+      artifactCache[candidate.artifactPath] = artifact;
+    }
     records.push({
       artifactPath: candidate.artifactPath,
       eventId: candidate.eventId || null,
@@ -347,7 +351,7 @@ async function collectDispatchEvidence(rootDir, sessionId, checkpoints = [], eve
   }
 
   records.sort((left, right) => String(right.ts || '').localeCompare(String(left.ts || '')));
-  return records;
+  return { records, artifactCache };
 }
 
 function safeAverage(total, count) {
@@ -762,8 +766,14 @@ export async function buildLearnEvalReport(rawOptions = {}, { rootDir } = {}) {
   const { meta, checkpoints, events } = await loadSessionArtifacts(rootDir, sessionMeta.sessionId);
   const limit = Number.isFinite(rawOptions.limit) ? Math.max(1, Math.floor(rawOptions.limit)) : 10;
   const selected = checkpoints.slice(Math.max(0, checkpoints.length - limit));
-  const dispatchEvidence = await collectDispatchEvidence(rootDir, sessionMeta.sessionId, selected, events);
-  const dispatchHindsight = await buildHindsightEval({ rootDir, meta, dispatchEvidence });
+  const dispatchEvidenceResult = await collectDispatchEvidence(rootDir, sessionMeta.sessionId, selected, events);
+  const dispatchEvidence = Array.isArray(dispatchEvidenceResult?.records) ? dispatchEvidenceResult.records : [];
+  const dispatchHindsight = await buildHindsightEval({
+    rootDir,
+    meta,
+    dispatchEvidence,
+    artifactCache: dispatchEvidenceResult?.artifactCache,
+  });
 
   const statusCounts = createCountRecord(SESSION_STATUS_NAMES);
   const verificationCounts = createCountRecord(VERIFICATION_RESULT_NAMES);
