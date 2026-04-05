@@ -15,12 +15,39 @@ function normalizeIntervalMs(value, fallback = 1000) {
   return Number.isFinite(parsed) && parsed > 0 ? Math.max(250, parsed) : fallback;
 }
 
+function normalizeConcurrency(value, fallback = 4) {
+  const parsed = Number.parseInt(String(value ?? '').trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.min(16, Math.max(1, Math.floor(parsed)));
+}
+
 function normalizeProvider(value) {
   const normalized = normalizeText(value).toLowerCase();
   if (normalized === 'codex' || normalized === 'claude' || normalized === 'gemini') {
     return normalized;
   }
   return 'codex';
+}
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+
+  const resolvedConcurrency = normalizeConcurrency(concurrency, 1);
+  const results = new Array(items.length);
+  let cursor = 0;
+
+  const workerCount = Math.min(resolvedConcurrency, items.length);
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= items.length) break;
+      results[index] = await mapper(items[index], index);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
 }
 
 export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, env = process.env } = {}) {
@@ -172,6 +199,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
   const limit = Number.isFinite(rawOptions.limit) ? Math.max(1, Math.floor(rawOptions.limit)) : Number.parseInt(String(rawOptions.limit ?? '').trim(), 10);
   const resolvedLimit = Number.isFinite(limit) && limit > 0 ? limit : 10;
   const json = rawOptions.json === true;
+  const concurrency = normalizeConcurrency(rawOptions.concurrency, 4);
 
   const agent = provider === 'claude'
     ? 'claude-code'
@@ -180,8 +208,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
       : 'codex-cli';
   const sessions = await listContextDbSessions(rootDir, { agent, limit: resolvedLimit });
 
-  const records = [];
-  for (const meta of sessions) {
+  const records = await mapWithConcurrency(sessions, concurrency, async (meta) => {
     const sessionId = normalizeText(meta.sessionId);
     const state = await readHudDispatchSummary({ rootDir, sessionId, provider, meta });
     const hindsight = state.dispatchHindsight && typeof state.dispatchHindsight === 'object'
@@ -196,7 +223,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
     const fixHint = state.dispatchFixHint && typeof state.dispatchFixHint === 'object'
       ? state.dispatchFixHint
       : null;
-    records.push({
+    return {
       sessionId,
       updatedAt: normalizeText(meta.updatedAt) || normalizeText(meta.createdAt),
       status: normalizeText(meta.status),
@@ -228,8 +255,8 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
           nextArtifact: normalizeText(fixHint.nextArtifact) || null,
         }
         : null,
-    });
-  }
+    };
+  });
 
   const summary = summarizeHistory(records);
   if (json) {

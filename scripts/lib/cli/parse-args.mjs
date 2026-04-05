@@ -257,6 +257,7 @@ function createDefaultTeamHistoryOptions() {
     provider: 'codex',
     clientId: TEAM_PROVIDER_CLIENT_MAP.codex,
     limit: 10,
+    concurrency: 4,
     json: false,
   };
 }
@@ -281,6 +282,10 @@ function parseTeamHistoryArgs(argv) {
         break;
       case '--limit':
         options.limit = parsePositiveInteger(takeValue(rest, index, '--limit'), '--limit');
+        index += 1;
+        break;
+      case '--concurrency':
+        options.concurrency = parsePositiveInteger(takeValue(rest, index, '--concurrency'), '--concurrency');
         index += 1;
         break;
       case '--json':

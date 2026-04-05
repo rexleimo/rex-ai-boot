@@ -360,3 +360,93 @@ test('runTeamHistory includes dispatch hindsight summary and fix hint', async ()
     /orchestrate --session history-session --dispatch local --execute dry-run --format json/
   );
 });
+
+test('runTeamHistory preserves session ordering under concurrency', async () => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-team-history-order-'));
+  const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');
+
+  const firstSessionId = 'history-order-session-a';
+  const secondSessionId = 'history-order-session-b';
+
+  await writeJson(
+    path.join(sessionsRoot, firstSessionId, 'meta.json'),
+    makeSessionMeta({ sessionId: firstSessionId, agent: 'codex-cli', updatedAt: '2026-04-05T05:00:00.000Z' })
+  );
+  await writeJson(
+    path.join(sessionsRoot, secondSessionId, 'meta.json'),
+    makeSessionMeta({ sessionId: secondSessionId, agent: 'codex-cli', updatedAt: '2026-04-05T04:00:00.000Z' })
+  );
+
+  const jobRuns = (attempts) => [
+    {
+      jobId: 'phase.implement.wi.1',
+      jobType: 'phase',
+      role: 'implementer',
+      status: 'blocked',
+      attempts,
+      output: { error: 'File policy violation' },
+    },
+    {
+      jobId: 'phase.plan',
+      jobType: 'phase',
+      role: 'planner',
+      status: 'simulated',
+      output: { outputType: 'handoff' },
+    },
+  ];
+
+  const writePair = async (sessionId, olderName, olderTs, newerName, newerTs) => {
+    const artifactsDir = path.join(sessionsRoot, sessionId, 'artifacts');
+    await writeJson(path.join(artifactsDir, olderName), {
+      schemaVersion: 1,
+      kind: 'orchestration.dispatch-run',
+      sessionId,
+      persistedAt: olderTs,
+      dispatchRun: {
+        ok: false,
+        mode: 'dry-run',
+        executorRegistry: ['local-dry-run'],
+        jobRuns: jobRuns(1),
+        finalOutputs: [],
+      },
+    });
+    await writeJson(path.join(artifactsDir, newerName), {
+      schemaVersion: 1,
+      kind: 'orchestration.dispatch-run',
+      sessionId,
+      persistedAt: newerTs,
+      dispatchRun: {
+        ok: false,
+        mode: 'dry-run',
+        executorRegistry: ['local-dry-run'],
+        jobRuns: jobRuns(2),
+        finalOutputs: [],
+      },
+    });
+  };
+
+  await writePair(
+    firstSessionId,
+    'dispatch-run-20260405T045900Z.json',
+    '2026-04-05T04:59:00.000Z',
+    'dispatch-run-20260405T050000Z.json',
+    '2026-04-05T05:00:00.000Z'
+  );
+  await writePair(
+    secondSessionId,
+    'dispatch-run-20260405T035900Z.json',
+    '2026-04-05T03:59:00.000Z',
+    'dispatch-run-20260405T040000Z.json',
+    '2026-04-05T04:00:00.000Z'
+  );
+
+  const logs = [];
+  await runTeamHistory(
+    { provider: 'codex', limit: 10, json: true },
+    { rootDir, io: { log: (line) => logs.push(line) } }
+  );
+
+  const report = JSON.parse(logs.at(-1));
+  assert.equal(report.records.length, 2);
+  assert.deepEqual(report.records.map((record) => record.sessionId), [firstSessionId, secondSessionId]);
+});

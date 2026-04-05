@@ -530,12 +530,32 @@ export async function readHudDispatchSummary({ rootDir, sessionId = '', provider
     }
     : null;
 
+  const artifactCache = {};
+  if (latestDispatch?.artifactPath && latestDispatch.raw && typeof latestDispatch.raw === 'object') {
+    artifactCache[latestDispatch.artifactPath] = latestDispatch.raw;
+  }
+
+  await Promise.all(
+    (Array.isArray(dispatchEvidence) ? dispatchEvidence : [])
+      .map((record) => normalizeText(record?.artifactPath))
+      .filter(Boolean)
+      .map(async (artifactPath) => {
+        if (artifactCache[artifactPath]) return;
+        if (path.isAbsolute(artifactPath)) return;
+        const artifact = await safeReadJson(path.join(rootDir, artifactPath));
+        if (artifact && typeof artifact === 'object') {
+          artifactCache[artifactPath] = artifact;
+        }
+      })
+  );
+
   let dispatchHindsight = null;
   try {
     dispatchHindsight = await buildHindsightEval({
       rootDir,
       meta: sessionMeta,
       dispatchEvidence,
+      artifactCache,
     });
   } catch (error) {
     warnings.push(`Dispatch hindsight eval failed: ${clipText(formatErrorMessage(error), 160)}`);

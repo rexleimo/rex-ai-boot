@@ -175,6 +175,7 @@ Options:
   --live                        Force live execution (default)
   --watch                       (team status) Refresh display on an interval (TTY-only)
   --json                        (team status/history) Output structured JSON instead of text
+  --concurrency <n>             (team history) Process sessions concurrently (default: 4)
   --preset <minimal|focused|full> (team status) Rendering preset (default: focused)
   --interval-ms <n>             (team status) Watch refresh interval in ms (default: 1000)
   -h, --help

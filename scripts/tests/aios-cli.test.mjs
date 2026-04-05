@@ -223,11 +223,19 @@ test('parseArgs accepts team status/history subcommands', () => {
   assert.equal(status.options.provider, 'codex');
   assert.equal(status.options.json, true);
 
-  const history = parseArgs(['team', 'history', '--provider', 'claude', '--limit', '5']);
+  const historyDefaults = parseArgs(['team', 'history']);
+  assert.equal(historyDefaults.command, 'team');
+  assert.equal(historyDefaults.options.subcommand, 'history');
+  assert.equal(historyDefaults.options.provider, 'codex');
+  assert.equal(historyDefaults.options.limit, 10);
+  assert.equal(historyDefaults.options.concurrency, 4);
+
+  const history = parseArgs(['team', 'history', '--provider', 'claude', '--limit', '5', '--concurrency', '8']);
   assert.equal(history.command, 'team');
   assert.equal(history.options.subcommand, 'history');
   assert.equal(history.options.provider, 'claude');
   assert.equal(history.options.limit, 5);
+  assert.equal(history.options.concurrency, 8);
 });
 
 test('parseArgs rejects invalid mode', () => {
