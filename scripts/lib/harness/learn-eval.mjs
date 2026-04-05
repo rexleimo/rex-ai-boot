@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
 import { getHarnessTarget } from './targets.mjs';
+import { buildHindsightEval } from './hindsight-eval.mjs';
 
 const SESSION_STATUS_NAMES = ['running', 'blocked', 'done'];
 const VERIFICATION_RESULT_NAMES = ['unknown', 'passed', 'failed', 'partial'];
@@ -671,6 +672,7 @@ export async function buildLearnEvalReport(rawOptions = {}, { rootDir } = {}) {
   const limit = Number.isFinite(rawOptions.limit) ? Math.max(1, Math.floor(rawOptions.limit)) : 10;
   const selected = checkpoints.slice(Math.max(0, checkpoints.length - limit));
   const dispatchEvidence = await collectDispatchEvidence(rootDir, sessionMeta.sessionId, selected, events);
+  const dispatchHindsight = await buildHindsightEval({ rootDir, meta, dispatchEvidence });
 
   const statusCounts = createCountRecord(SESSION_STATUS_NAMES);
   const verificationCounts = createCountRecord(VERIFICATION_RESULT_NAMES);
@@ -847,6 +849,7 @@ export async function buildLearnEvalReport(rawOptions = {}, { rootDir } = {}) {
         successfulRuns: dispatchEvidence.filter((item) => item.ok).length,
         blockedRuns: dispatchEvidence.filter((item) => item.ok === false).length,
         blockedJobs: dispatchBlockedJobs,
+        hindsight: dispatchHindsight,
         executorUsage: Array.from(dispatchExecutorCounts.entries())
           .map(([executor, count]) => ({ executor, count }))
           .sort((left, right) => right.count - left.count || left.executor.localeCompare(right.executor)),
@@ -878,6 +881,28 @@ export function renderLearnEvalReport(report) {
   const dispatchExecutors = report.signals.dispatch.executorUsage.length > 0
     ? report.signals.dispatch.executorUsage.map((item) => `${item.executor}=${item.count}`).join(', ')
     : '(none)';
+  const dispatchHindsight = report.signals.dispatch.hindsight && typeof report.signals.dispatch.hindsight === 'object'
+    ? report.signals.dispatch.hindsight
+    : null;
+  const dispatchHindsightTopFailures = dispatchHindsight && Array.isArray(dispatchHindsight.topRepeatedFailureClasses) && dispatchHindsight.topRepeatedFailureClasses.length > 0
+    ? dispatchHindsight.topRepeatedFailureClasses.map((item) => `${item.failureClass}=${item.count}`).join(', ')
+    : '(none)';
+  const dispatchHindsightLessons = dispatchHindsight && Array.isArray(dispatchHindsight.lessons)
+    ? dispatchHindsight.lessons.slice(0, 3)
+    : [];
+  const dispatchHindsightLessonLines = dispatchHindsightLessons.map((lesson) => {
+    const kind = String(lesson?.kind || '').trim() || 'unknown';
+    const jobId = String(lesson?.jobId || '').trim() || 'unknown';
+    const failureClass = String(lesson?.from?.failureClass || '').trim() || 'unknown';
+    const workItems = Array.isArray(lesson?.workItemRefs) && lesson.workItemRefs.length > 0
+      ? lesson.workItemRefs.join(',')
+      : 'none';
+    const hint = String(lesson?.hint || '').trim() || '(none)';
+    return `- dispatch hindsight ${kind} jobId=${jobId} failure=${failureClass} wi=${workItems} hint=${hint}`;
+  });
+  const shouldRenderDispatchHindsight = dispatchHindsight
+    && ((Number.isFinite(dispatchHindsight.pairsAnalyzed) ? dispatchHindsight.pairsAnalyzed : 0) > 0
+      || dispatchHindsightLessonLines.length > 0);
   const dispatchWorkItems = report.signals.dispatch.workItems || {
     total: 0,
     blocked: 0,
@@ -927,6 +952,11 @@ export function renderLearnEvalReport(report) {
     `- dispatch workItems total=${dispatchWorkItems.total} blocked=${dispatchWorkItems.blocked} done=${dispatchWorkItems.done} blockedRate=${dispatchWorkItems.blockedRate} byType=${dispatchWorkItemsByType}`,
     `- dispatch workItemFailures ${dispatchWorkItemFailures}`,
     `- dispatch workItemRetries ${dispatchWorkItemRetries}`,
+    ...(shouldRenderDispatchHindsight ? [
+      `- dispatch hindsight pairs=${dispatchHindsight.pairsAnalyzed} comparedJobs=${dispatchHindsight.comparedJobs} resolved=${dispatchHindsight.resolvedBlockedTurns} repeatBlocked=${dispatchHindsight.repeatedBlockedTurns} regressions=${dispatchHindsight.regressions} lessons=${Array.isArray(dispatchHindsight.lessons) ? dispatchHindsight.lessons.length : 0}`,
+      `- dispatch hindsight topRepeatedFailureClasses ${dispatchHindsightTopFailures}`,
+      ...dispatchHindsightLessonLines,
+    ] : []),
     ...(report.signals.dispatch.latestArtifactPath ? [`- dispatch latestArtifact=${report.signals.dispatch.latestArtifactPath}`] : []),
     '',
     ...sections,

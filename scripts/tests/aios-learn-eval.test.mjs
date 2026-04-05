@@ -47,6 +47,7 @@ async function writeDispatchEvidence(rootDir, sessionId, {
   finalOutputs = 2,
   artifactName = 'dispatch-run-20260309T010600Z.json',
   workItemTelemetry = null,
+  jobRuns = null,
 } = {}) {
   const artifactPath = path.join('memory', 'context-db', 'sessions', sessionId, 'artifacts', artifactName);
   const artifactAbsPath = path.join(rootDir, artifactPath);
@@ -62,10 +63,12 @@ async function writeDispatchEvidence(rootDir, sessionId, {
         mode: 'dry-run',
         ok,
         executorRegistry: executors,
-        jobRuns: [
-          { jobId: 'phase.plan', status: 'simulated', output: { outputType: 'handoff' } },
-          ...(blockedJobs > 0 ? [{ jobId: 'merge.final-checks', status: 'blocked', output: { outputType: 'merged-handoff' } }] : [{ jobId: 'merge.final-checks', status: 'simulated', output: { outputType: 'merged-handoff' } }]),
-        ],
+        jobRuns: Array.isArray(jobRuns)
+          ? jobRuns
+          : [
+            { jobId: 'phase.plan', status: 'simulated', output: { outputType: 'handoff' } },
+            ...(blockedJobs > 0 ? [{ jobId: 'merge.final-checks', status: 'blocked', output: { outputType: 'merged-handoff' } }] : [{ jobId: 'merge.final-checks', status: 'simulated', output: { outputType: 'merged-handoff' } }]),
+          ],
         finalOutputs: Array.from({ length: finalOutputs }, (_, index) => ({ jobId: `job-${index + 1}`, outputType: 'handoff' })),
       },
       ...(workItemTelemetry && typeof workItemTelemetry === 'object' ? { workItemTelemetry } : {}),
@@ -656,6 +659,115 @@ test('buildLearnEvalReport routes blocked dispatch evidence to merge triage', as
   const rendered = renderLearnEvalReport(report);
   assert.match(rendered, /runbook\.dispatch-merge-triage/);
   assert.match(rendered, /dispatch runs=1 ok=0 blocked=1/);
+});
+
+test('buildLearnEvalReport compares consecutive dispatch artifacts to surface hindsight transitions', async () => {
+  const rootDir = await makeRootDir();
+  const sessionId = 'dispatch-hindsight';
+  await writeSession(rootDir, sessionId, { updatedAt: '2026-03-09T04:30:00.000Z' }, [
+    {
+      seq: 1,
+      ts: '2026-03-09T04:00:00.000Z',
+      status: 'running',
+      summary: 'Checkpoint 1',
+      nextActions: [],
+      artifacts: [],
+      telemetry: {
+        verification: { result: 'passed', evidence: 'quality-gate pre-pr' },
+        retryCount: 0,
+        elapsedMs: 900,
+      },
+    },
+  ]);
+
+  const phaseRun = { jobId: 'phase.plan', jobType: 'phase', role: 'planner', status: 'simulated', turnId: 'turn-plan', workItemRefs: ['wi.plan'], output: { outputType: 'handoff' } };
+  const mergeDoneRun = { jobId: 'merge.final-checks', jobType: 'merge-gate', role: 'merge-gate', status: 'simulated', turnId: 'turn-merge', workItemRefs: ['wi.merge'], output: { outputType: 'merged-handoff' } };
+  const mergeBlockedRun = { ...mergeDoneRun, status: 'blocked' };
+
+  await writeDispatchEvidence(rootDir, sessionId, {
+    seq: 1,
+    ts: '2026-03-09T04:06:00.000Z',
+    ok: true,
+    artifactName: 'dispatch-run-20260309T040600Z.json',
+    jobRuns: [phaseRun, mergeDoneRun],
+    workItemTelemetry: {
+      schemaVersion: 1,
+      generatedAt: '2026-03-09T04:06:00.000Z',
+      totals: { total: 2, queued: 0, running: 0, blocked: 0, done: 2 },
+      items: [
+        { itemId: 'phase.plan', itemType: 'phase', role: 'planner', status: 'done', failureClass: 'none', retryClass: 'none' },
+        { itemId: 'merge.final-checks', itemType: 'merge-gate', role: 'merge-gate', status: 'done', failureClass: 'none', retryClass: 'none' },
+      ],
+    },
+  });
+
+  await writeDispatchEvidence(rootDir, sessionId, {
+    seq: 2,
+    ts: '2026-03-09T04:07:00.000Z',
+    ok: false,
+    artifactName: 'dispatch-run-20260309T040700Z.json',
+    jobRuns: [phaseRun, mergeBlockedRun],
+    workItemTelemetry: {
+      schemaVersion: 1,
+      generatedAt: '2026-03-09T04:07:00.000Z',
+      totals: { total: 2, queued: 0, running: 0, blocked: 1, done: 1 },
+      items: [
+        { itemId: 'phase.plan', itemType: 'phase', role: 'planner', status: 'done', failureClass: 'none', retryClass: 'none' },
+        { itemId: 'merge.final-checks', itemType: 'merge-gate', role: 'merge-gate', status: 'blocked', failureClass: 'ownership-policy', retryClass: 'same-hypothesis' },
+      ],
+    },
+  });
+
+  await writeDispatchEvidence(rootDir, sessionId, {
+    seq: 3,
+    ts: '2026-03-09T04:08:00.000Z',
+    ok: false,
+    artifactName: 'dispatch-run-20260309T040800Z.json',
+    jobRuns: [phaseRun, mergeBlockedRun],
+    workItemTelemetry: {
+      schemaVersion: 1,
+      generatedAt: '2026-03-09T04:08:00.000Z',
+      totals: { total: 2, queued: 0, running: 0, blocked: 1, done: 1 },
+      items: [
+        { itemId: 'phase.plan', itemType: 'phase', role: 'planner', status: 'done', failureClass: 'none', retryClass: 'none' },
+        { itemId: 'merge.final-checks', itemType: 'merge-gate', role: 'merge-gate', status: 'blocked', failureClass: 'ownership-policy', retryClass: 'same-hypothesis' },
+      ],
+    },
+  });
+
+  await writeDispatchEvidence(rootDir, sessionId, {
+    seq: 4,
+    ts: '2026-03-09T04:09:00.000Z',
+    ok: true,
+    artifactName: 'dispatch-run-20260309T040900Z.json',
+    jobRuns: [phaseRun, mergeDoneRun],
+    workItemTelemetry: {
+      schemaVersion: 1,
+      generatedAt: '2026-03-09T04:09:00.000Z',
+      totals: { total: 2, queued: 0, running: 0, blocked: 0, done: 2 },
+      items: [
+        { itemId: 'phase.plan', itemType: 'phase', role: 'planner', status: 'done', failureClass: 'none', retryClass: 'none' },
+        { itemId: 'merge.final-checks', itemType: 'merge-gate', role: 'merge-gate', status: 'done', failureClass: 'none', retryClass: 'none' },
+      ],
+    },
+  });
+
+  const report = await buildLearnEvalReport({ sessionId, limit: 5 }, { rootDir });
+  const hindsight = report.signals.dispatch.hindsight;
+  assert.equal(hindsight.pairsAnalyzed, 3);
+  assert.equal(hindsight.comparedJobs, 6);
+  assert.equal(hindsight.regressions, 1);
+  assert.equal(hindsight.repeatedBlockedTurns, 1);
+  assert.equal(hindsight.resolvedBlockedTurns, 1);
+  assert.equal(hindsight.topRepeatedFailureClasses.some((item) => item.failureClass === 'ownership-policy' && item.count === 1), true);
+  assert.equal(hindsight.lessons.some((item) => item.kind === 'repeat-blocked' && item.jobId === 'merge.final-checks'), true);
+  assert.equal(hindsight.lessons.some((item) => item.kind === 'regression' && item.jobId === 'merge.final-checks'), true);
+  assert.equal(hindsight.lessons.some((item) => Array.isArray(item.suggestedCommands) && item.suggestedCommands.some((cmd) => cmd.includes('team --resume'))), true);
+
+  const rendered = renderLearnEvalReport(report);
+  assert.match(rendered, /dispatch hindsight pairs=3 comparedJobs=6/);
+  assert.match(rendered, /repeatBlocked=1 regressions=1/);
+  assert.match(rendered, /topRepeatedFailureClasses ownership-policy=1/);
 });
 test('runLearnEval preserves json and text output modes', async () => {
   const rootDir = await makeRootDir();
