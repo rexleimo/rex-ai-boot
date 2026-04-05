@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { readHudState, selectHudSessionId } from '../lib/hud/state.mjs';
+import { readHudDispatchSummary, readHudState, selectHudSessionId } from '../lib/hud/state.mjs';
 import { renderHud } from '../lib/hud/render.mjs';
 import { runTeamHistory } from '../lib/lifecycle/team-ops.mjs';
 
@@ -208,6 +208,76 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
   const rendered = renderHud(state, { preset: 'focused' });
   assert.match(rendered, /Dispatch Hindsight: pairs=1/);
   assert.match(rendered, /FixHint: \[runbook\.dispatch-merge-triage\]/);
+});
+
+test('readHudDispatchSummary includes latest dispatch, hindsight, and fix hint', async () => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-hud-summary-'));
+  const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');
+  const sessionId = 'dispatch-summary-session';
+  const sessionDir = path.join(sessionsRoot, sessionId);
+  const meta = makeSessionMeta({ sessionId, agent: 'codex-cli', updatedAt: '2026-04-05T03:00:00.000Z' });
+
+  await writeJson(path.join(sessionDir, 'meta.json'), meta);
+
+  const jobRuns = (attempts) => [
+    {
+      jobId: 'phase.implement.wi.1',
+      jobType: 'phase',
+      role: 'implementer',
+      status: 'blocked',
+      attempts,
+      output: { error: 'File policy violation' },
+    },
+    {
+      jobId: 'phase.plan',
+      jobType: 'phase',
+      role: 'planner',
+      status: 'simulated',
+      output: { outputType: 'handoff' },
+    },
+  ];
+
+  await writeJson(path.join(sessionDir, 'artifacts', 'dispatch-run-20260405T025900Z.json'), {
+    schemaVersion: 1,
+    kind: 'orchestration.dispatch-run',
+    sessionId,
+    persistedAt: '2026-04-05T02:59:00.000Z',
+    dispatchRun: {
+      ok: false,
+      mode: 'dry-run',
+      executorRegistry: ['local-dry-run'],
+      jobRuns: jobRuns(1),
+      finalOutputs: [],
+    },
+  });
+  await writeJson(path.join(sessionDir, 'artifacts', 'dispatch-run-20260405T030000Z.json'), {
+    schemaVersion: 1,
+    kind: 'orchestration.dispatch-run',
+    sessionId,
+    persistedAt: '2026-04-05T03:00:00.000Z',
+    dispatchRun: {
+      ok: false,
+      mode: 'dry-run',
+      executorRegistry: ['local-dry-run'],
+      jobRuns: jobRuns(2),
+      finalOutputs: [],
+    },
+  });
+
+  const summary = await readHudDispatchSummary({ rootDir, sessionId, provider: 'codex', meta });
+  assert.equal(summary.sessionId, sessionId);
+  assert.equal(summary.provider, 'codex');
+  assert.equal(summary.latestDispatch?.ok, false);
+  assert.equal(summary.latestDispatch?.jobCount, 2);
+  assert.equal(summary.latestDispatch?.blockedJobs, 1);
+  assert.ok(String(summary.latestDispatch?.artifactPath || '').includes('dispatch-run-20260405T030000Z.json'));
+  assert.equal(summary.dispatchHindsight?.pairsAnalyzed, 1);
+  assert.equal(summary.dispatchHindsight?.repeatedBlockedTurns, 1);
+  assert.equal(summary.dispatchFixHint?.targetId, 'runbook.dispatch-merge-triage');
+  assert.match(
+    summary.dispatchFixHint?.nextCommand ?? '',
+    /orchestrate --session dispatch-summary-session --dispatch local --execute dry-run --format json/
+  );
 });
 
 test('runTeamHistory includes dispatch hindsight summary and fix hint', async () => {

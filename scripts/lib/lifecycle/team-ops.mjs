@@ -1,4 +1,4 @@
-import { listContextDbSessions, readHudState } from '../hud/state.mjs';
+import { listContextDbSessions, readHudDispatchSummary, readHudState } from '../hud/state.mjs';
 import { normalizeHudPreset, renderHud } from '../hud/render.mjs';
 import { watchRenderLoop } from '../hud/watch.mjs';
 
@@ -183,7 +183,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
   const records = [];
   for (const meta of sessions) {
     const sessionId = normalizeText(meta.sessionId);
-    const state = await readHudState({ rootDir, sessionId, provider });
+    const state = await readHudDispatchSummary({ rootDir, sessionId, provider, meta });
     const hindsight = state.dispatchHindsight && typeof state.dispatchHindsight === 'object'
       ? state.dispatchHindsight
       : null;

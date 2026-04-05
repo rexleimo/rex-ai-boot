@@ -492,3 +492,70 @@ export async function readHudState({ rootDir, sessionId = '', provider = '' } = 
     warnings,
   };
 }
+
+export async function readHudDispatchSummary({ rootDir, sessionId = '', provider = '', meta = null, limit = 6 } = {}) {
+  const normalizedSessionId = normalizeText(sessionId || meta?.sessionId);
+  const warnings = [];
+  if (!normalizedSessionId) {
+    return {
+      schemaVersion: 1,
+      generatedAt: nowIso(),
+      sessionId: null,
+      provider: normalizeProvider(provider) || null,
+      latestDispatch: null,
+      dispatchHindsight: null,
+      dispatchFixHint: null,
+      warnings: ['Missing sessionId for dispatch summary.'],
+    };
+  }
+
+  const sessionMeta = meta && typeof meta === 'object'
+    ? meta
+    : await safeReadJson(path.join(getSessionsRoot(rootDir), normalizedSessionId, 'meta.json'));
+  if (!sessionMeta) {
+    warnings.push('Session meta.json missing or unreadable.');
+  }
+
+  const providerInferred = normalizeProvider(provider) || inferProviderFromAgent(sessionMeta?.agent || '');
+
+  const [dispatch, dispatchEvidence] = await Promise.all([
+    findLatestDispatchArtifact(rootDir, normalizedSessionId),
+    collectRecentDispatchEvidence(rootDir, normalizedSessionId, { limit }),
+  ]);
+
+  const latestDispatch = dispatch
+    ? {
+      ...dispatch,
+      provider: providerInferred,
+    }
+    : null;
+
+  let dispatchHindsight = null;
+  try {
+    dispatchHindsight = await buildHindsightEval({
+      rootDir,
+      meta: sessionMeta,
+      dispatchEvidence,
+    });
+  } catch (error) {
+    warnings.push(`Dispatch hindsight eval failed: ${clipText(formatErrorMessage(error), 160)}`);
+    dispatchHindsight = null;
+  }
+
+  const dispatchFixHint = buildDispatchFixHint({
+    sessionId: normalizedSessionId,
+    dispatchHindsight,
+    latestDispatchArtifactPath: latestDispatch?.artifactPath,
+  });
+
+  return {
+    schemaVersion: 1,
+    generatedAt: nowIso(),
+    sessionId: normalizedSessionId,
+    provider: providerInferred || null,
+    latestDispatch,
+    dispatchHindsight,
+    dispatchFixHint,
+    warnings,
+  };
+}
