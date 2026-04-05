@@ -63,6 +63,31 @@ test('selectHudSessionId picks latest provider session by updatedAt', async () =
   assert.equal(selection.source, 'provider-latest');
 });
 
+test('selectHudSessionId scales to many sessions', async () => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-hud-many-'));
+  const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');
+
+  const writeMany = async (prefix, agent, count, startHour) => {
+    for (let index = 0; index < count; index += 1) {
+      const sessionId = `${prefix}-${String(index).padStart(2, '0')}`;
+      const hour = startHour;
+      const minute = index;
+      await writeJson(
+        path.join(sessionsRoot, sessionId, 'meta.json'),
+        makeSessionMeta({ sessionId, agent, updatedAt: `2026-04-05T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00.000Z` })
+      );
+    }
+  };
+
+  await writeMany('codex', 'codex-cli', 25, 0);
+  await writeMany('claude', 'claude-code', 25, 0);
+
+  const selection = await selectHudSessionId({ rootDir, provider: 'codex' });
+  assert.equal(selection.sessionId, 'codex-24');
+  assert.equal(selection.agent, 'codex-cli');
+  assert.equal(selection.source, 'provider-latest');
+});
+
 test('readHudState includes latest checkpoint and dispatch evidence', async () => {
   const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-hud-'));
   const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');

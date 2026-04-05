@@ -118,6 +118,33 @@ function compareIsoDesc(left = '', right = '') {
   return String(right || '').localeCompare(String(left || ''));
 }
 
+function normalizeConcurrency(value, fallback = 8) {
+  const parsed = Number.parseInt(String(value ?? '').trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.min(32, Math.max(1, Math.floor(parsed)));
+}
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+
+  const resolvedConcurrency = normalizeConcurrency(concurrency, 1);
+  const results = new Array(items.length);
+  let cursor = 0;
+
+  const workerCount = Math.min(resolvedConcurrency, items.length);
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= items.length) break;
+      results[index] = await mapper(items[index], index);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
+
 export async function listContextDbSessions(rootDir, { agent = '', limit = DEFAULT_SESSION_SCAN_LIMIT } = {}) {
   const sessionsRoot = getSessionsRoot(rootDir);
   if (!existsSync(sessionsRoot)) return [];
@@ -132,23 +159,28 @@ export async function listContextDbSessions(rootDir, { agent = '', limit = DEFAU
 
   const metas = [];
   const max = Number.isFinite(limit) ? Math.max(1, Math.floor(limit)) : DEFAULT_SESSION_SCAN_LIMIT;
+  const candidates = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => normalizeText(entry.name))
+    .filter(Boolean)
+    .sort((left, right) => String(right).localeCompare(String(left)))
+    .slice(0, max * 4);
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const sessionId = entry.name;
+  const parsed = await mapWithConcurrency(candidates, 8, async (sessionId) => {
     const meta = await safeReadJson(path.join(sessionsRoot, sessionId, 'meta.json'));
-    if (!meta || typeof meta !== 'object') continue;
-    if (requestedAgent && normalizeText(meta.agent) !== requestedAgent) continue;
+    if (!meta || typeof meta !== 'object') return null;
+    if (requestedAgent && normalizeText(meta.agent) !== requestedAgent) return null;
     const updatedAt = normalizeText(meta.updatedAt) || normalizeText(meta.createdAt);
-    metas.push({
+    return {
       ...meta,
       sessionId: normalizeText(meta.sessionId) || sessionId,
       updatedAt,
-    });
-    if (metas.length >= max * 4) {
-      // Avoid unbounded scans on very large session trees.
-      break;
-    }
+    };
+  });
+
+  for (const meta of parsed) {
+    if (!meta) continue;
+    metas.push(meta);
   }
 
   metas.sort((left, right) => compareIsoDesc(left.updatedAt, right.updatedAt));
