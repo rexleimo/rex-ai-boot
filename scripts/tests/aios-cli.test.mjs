@@ -223,6 +223,24 @@ test('parseArgs accepts team status/history subcommands', () => {
   assert.equal(status.options.provider, 'codex');
   assert.equal(status.options.json, true);
 
+  const statusDefaults = parseArgs(['team', 'status']);
+  assert.equal(statusDefaults.command, 'team');
+  assert.equal(statusDefaults.options.subcommand, 'status');
+  assert.equal(statusDefaults.options.preset, 'focused');
+  assert.equal(statusDefaults.options.watch, false);
+
+  const statusWatchDefaults = parseArgs(['team', 'status', '--watch']);
+  assert.equal(statusWatchDefaults.command, 'team');
+  assert.equal(statusWatchDefaults.options.subcommand, 'status');
+  assert.equal(statusWatchDefaults.options.watch, true);
+  assert.equal(statusWatchDefaults.options.preset, 'minimal');
+
+  const statusWatchExplicitPreset = parseArgs(['team', 'status', '--preset', 'full', '--watch']);
+  assert.equal(statusWatchExplicitPreset.command, 'team');
+  assert.equal(statusWatchExplicitPreset.options.subcommand, 'status');
+  assert.equal(statusWatchExplicitPreset.options.watch, true);
+  assert.equal(statusWatchExplicitPreset.options.preset, 'full');
+
   const historyDefaults = parseArgs(['team', 'history']);
   assert.equal(historyDefaults.command, 'team');
   assert.equal(historyDefaults.options.subcommand, 'history');

@@ -188,6 +188,7 @@ function parseTeamStatusArgs(argv) {
   const rest = argv.slice(2);
   const options = createDefaultTeamStatusOptions();
   let help = false;
+  let presetExplicit = false;
 
   for (let index = 0; index < rest.length; index += 1) {
     const arg = rest[index];
@@ -218,6 +219,7 @@ function parseTeamStatusArgs(argv) {
         index += 1;
         break;
       case '--preset':
+        presetExplicit = true;
         options.preset = normalizeHudPreset(takeValue(rest, index, '--preset'));
         index += 1;
         break;
@@ -241,6 +243,9 @@ function parseTeamStatusArgs(argv) {
   options.clientId = TEAM_PROVIDER_CLIENT_MAP[options.provider];
   if (!options.sessionId && options.resumeSessionId) {
     options.sessionId = options.resumeSessionId;
+  }
+  if (options.watch && !presetExplicit) {
+    options.preset = 'minimal';
   }
 
   return {
