@@ -20,6 +20,8 @@ const DEFAULT_SESSION_SCAN_LIMIT = 200;
 const DEFAULT_CHECKPOINT_TAIL_BYTES = 1_000_000;
 const CHECKPOINT_TAIL_CACHE_MAX_ENTRIES = 32;
 const CHECKPOINT_TAIL_CACHE = new Map();
+const JSON_READ_CACHE_MAX_ENTRIES = 64;
+const JSON_READ_CACHE = new Map();
 const DISPATCH_INDEX_CACHE_TTL_MS = 2000;
 const DISPATCH_INDEX_CACHE_MAX_ENTRIES = 32;
 const DISPATCH_INDEX_CACHE_MAX_NAMES = 200;
@@ -76,6 +78,52 @@ async function safeReadJson(filePath) {
   } catch {
     return null;
   }
+}
+
+async function safeReadJsonCached(filePath) {
+  const cacheKey = normalizeText(filePath);
+  if (!cacheKey) return null;
+
+  let stats = null;
+  try {
+    stats = await fs.stat(filePath);
+  } catch {
+    JSON_READ_CACHE.delete(cacheKey);
+    return null;
+  }
+
+  const mtimeMs = Number.isFinite(stats.mtimeMs) ? stats.mtimeMs : 0;
+  const size = Number(stats.size) || 0;
+  const cached = JSON_READ_CACHE.get(cacheKey);
+  if (cached && cached.mtimeMs === mtimeMs && cached.size === size) {
+    bumpLruCache(JSON_READ_CACHE, cacheKey);
+    return cached.value;
+  }
+
+  let value = null;
+  try {
+    const raw = await fs.readFile(filePath, 'utf8');
+    if (!raw.trim()) {
+      value = null;
+    } else {
+      value = JSON.parse(raw);
+    }
+  } catch {
+    value = null;
+  }
+
+  setLruCache(
+    JSON_READ_CACHE,
+    cacheKey,
+    {
+      mtimeMs,
+      size,
+      value,
+    },
+    JSON_READ_CACHE_MAX_ENTRIES
+  );
+
+  return value;
 }
 
 function getCheckpointTailCacheKey(filePath, maxBytes) {
@@ -613,8 +661,8 @@ export async function readHudState({ rootDir, sessionId = '', provider = '' } = 
   const sessionDir = path.join(sessionsRoot, selection.sessionId);
 
   const [meta, state, checkpoint, dispatch, dispatchEvidence] = await Promise.all([
-    safeReadJson(path.join(sessionDir, 'meta.json')),
-    safeReadJson(path.join(sessionDir, 'state.json')),
+    safeReadJsonCached(path.join(sessionDir, 'meta.json')),
+    safeReadJsonCached(path.join(sessionDir, 'state.json')),
     readLastJsonLine(path.join(sessionDir, 'l1-checkpoints.jsonl')),
     findLatestDispatchArtifact(rootDir, selection.sessionId),
     collectRecentDispatchEvidence(rootDir, selection.sessionId),
@@ -703,7 +751,7 @@ export async function readHudDispatchSummary({ rootDir, sessionId = '', provider
 
   const sessionMeta = meta && typeof meta === 'object'
     ? meta
-    : await safeReadJson(path.join(getSessionsRoot(rootDir), normalizedSessionId, 'meta.json'));
+    : await safeReadJsonCached(path.join(getSessionsRoot(rootDir), normalizedSessionId, 'meta.json'));
   if (!sessionMeta) {
     warnings.push('Session meta.json missing or unreadable.');
   }

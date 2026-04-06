@@ -296,6 +296,58 @@ test('readHudState caches latest checkpoint tail until file changes', async () =
   }
 });
 
+test('readHudState caches meta/state JSON reads until files change', async () => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-hud-json-cache-'));
+  const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');
+  const sessionId = 'json-cache-session';
+  const sessionDir = path.join(sessionsRoot, sessionId);
+  const metaPath = path.join(sessionDir, 'meta.json');
+  const statePath = path.join(sessionDir, 'state.json');
+
+  await writeJson(
+    metaPath,
+    makeSessionMeta({ sessionId, agent: 'codex-cli', updatedAt: '2026-04-06T00:00:00.000Z' })
+  );
+  await writeJson(statePath, { sessionId, status: 'running', nextActions: ['A'] });
+  await writeJsonLines(path.join(sessionDir, 'l1-checkpoints.jsonl'), [
+    {
+      seq: 1,
+      ts: '2026-04-06T00:00:00.000Z',
+      status: 'running',
+      summary: 'First checkpoint',
+      nextActions: [],
+      artifacts: [],
+    },
+  ]);
+
+  const originalReadFile = fs.readFile;
+  const reads = { meta: 0, state: 0 };
+  fs.readFile = async (filePath, ...rest) => {
+    if (String(filePath) === metaPath) reads.meta += 1;
+    if (String(filePath) === statePath) reads.state += 1;
+    return await originalReadFile(filePath, ...rest);
+  };
+
+  try {
+    const first = await readHudState({ rootDir, sessionId });
+    const second = await readHudState({ rootDir, sessionId });
+
+    assert.equal(first.session?.sessionId, sessionId);
+    assert.equal(first.sessionState?.nextActions?.[0], 'A');
+    assert.equal(second.session?.sessionId, sessionId);
+    assert.equal(second.sessionState?.nextActions?.[0], 'A');
+    assert.deepEqual(reads, { meta: 1, state: 1 });
+
+    await writeJson(statePath, { sessionId, status: 'running', nextActions: ['B'] });
+
+    const third = await readHudState({ rootDir, sessionId });
+    assert.equal(third.sessionState?.nextActions?.[0], 'B');
+    assert.deepEqual(reads, { meta: 1, state: 2 });
+  } finally {
+    fs.readFile = originalReadFile;
+  }
+});
+
 test('readHudDispatchSummary includes latest dispatch, hindsight, and fix hint', async () => {
   const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-hud-summary-'));
   const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');
