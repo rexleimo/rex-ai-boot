@@ -715,6 +715,53 @@ test('runTeamHistory includes dispatch hindsight summary and fix hint', async ()
   );
 });
 
+test('runTeamHistory fast mode skips dispatch hindsight and fix hint', async () => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-team-history-fast-'));
+  const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');
+  const sessionId = 'history-fast-session';
+  const sessionDir = path.join(sessionsRoot, sessionId);
+
+  await writeJson(
+    path.join(sessionDir, 'meta.json'),
+    makeSessionMeta({ sessionId, agent: 'codex-cli', updatedAt: '2026-04-06T03:00:00.000Z' })
+  );
+  await writeJson(path.join(sessionDir, 'artifacts', 'dispatch-run-20260406T030000Z.json'), {
+    schemaVersion: 1,
+    kind: 'orchestration.dispatch-run',
+    sessionId,
+    persistedAt: '2026-04-06T03:00:00.000Z',
+    dispatchRun: {
+      ok: false,
+      mode: 'dry-run',
+      executorRegistry: ['local-dry-run'],
+      jobRuns: [
+        {
+          jobId: 'phase.implement.wi.1',
+          jobType: 'phase',
+          role: 'implementer',
+          status: 'blocked',
+          attempts: 1,
+          output: { error: 'File policy violation' },
+        },
+      ],
+      finalOutputs: [],
+    },
+  });
+
+  const logs = [];
+  await runTeamHistory(
+    { provider: 'codex', limit: 5, json: true, fast: true },
+    { rootDir, io: { log: (line) => logs.push(line) } }
+  );
+  const report = JSON.parse(logs.at(-1));
+  assert.equal(report.fast, true);
+  assert.equal(report.records.length, 1);
+  const record = report.records[0];
+  assert.equal(record.sessionId, sessionId);
+  assert.equal(record.dispatchHindsight, null);
+  assert.equal(record.dispatchFixHint, null);
+});
+
 test('runTeamHistory preserves session ordering under concurrency', async () => {
   const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-team-history-order-'));
   const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');

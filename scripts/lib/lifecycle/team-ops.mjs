@@ -200,17 +200,33 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
   const resolvedLimit = Number.isFinite(limit) && limit > 0 ? limit : 10;
   const json = rawOptions.json === true;
   const concurrency = normalizeConcurrency(rawOptions.concurrency, 4);
+  const fast = rawOptions.fast === true;
+  const sinceIso = normalizeText(rawOptions.since);
+  const statusFilter = normalizeText(rawOptions.status);
 
   const agent = provider === 'claude'
     ? 'claude-code'
     : provider === 'gemini'
       ? 'gemini-cli'
       : 'codex-cli';
-  const sessions = await listContextDbSessions(rootDir, { agent, limit: resolvedLimit });
 
-  const records = await mapWithConcurrency(sessions, concurrency, async (meta) => {
+  const scanLimit = (sinceIso || statusFilter) ? Math.max(resolvedLimit, resolvedLimit * 8) : resolvedLimit;
+  const sessions = await listContextDbSessions(rootDir, { agent, limit: scanLimit });
+  const sinceMs = sinceIso ? Date.parse(sinceIso) : NaN;
+
+  const filteredSessions = sessions.filter((meta) => {
+    if (statusFilter && normalizeText(meta?.status) !== statusFilter) return false;
+    if (sinceIso) {
+      const updatedAt = normalizeText(meta?.updatedAt) || normalizeText(meta?.createdAt);
+      const updatedMs = updatedAt ? Date.parse(updatedAt) : NaN;
+      if (!Number.isFinite(updatedMs) || !Number.isFinite(sinceMs) || updatedMs < sinceMs) return false;
+    }
+    return true;
+  }).slice(0, resolvedLimit);
+
+  const records = await mapWithConcurrency(filteredSessions, concurrency, async (meta) => {
     const sessionId = normalizeText(meta.sessionId);
-    const state = await readHudDispatchSummary({ rootDir, sessionId, provider, meta });
+    const state = await readHudDispatchSummary({ rootDir, sessionId, provider, meta, includeHindsight: !fast });
     const hindsight = state.dispatchHindsight && typeof state.dispatchHindsight === 'object'
       ? state.dispatchHindsight
       : null;
@@ -266,6 +282,9 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
       provider,
       agent,
       limit: resolvedLimit,
+      fast,
+      since: sinceIso || null,
+      status: statusFilter || null,
       summary,
       records,
     }, null, 2));

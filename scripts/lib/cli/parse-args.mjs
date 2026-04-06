@@ -258,8 +258,21 @@ function createDefaultTeamHistoryOptions() {
     clientId: TEAM_PROVIDER_CLIENT_MAP.codex,
     limit: 10,
     concurrency: 4,
+    fast: false,
+    since: '',
+    status: '',
     json: false,
   };
+}
+
+function normalizeSinceIso(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return '';
+  const parsed = Date.parse(text);
+  if (!Number.isFinite(parsed)) {
+    throw new Error('--since must be an ISO timestamp (e.g., 2026-04-06T00:00:00.000Z)');
+  }
+  return new Date(parsed).toISOString();
 }
 
 function parseTeamHistoryArgs(argv) {
@@ -286,6 +299,17 @@ function parseTeamHistoryArgs(argv) {
         break;
       case '--concurrency':
         options.concurrency = parsePositiveInteger(takeValue(rest, index, '--concurrency'), '--concurrency');
+        index += 1;
+        break;
+      case '--fast':
+        options.fast = true;
+        break;
+      case '--since':
+        options.since = normalizeSinceIso(takeValue(rest, index, '--since'));
+        index += 1;
+        break;
+      case '--status':
+        options.status = String(takeValue(rest, index, '--status') ?? '').trim();
         index += 1;
         break;
       case '--json':

@@ -796,7 +796,14 @@ export async function readHudState({ rootDir, sessionId = '', provider = '' } = 
   };
 }
 
-export async function readHudDispatchSummary({ rootDir, sessionId = '', provider = '', meta = null, limit = 6 } = {}) {
+export async function readHudDispatchSummary({
+  rootDir,
+  sessionId = '',
+  provider = '',
+  meta = null,
+  limit = 6,
+  includeHindsight = true,
+} = {}) {
   const normalizedSessionId = normalizeText(sessionId || meta?.sessionId);
   const warnings = [];
   if (!normalizedSessionId) {
@@ -833,22 +840,24 @@ export async function readHudDispatchSummary({ rootDir, sessionId = '', provider
     }
     : null;
 
-  const artifactCache = {};
-  if (latestDispatch?.artifactPath && latestDispatch.raw && typeof latestDispatch.raw === 'object') {
-    artifactCache[latestDispatch.artifactPath] = latestDispatch.raw;
-  }
-
   let dispatchHindsight = null;
-  try {
-    dispatchHindsight = await buildHindsightEval({
-      rootDir,
-      meta: sessionMeta,
-      dispatchEvidence,
-      artifactCache,
-    });
-  } catch (error) {
-    warnings.push(`Dispatch hindsight eval failed: ${clipText(formatErrorMessage(error), 160)}`);
-    dispatchHindsight = null;
+  if (includeHindsight) {
+    const artifactCache = {};
+    if (latestDispatch?.artifactPath && latestDispatch.raw && typeof latestDispatch.raw === 'object') {
+      artifactCache[latestDispatch.artifactPath] = latestDispatch.raw;
+    }
+
+    try {
+      dispatchHindsight = await buildHindsightEval({
+        rootDir,
+        meta: sessionMeta,
+        dispatchEvidence,
+        artifactCache,
+      });
+    } catch (error) {
+      warnings.push(`Dispatch hindsight eval failed: ${clipText(formatErrorMessage(error), 160)}`);
+      dispatchHindsight = null;
+    }
   }
 
   const dispatchFixHint = buildDispatchFixHint({
