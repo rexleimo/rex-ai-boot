@@ -1,6 +1,8 @@
 import { readHudState } from '../hud/state.mjs';
 import { normalizeHudPreset, renderHud } from '../hud/render.mjs';
-import { watchRenderLoop } from '../hud/watch.mjs';
+import { createThrottledWatchRender, watchRenderLoop } from '../hud/watch.mjs';
+
+const FAST_WATCH_DATA_REFRESH_MS = 1000;
 
 function normalizeText(value) {
   return String(value ?? '').trim();
@@ -51,7 +53,7 @@ export async function runHud(rawOptions = {}, { rootDir, io = console, env = pro
     return await renderOnce();
   }
 
-  await watchRenderLoop(async () => {
+  const readAndRender = async () => {
     const state = await readHudState({
       rootDir,
       sessionId: options.sessionId,
@@ -59,7 +61,15 @@ export async function runHud(rawOptions = {}, { rootDir, io = console, env = pro
       fast: fastWatchMinimal,
     });
     return renderHud(state, { preset: options.preset });
-  }, {
+  };
+
+  const watchRender = fastWatchMinimal
+    ? createThrottledWatchRender(readAndRender, {
+      minIntervalMs: Math.max(options.intervalMs, FAST_WATCH_DATA_REFRESH_MS),
+    })
+    : readAndRender;
+
+  await watchRenderLoop(watchRender, {
     intervalMs: options.intervalMs,
     env,
   });

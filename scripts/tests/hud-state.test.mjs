@@ -7,7 +7,7 @@ import test from 'node:test';
 import { buildHindsightEval } from '../lib/harness/hindsight-eval.mjs';
 import { readHudDispatchSummary, readHudState, selectHudSessionId } from '../lib/hud/state.mjs';
 import { renderHud } from '../lib/hud/render.mjs';
-import { watchRenderLoop } from '../lib/hud/watch.mjs';
+import { createThrottledWatchRender, watchRenderLoop } from '../lib/hud/watch.mjs';
 import { runTeamHistory } from '../lib/lifecycle/team-ops.mjs';
 
 async function writeJson(filePath, value) {
@@ -246,6 +246,33 @@ test('watchRenderLoop skips redraw when output is unchanged', async () => {
   const stdout = stdoutWrites.join('');
   assert.equal(stdout.split('hello').length - 1, 1);
   assert.equal(stdout.split('world').length - 1, 1);
+});
+
+test('createThrottledWatchRender limits read cadence while reusing last output', async () => {
+  let nowMs = 0;
+  let callCount = 0;
+  const throttledRender = createThrottledWatchRender(async () => {
+    callCount += 1;
+    return `frame-${callCount}`;
+  }, {
+    minIntervalMs: 1000,
+    nowFn: () => nowMs,
+  });
+
+  assert.equal(await throttledRender(), 'frame-1');
+  assert.equal(callCount, 1);
+
+  nowMs = 100;
+  assert.equal(await throttledRender(), 'frame-1');
+  assert.equal(callCount, 1);
+
+  nowMs = 999;
+  assert.equal(await throttledRender(), 'frame-1');
+  assert.equal(callCount, 1);
+
+  nowMs = 1000;
+  assert.equal(await throttledRender(), 'frame-2');
+  assert.equal(callCount, 2);
 });
 
 test('readHudState includes latest checkpoint and dispatch evidence', async () => {

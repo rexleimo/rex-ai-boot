@@ -1,6 +1,8 @@
 import { listContextDbSessions, readHudDispatchSummary, readHudState } from '../hud/state.mjs';
 import { normalizeHudPreset, renderHud } from '../hud/render.mjs';
-import { watchRenderLoop } from '../hud/watch.mjs';
+import { createThrottledWatchRender, watchRenderLoop } from '../hud/watch.mjs';
+
+const FAST_WATCH_DATA_REFRESH_MS = 1000;
 
 function normalizeText(value) {
   return String(value ?? '').trim();
@@ -77,10 +79,18 @@ export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, en
     return await renderOnce();
   }
 
-  await watchRenderLoop(async () => {
+  const readAndRender = async () => {
     const state = await readHudState({ rootDir, sessionId, provider, fast: fastWatchMinimal });
     return renderHud(state, { preset });
-  }, { intervalMs, env });
+  };
+
+  const watchRender = fastWatchMinimal
+    ? createThrottledWatchRender(readAndRender, {
+      minIntervalMs: Math.max(intervalMs, FAST_WATCH_DATA_REFRESH_MS),
+    })
+    : readAndRender;
+
+  await watchRenderLoop(watchRender, { intervalMs, env });
 
   return { exitCode: process.exitCode ?? 0 };
 }

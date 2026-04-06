@@ -10,6 +10,50 @@ function shouldAllowNonTtyWatch(env = process.env) {
   return parseBoolEnv(env?.CI, false);
 }
 
+export function createThrottledWatchRender(
+  render,
+  {
+    minIntervalMs = 1000,
+    nowFn = () => Date.now(),
+  } = {},
+) {
+  if (typeof render !== 'function') {
+    throw new Error('createThrottledWatchRender requires a render() function');
+  }
+
+  const minInterval = Number.isFinite(minIntervalMs) ? Math.max(1, Math.floor(minIntervalMs)) : 1000;
+  let hasValue = false;
+  let lastOutput = '';
+  let lastRefreshAt = 0;
+  let inFlight = null;
+
+  const refresh = async () => {
+    const output = await render();
+    lastOutput = String(output || '');
+    hasValue = true;
+    lastRefreshAt = nowFn();
+    return lastOutput;
+  };
+
+  return async () => {
+    const now = nowFn();
+    if (hasValue && now - lastRefreshAt < minInterval) {
+      return lastOutput;
+    }
+
+    if (inFlight) {
+      return await inFlight;
+    }
+
+    inFlight = refresh();
+    try {
+      return await inFlight;
+    } finally {
+      inFlight = null;
+    }
+  };
+}
+
 export async function watchRenderLoop(
   render,
   {
