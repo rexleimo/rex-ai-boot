@@ -50,27 +50,38 @@ export function planUpdate(rawOptions = {}) {
   };
 }
 
-export async function runUpdate(rawOptions = {}, { rootDir, projectRoot = rootDir, io = console } = {}) {
+export async function runUpdate(rawOptions = {}, { rootDir, projectRoot = rootDir, io = console, deps = {} } = {}) {
   const { options } = planUpdate(rawOptions);
+  const browserInstaller = deps.installBrowserMcp ?? installBrowserMcp;
+  const browserDoctor = deps.doctorBrowserMcp ?? doctorBrowserMcp;
+  const shellInstaller = deps.installContextDbShell ?? installContextDbShell;
+  const privacyInstaller = deps.installPrivacyGuard ?? installPrivacyGuard;
+  const shellDoctor = deps.doctorContextDbShell ?? doctorContextDbShell;
+  const skillsInstaller = deps.installContextDbSkills ?? installContextDbSkills;
+  const skillsDoctor = deps.doctorContextDbSkills ?? doctorContextDbSkills;
+  const nativeUpdater = deps.updateNativeEnhancements ?? updateNativeEnhancements;
+  const agentsInstaller = deps.installOrchestratorAgents ?? installOrchestratorAgents;
+  const superpowersInstaller = deps.installSuperpowers ?? installSuperpowers;
+  const superpowersDoctor = deps.doctorSuperpowers ?? doctorSuperpowers;
   io.log(`Update components: ${options.components.join(',')}`);
 
   if (hasComponent(options.components, 'browser')) {
-    await installBrowserMcp({ rootDir, skipPlaywrightInstall: !options.withPlaywrightInstall, io });
+    await browserInstaller({ rootDir, skipPlaywrightInstall: !options.withPlaywrightInstall, io });
     if (!options.skipDoctor) {
-      await doctorBrowserMcp({ rootDir, io });
+      await browserDoctor({ rootDir, fix: true, io });
     }
   }
 
   if (hasComponent(options.components, 'shell')) {
-    await installContextDbShell({ rootDir, mode: options.wrapMode, force: true, io });
-    await installPrivacyGuard({ rootDir, io });
+    await shellInstaller({ rootDir, mode: options.wrapMode, force: true, io });
+    await privacyInstaller({ rootDir, io });
     if (!options.skipDoctor) {
-      await doctorContextDbShell({ io });
+      await shellDoctor({ io });
     }
   }
 
   if (hasComponent(options.components, 'skills')) {
-    await installContextDbSkills({
+    await skillsInstaller({
       rootDir,
       projectRoot,
       client: options.client,
@@ -81,12 +92,12 @@ export async function runUpdate(rawOptions = {}, { rootDir, projectRoot = rootDi
       io,
     });
     if (!options.skipDoctor) {
-      await doctorContextDbSkills({ rootDir, projectRoot, client: options.client, scope: options.scope, selectedSkills: options.skills, io });
+      await skillsDoctor({ rootDir, projectRoot, client: options.client, scope: options.scope, selectedSkills: options.skills, io });
     }
   }
 
   if (hasComponent(options.components, 'native')) {
-    await updateNativeEnhancements({
+    await nativeUpdater({
       rootDir,
       projectRoot,
       client: options.client,
@@ -95,13 +106,13 @@ export async function runUpdate(rawOptions = {}, { rootDir, projectRoot = rootDi
   }
 
   if (hasComponent(options.components, 'agents')) {
-    await installOrchestratorAgents({ rootDir, client: options.client, io });
+    await agentsInstaller({ rootDir, client: options.client, io });
   }
 
   if (hasComponent(options.components, 'superpowers')) {
-    await installSuperpowers({ update: true, force: true, io });
+    await superpowersInstaller({ update: true, force: true, io });
     if (!options.skipDoctor) {
-      const result = await doctorSuperpowers({ io });
+      const result = await superpowersDoctor({ io });
       if (result.errors > 0) {
         throw new Error(`doctor-superpowers failed (${result.errors} errors)`);
       }

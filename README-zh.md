@@ -342,6 +342,8 @@ TUI 可见变化提示：
 - 全局 Skills：`install/update/uninstall/doctor-contextdb-skills.*`
 - Superpowers：`install/update/doctor-superpowers.*`
 
+现在 `setup --components browser` / `update --components browser` 默认会以 auto-heal 模式运行 browser doctor（等价包含 `--fix`），当默认 `cdpPort` 不可达时会自动尝试恢复。
+
 CDP 服务常用命令（macOS）：
 
 ```bash

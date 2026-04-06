@@ -343,6 +343,8 @@ If you prefer explicit per-component lifecycle, use the individual scripts in `s
 - Global skills: `install/update/uninstall/doctor-contextdb-skills.*`
 - Superpowers: `install/update/doctor-superpowers.*`
 
+`setup --components browser` / `update --components browser` now runs browser doctor with auto-heal (`--fix`) by default, so unreachable default `cdpPort` will try to recover automatically.
+
 CDP service quick commands (macOS):
 
 ```bash

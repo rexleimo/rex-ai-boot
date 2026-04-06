@@ -3,8 +3,9 @@ import test from 'node:test';
 
 import { planDoctor } from '../lib/lifecycle/doctor.mjs';
 import { planEntropyGc } from '../lib/lifecycle/entropy-gc.mjs';
-import { planSetup } from '../lib/lifecycle/setup.mjs';
+import { planSetup, runSetup } from '../lib/lifecycle/setup.mjs';
 import { planUninstall } from '../lib/lifecycle/uninstall.mjs';
+import { runUpdate } from '../lib/lifecycle/update.mjs';
 
 test('planSetup uses the current lifecycle defaults', () => {
   const plan = planSetup();
@@ -57,4 +58,50 @@ test('planEntropyGc preserves explicit options', () => {
   assert.equal(plan.options.format, 'json');
   assert.match(plan.preview, /entropy-gc dry-run/);
   assert.match(plan.preview, /--retain 9/);
+});
+
+test('runSetup browser flow enables doctor auto-heal by default', async () => {
+  const calls = [];
+  const io = { log: () => {} };
+  await runSetup({
+    components: ['browser'],
+    skipPlaywrightInstall: true,
+    skipDoctor: false,
+  }, {
+    rootDir: '/tmp/aios-test',
+    projectRoot: '/tmp/aios-test',
+    io,
+    deps: {
+      installBrowserMcp: async (options) => { calls.push({ kind: 'install', options }); },
+      doctorBrowserMcp: async (options) => { calls.push({ kind: 'doctor', options }); },
+    },
+  });
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].kind, 'install');
+  assert.equal(calls[1].kind, 'doctor');
+  assert.equal(calls[1].options.fix, true);
+});
+
+test('runUpdate browser flow enables doctor auto-heal by default', async () => {
+  const calls = [];
+  const io = { log: () => {} };
+  await runUpdate({
+    components: ['browser'],
+    withPlaywrightInstall: false,
+    skipDoctor: false,
+  }, {
+    rootDir: '/tmp/aios-test',
+    projectRoot: '/tmp/aios-test',
+    io,
+    deps: {
+      installBrowserMcp: async (options) => { calls.push({ kind: 'install', options }); },
+      doctorBrowserMcp: async (options) => { calls.push({ kind: 'doctor', options }); },
+    },
+  });
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].kind, 'install');
+  assert.equal(calls[1].kind, 'doctor');
+  assert.equal(calls[1].options.fix, true);
 });
