@@ -177,6 +177,7 @@ Options:
   --json                        (team status/history) Output structured JSON instead of text
   --concurrency <n>             (team history) Process sessions concurrently (default: 4)
   --fast                        (team history) Skip dispatch hindsight evaluation for faster scans
+  --fast                        (team status/hud) In --watch + minimal preset, skip heavy reads that do not affect minimal output
   --since <iso>                 (team history) Only include sessions updated at/after ISO timestamp
   --status <value>              (team history) Only include sessions with matching meta.status
   --preset <minimal|focused|full> (team status) Rendering preset (default: focused; with --watch defaults to minimal unless --preset provided)
@@ -192,6 +193,7 @@ Options:
   --provider <codex|claude|gemini>
   --preset <minimal|focused|full> Rendering preset (default: focused; with --watch defaults to minimal unless --preset provided)
   --watch                       Refresh display on an interval (TTY-only)
+  --fast                        In --watch + minimal preset, skip heavy reads that do not affect minimal output
   --interval-ms <n>             Watch refresh interval in ms (default: 1000)
   --json                        Output structured JSON instead of text
   -h, --help

@@ -456,6 +456,86 @@ test('readHudState caches latest checkpoint tail until file changes', async () =
   }
 });
 
+test('readHudState fast mode skips non-minimal heavy reads', async () => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-hud-fast-state-'));
+  const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');
+  const sessionId = 'fast-state-session';
+  const sessionDir = path.join(sessionsRoot, sessionId);
+  const statePath = path.join(sessionDir, 'state.json');
+  const checkpointPath = path.join(sessionDir, 'l1-checkpoints.jsonl');
+
+  await writeJson(
+    path.join(sessionDir, 'meta.json'),
+    makeSessionMeta({ sessionId, agent: 'codex-cli', updatedAt: '2026-04-06T02:00:00.000Z' })
+  );
+  await writeJson(statePath, { sessionId, status: 'running', nextActions: ['inspect'] });
+  await writeJsonLines(checkpointPath, [
+    {
+      seq: 1,
+      ts: '2026-04-06T02:00:00.000Z',
+      status: 'running',
+      summary: 'checkpoint should be skipped in fast mode',
+      nextActions: [],
+      artifacts: [],
+    },
+  ]);
+  await writeJson(path.join(sessionDir, 'artifacts', 'dispatch-run-20260406T020000Z.json'), {
+    schemaVersion: 1,
+    kind: 'orchestration.dispatch-run',
+    sessionId,
+    persistedAt: '2026-04-06T02:00:00.000Z',
+    dispatchRun: {
+      ok: false,
+      mode: 'dry-run',
+      executorRegistry: ['local-dry-run'],
+      jobRuns: [
+        {
+          jobId: 'phase.implement.wi.1',
+          jobType: 'phase',
+          role: 'implementer',
+          status: 'blocked',
+          attempts: 1,
+          output: { error: 'File policy violation' },
+        },
+      ],
+      finalOutputs: [],
+    },
+  });
+
+  const originalReadFile = fs.readFile;
+  const originalOpen = fs.open;
+  const reads = { state: 0, checkpointOpen: 0 };
+  fs.readFile = async (filePath, ...rest) => {
+    if (String(filePath) === statePath) {
+      reads.state += 1;
+    }
+    return await originalReadFile(filePath, ...rest);
+  };
+  fs.open = async (filePath, flags, ...rest) => {
+    if (String(filePath) === checkpointPath && String(flags) === 'r') {
+      reads.checkpointOpen += 1;
+    }
+    return await originalOpen(filePath, flags, ...rest);
+  };
+
+  try {
+    const state = await readHudState({ rootDir, sessionId, fast: true });
+    assert.equal(state.selection.sessionId, sessionId);
+    assert.equal(state.session?.sessionId, sessionId);
+    assert.equal(state.sessionState, null);
+    assert.equal(state.latestCheckpoint, null);
+    assert.equal(state.latestDispatch?.ok, false);
+    assert.equal(state.latestDispatch?.blockedJobs, 1);
+    assert.equal(state.dispatchHindsight, null);
+    assert.equal(state.dispatchFixHint, null);
+    assert.deepEqual(state.suggestedCommands, []);
+    assert.deepEqual(reads, { state: 0, checkpointOpen: 0 });
+  } finally {
+    fs.readFile = originalReadFile;
+    fs.open = originalOpen;
+  }
+});
+
 test('readHudState caches meta/state JSON reads until files change', async () => {
   const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-hud-json-cache-'));
   const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');

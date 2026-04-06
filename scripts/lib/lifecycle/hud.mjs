@@ -17,6 +17,7 @@ export function normalizeHudOptions(rawOptions = {}) {
     provider: normalizeText(rawOptions.provider).toLowerCase(),
     preset: normalizeHudPreset(rawOptions.preset || 'focused'),
     watch: rawOptions.watch === true,
+    fast: rawOptions.fast === true,
     json: rawOptions.json === true,
     intervalMs: normalizeIntervalMs(rawOptions.intervalMs, 1000),
   };
@@ -24,12 +25,14 @@ export function normalizeHudOptions(rawOptions = {}) {
 
 export async function runHud(rawOptions = {}, { rootDir, io = console, env = process.env } = {}) {
   const options = normalizeHudOptions(rawOptions);
+  const fastWatchMinimal = options.fast && options.watch && !options.json && options.preset === 'minimal';
 
   const renderOnce = async () => {
     const state = await readHudState({
       rootDir,
       sessionId: options.sessionId,
       provider: options.provider,
+      fast: fastWatchMinimal,
     });
 
     if (options.json) {
@@ -53,6 +56,7 @@ export async function runHud(rawOptions = {}, { rootDir, io = console, env = pro
       rootDir,
       sessionId: options.sessionId,
       provider: options.provider,
+      fast: fastWatchMinimal,
     });
     return renderHud(state, { preset: options.preset });
   }, {
@@ -62,4 +66,3 @@ export async function runHud(rawOptions = {}, { rootDir, io = console, env = pro
 
   return { exitCode: process.exitCode ?? 0 };
 }
-

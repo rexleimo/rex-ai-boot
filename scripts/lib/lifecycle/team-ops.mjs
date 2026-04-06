@@ -55,11 +55,13 @@ export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, en
   const provider = normalizeProvider(rawOptions.provider);
   const preset = normalizeHudPreset(rawOptions.preset || 'focused');
   const watch = rawOptions.watch === true;
+  const fast = rawOptions.fast === true;
   const json = rawOptions.json === true;
   const intervalMs = normalizeIntervalMs(rawOptions.intervalMs, 1000);
+  const fastWatchMinimal = fast && watch && !json && preset === 'minimal';
 
   const renderOnce = async () => {
-    const state = await readHudState({ rootDir, sessionId, provider });
+    const state = await readHudState({ rootDir, sessionId, provider, fast: fastWatchMinimal });
     if (json) {
       io.log(JSON.stringify(state, null, 2));
       return { exitCode: state.selection?.sessionId ? 0 : 1 };
@@ -76,7 +78,7 @@ export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, en
   }
 
   await watchRenderLoop(async () => {
-    const state = await readHudState({ rootDir, sessionId, provider });
+    const state = await readHudState({ rootDir, sessionId, provider, fast: fastWatchMinimal });
     return renderHud(state, { preset });
   }, { intervalMs, env });
 

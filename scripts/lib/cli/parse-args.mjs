@@ -93,6 +93,7 @@ function createDefaultHudOptions() {
     provider: 'codex',
     preset: 'focused',
     watch: false,
+    fast: false,
     json: false,
     intervalMs: 1000,
   };
@@ -129,6 +130,9 @@ function parseHudArgs(argv) {
       case '--watch':
       case '-w':
         options.watch = true;
+        break;
+      case '--fast':
+        options.fast = true;
         break;
       case '--json':
         options.json = true;
@@ -184,6 +188,7 @@ function createDefaultTeamStatusOptions() {
     resumeSessionId: '',
     preset: 'focused',
     watch: false,
+    fast: false,
     json: false,
     intervalMs: 1000,
   };
@@ -231,6 +236,9 @@ function parseTeamStatusArgs(argv) {
       case '--watch':
       case '-w':
         options.watch = true;
+        break;
+      case '--fast':
+        options.fast = true;
         break;
       case '--json':
         options.json = true;

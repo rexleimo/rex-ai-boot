@@ -702,9 +702,10 @@ function buildSuggestedCommands({ sessionId, provider, latestDispatch, dispatchH
   return commands;
 }
 
-export async function readHudState({ rootDir, sessionId = '', provider = '' } = {}) {
+export async function readHudState({ rootDir, sessionId = '', provider = '', fast = false } = {}) {
   const selection = await selectHudSessionId({ rootDir, sessionId, provider });
   const generatedAt = nowIso();
+  const fastMode = fast === true;
 
   if (!selection.sessionId) {
     return {
@@ -722,14 +723,29 @@ export async function readHudState({ rootDir, sessionId = '', provider = '' } = 
 
   const sessionsRoot = getSessionsRoot(rootDir);
   const sessionDir = path.join(sessionsRoot, selection.sessionId);
+  const metaPath = path.join(sessionDir, 'meta.json');
+  const statePath = path.join(sessionDir, 'state.json');
+  const checkpointPath = path.join(sessionDir, 'l1-checkpoints.jsonl');
 
-  const [meta, state, checkpoint, dispatch, dispatchEvidence] = await Promise.all([
-    safeReadJsonCached(path.join(sessionDir, 'meta.json')),
-    safeReadJsonCached(path.join(sessionDir, 'state.json')),
-    readLastJsonLine(path.join(sessionDir, 'l1-checkpoints.jsonl')),
-    findLatestDispatchArtifact(rootDir, selection.sessionId),
-    collectRecentDispatchEvidence(rootDir, selection.sessionId),
-  ]);
+  let meta = null;
+  let state = null;
+  let checkpoint = null;
+  let dispatch = null;
+  let dispatchEvidence = [];
+  if (fastMode) {
+    [meta, dispatch] = await Promise.all([
+      safeReadJsonCached(metaPath),
+      findLatestDispatchArtifact(rootDir, selection.sessionId),
+    ]);
+  } else {
+    [meta, state, checkpoint, dispatch, dispatchEvidence] = await Promise.all([
+      safeReadJsonCached(metaPath),
+      safeReadJsonCached(statePath),
+      readLastJsonLine(checkpointPath),
+      findLatestDispatchArtifact(rootDir, selection.sessionId),
+      collectRecentDispatchEvidence(rootDir, selection.sessionId),
+    ]);
+  }
 
   const agent = normalizeText(meta?.agent) || normalizeText(selection.agent);
   const providerInferred = selection.provider || inferProviderFromAgent(agent);
@@ -741,7 +757,7 @@ export async function readHudState({ rootDir, sessionId = '', provider = '' } = 
 
   const warnings = [];
   if (!meta) warnings.push('Session meta.json missing or unreadable.');
-  if (!checkpoint) warnings.push('No checkpoints found for this session yet.');
+  if (!fastMode && !checkpoint) warnings.push('No checkpoints found for this session yet.');
   if (!dispatch) warnings.push('No dispatch artifact found for this session yet.');
 
   const latestDispatch = dispatch
@@ -750,6 +766,22 @@ export async function readHudState({ rootDir, sessionId = '', provider = '' } = 
       provider: providerInferred,
     }
     : null;
+
+  if (fastMode) {
+    return {
+      schemaVersion: 1,
+      generatedAt,
+      selection: effectiveSelection,
+      session: meta,
+      sessionState: null,
+      latestCheckpoint: null,
+      latestDispatch,
+      dispatchHindsight: null,
+      dispatchFixHint: null,
+      suggestedCommands: [],
+      warnings,
+    };
+  }
 
   const artifactCache = {};
   if (latestDispatch?.artifactPath && latestDispatch.raw && typeof latestDispatch.raw === 'object') {
