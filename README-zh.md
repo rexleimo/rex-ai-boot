@@ -337,10 +337,19 @@ TUI 可见变化提示：
 
 如果你想按组件独立管理，也可以使用 `scripts/` 里的拆分脚本：
 
-- Browser MCP：`install-browser-mcp.*`、`doctor-browser-mcp.*`
+- Browser MCP：`install-browser-mcp.*`、`doctor-browser-mcp.*`、`start/stop/restart/status-browser-cdp.*`
 - Shell 包装：`install/update/uninstall/doctor-contextdb-shell.*`
 - 全局 Skills：`install/update/uninstall/doctor-contextdb-skills.*`
 - Superpowers：`install/update/doctor-superpowers.*`
+
+CDP 服务常用命令（macOS）：
+
+```bash
+scripts/start-browser-cdp.sh
+scripts/status-browser-cdp.sh
+scripts/restart-browser-cdp.sh
+scripts/stop-browser-cdp.sh
+```
 
 ### 3.1 作用域控制（避免跨项目复用）
 

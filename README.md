@@ -338,10 +338,19 @@ TUI visibility tip:
 
 If you prefer explicit per-component lifecycle, use the individual scripts in `scripts/`:
 
-- Browser MCP: `install-browser-mcp.*`, `doctor-browser-mcp.*`
+- Browser MCP: `install-browser-mcp.*`, `doctor-browser-mcp.*`, `start/stop/restart/status-browser-cdp.*`
 - Shell wrappers: `install/update/uninstall/doctor-contextdb-shell.*`
 - Global skills: `install/update/uninstall/doctor-contextdb-skills.*`
 - Superpowers: `install/update/doctor-superpowers.*`
+
+CDP service quick commands (macOS):
+
+```bash
+scripts/start-browser-cdp.sh
+scripts/status-browser-cdp.sh
+scripts/restart-browser-cdp.sh
+scripts/stop-browser-cdp.sh
+```
 
 ### 3.1 Scope control (avoid cross-project reuse)
 
