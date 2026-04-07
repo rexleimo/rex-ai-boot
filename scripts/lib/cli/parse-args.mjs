@@ -314,10 +314,17 @@ function createDefaultTeamHistoryOptions() {
     qualityFailedOnly: false,
     qualityCategory: '',
     qualityCategoryPrefix: '',
+    qualityCategoryPrefixMode: 'any',
     since: '',
     status: '',
     json: false,
   };
+}
+
+function normalizeQualityCategoryPrefixMode(value) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === 'any' || normalized === 'all') return normalized;
+  throw new Error('--quality-category-prefix-mode must be one of: any, all');
 }
 
 function normalizeSinceIso(value) {
@@ -368,6 +375,10 @@ function parseTeamHistoryArgs(argv) {
         break;
       case '--quality-category-prefix':
         options.qualityCategoryPrefix = String(takeValue(rest, index, '--quality-category-prefix') ?? '').trim();
+        index += 1;
+        break;
+      case '--quality-category-prefix-mode':
+        options.qualityCategoryPrefixMode = normalizeQualityCategoryPrefixMode(takeValue(rest, index, '--quality-category-prefix-mode'));
         index += 1;
         break;
       case '--since':

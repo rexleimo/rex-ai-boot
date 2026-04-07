@@ -51,6 +51,11 @@ function normalizeQualityCategoryPrefixes(value) {
     .filter(Boolean)));
 }
 
+function normalizeQualityCategoryPrefixMode(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  return normalized === 'all' ? 'all' : 'any';
+}
+
 function resolveQualityCategory(record) {
   const qualityGate = record?.qualityGate && typeof record.qualityGate === 'object'
     ? record.qualityGate
@@ -71,10 +76,13 @@ function matchesQualityCategory(record, categoryFilter) {
   return normalizeQualityCategory(resolveQualityCategory(record)) === categoryFilter;
 }
 
-function matchesQualityCategoryPrefix(record, categoryPrefixFilters = []) {
+function matchesQualityCategoryPrefix(record, categoryPrefixFilters = [], mode = 'any') {
   if (!Array.isArray(categoryPrefixFilters) || categoryPrefixFilters.length === 0) return true;
   if (!hasFailedQualityGate(record)) return false;
   const category = normalizeQualityCategory(resolveQualityCategory(record));
+  if (mode === 'all') {
+    return categoryPrefixFilters.every((prefix) => category.startsWith(prefix));
+  }
   return categoryPrefixFilters.some((prefix) => category.startsWith(prefix));
 }
 
@@ -326,6 +334,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
       ? rawOptions.qualityCategoryPrefixes
       : qualityCategoryPrefix
   );
+  const qualityCategoryPrefixMode = normalizeQualityCategoryPrefixMode(rawOptions.qualityCategoryPrefixMode);
   const qualityCategoryPrefixEnabled = qualityCategoryPrefixFilters.length > 0;
   const sinceIso = normalizeText(rawOptions.since);
   const statusFilter = normalizeText(rawOptions.status);
@@ -422,7 +431,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
     ? filteredByQualityFailed.filter((record) => matchesQualityCategory(record, qualityCategoryFilter))
     : filteredByQualityFailed;
   const filteredByCategoryPrefix = qualityCategoryPrefixEnabled
-    ? filteredByCategory.filter((record) => matchesQualityCategoryPrefix(record, qualityCategoryPrefixFilters))
+    ? filteredByCategory.filter((record) => matchesQualityCategoryPrefix(record, qualityCategoryPrefixFilters, qualityCategoryPrefixMode))
     : filteredByCategory;
   const selectedRecords = (qualityFailedOnly || qualityCategoryFilter || qualityCategoryPrefixEnabled)
     ? filteredByCategoryPrefix.slice(0, resolvedLimit)
@@ -440,6 +449,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
       qualityCategory: qualityCategory || null,
       qualityCategoryPrefix: qualityCategoryPrefix || null,
       qualityCategoryPrefixes: qualityCategoryPrefixEnabled ? qualityCategoryPrefixFilters : null,
+      qualityCategoryPrefixMode,
       since: sinceIso || null,
       status: statusFilter || null,
       summary,
@@ -452,6 +462,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
   if (qualityFailedOnly) filterLabels.push('quality-gate failed only');
   if (qualityCategoryFilter) filterLabels.push(`quality-category=${qualityCategory}`);
   if (qualityCategoryPrefixEnabled) filterLabels.push(`quality-category-prefix=${qualityCategoryPrefixFilters.join(',')}`);
+  if (qualityCategoryPrefixEnabled) filterLabels.push(`quality-category-prefix-mode=${qualityCategoryPrefixMode}`);
 
   const lines = [
     `AIOS Team History (provider=${provider} agent=${agent})`,

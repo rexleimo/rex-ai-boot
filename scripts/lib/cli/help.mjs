@@ -183,6 +183,7 @@ Options:
   --quality-failed-only         (team history) Only include sessions with failed quality-gate outcomes
   --quality-category <name>     (team history) Only include sessions with failed quality-gate category match
   --quality-category-prefix <name> (team history) Only include sessions with failed quality-gate category prefix match (comma-separated)
+  --quality-category-prefix-mode <any|all> (team history) Prefix matching mode (default: any)
   --fast                        (team status/hud) In --watch + minimal preset, skip heavy reads and throttle state refresh to ~1s
   --no-fast                     (team status/hud) Force disable fast mode (overrides auto-fast)
   --since <iso>                 (team history) Only include sessions updated at/after ISO timestamp

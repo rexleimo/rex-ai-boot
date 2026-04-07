@@ -343,6 +343,7 @@ test('parseArgs accepts team status/history subcommands', () => {
   assert.equal(historyDefaults.options.qualityFailedOnly, false);
   assert.equal(historyDefaults.options.qualityCategory, '');
   assert.equal(historyDefaults.options.qualityCategoryPrefix, '');
+  assert.equal(historyDefaults.options.qualityCategoryPrefixMode, 'any');
 
   const history = parseArgs([
     'team',
@@ -358,6 +359,8 @@ test('parseArgs accepts team status/history subcommands', () => {
     'quality-logs',
     '--quality-category-prefix',
     'quality-, contextdb-quality-',
+    '--quality-category-prefix-mode',
+    'all',
   ]);
   assert.equal(history.command, 'team');
   assert.equal(history.options.subcommand, 'history');
@@ -367,6 +370,7 @@ test('parseArgs accepts team status/history subcommands', () => {
   assert.equal(history.options.qualityFailedOnly, true);
   assert.equal(history.options.qualityCategory, 'quality-logs');
   assert.equal(history.options.qualityCategoryPrefix, 'quality-, contextdb-quality-');
+  assert.equal(history.options.qualityCategoryPrefixMode, 'all');
 });
 
 test('parseArgs rejects invalid mode', () => {
@@ -375,6 +379,13 @@ test('parseArgs rejects invalid mode', () => {
 
 test('parseArgs rejects invalid watch interval token', () => {
   assert.throws(() => parseArgs(['hud', '--watch', '--interval-ms', 'fast']), /--interval-ms must be a positive integer or \"auto\"/);
+});
+
+test('parseArgs rejects invalid team history quality prefix mode', () => {
+  assert.throws(
+    () => parseArgs(['team', 'history', '--quality-category-prefix-mode', 'strict']),
+    /--quality-category-prefix-mode must be one of: any, all/
+  );
 });
 
 test('parseArgs rejects team --retry-blocked without a session target', () => {

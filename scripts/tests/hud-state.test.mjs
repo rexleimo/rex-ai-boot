@@ -1290,8 +1290,80 @@ test('runTeamHistory quality-category-prefix filters failed category families wi
   const sessionIds = report.records.map((record) => record.sessionId).sort();
   assert.equal(report.qualityCategoryPrefix, 'quality-, contextdb-quality-');
   assert.deepEqual(report.qualityCategoryPrefixes, ['quality-', 'contextdb-quality-']);
+  assert.equal(report.qualityCategoryPrefixMode, 'any');
   assert.equal(report.summary.total, 3);
   assert.deepEqual(sessionIds, [failedLogsSessionId, failedMetricsSessionId, failedOtherSessionId].sort());
+});
+
+test('runTeamHistory quality-category-prefix mode=all requires all prefixes to match', async () => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-team-history-quality-category-prefix-all-'));
+  const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');
+  const failedLogsSessionId = 'history-quality-prefix-all-failed-logs';
+  const failedMetricsSessionId = 'history-quality-prefix-all-failed-metrics';
+
+  await writeJson(
+    path.join(sessionsRoot, failedLogsSessionId, 'meta.json'),
+    makeSessionMeta({ sessionId: failedLogsSessionId, agent: 'codex-cli', updatedAt: '2026-04-06T07:00:00.000Z' })
+  );
+  await writeJson(
+    path.join(sessionsRoot, failedMetricsSessionId, 'meta.json'),
+    makeSessionMeta({ sessionId: failedMetricsSessionId, agent: 'codex-cli', updatedAt: '2026-04-06T06:00:00.000Z' })
+  );
+
+  await writeJsonLines(path.join(sessionsRoot, failedLogsSessionId, 'l2-events.jsonl'), [
+    {
+      seq: 1,
+      ts: '2026-04-06T07:00:00.000Z',
+      role: 'assistant',
+      kind: 'verification.quality-gate',
+      text: 'quality gate failed',
+      turn: {
+        turnId: 'quality-gate:20260406T070000Z:summary',
+        turnType: 'verification',
+        environment: 'quality-gate',
+        hindsightStatus: 'evaluated',
+        outcome: 'retry-needed',
+        nextStateRefs: ['category:quality-logs'],
+      },
+    },
+  ]);
+
+  await writeJsonLines(path.join(sessionsRoot, failedMetricsSessionId, 'l2-events.jsonl'), [
+    {
+      seq: 1,
+      ts: '2026-04-06T06:00:00.000Z',
+      role: 'assistant',
+      kind: 'verification.quality-gate',
+      text: 'quality gate failed',
+      turn: {
+        turnId: 'quality-gate:20260406T060000Z:summary',
+        turnType: 'verification',
+        environment: 'quality-gate',
+        hindsightStatus: 'evaluated',
+        outcome: 'failed',
+        nextStateRefs: ['category:quality-metrics'],
+      },
+    },
+  ]);
+
+  const logs = [];
+  await runTeamHistory(
+    {
+      provider: 'codex',
+      limit: 5,
+      json: true,
+      fast: true,
+      qualityCategoryPrefix: 'quality-, quality-logs',
+      qualityCategoryPrefixMode: 'all',
+    },
+    { rootDir, io: { log: (line) => logs.push(line) } }
+  );
+  const report = JSON.parse(logs.at(-1));
+  assert.equal(report.qualityCategoryPrefixMode, 'all');
+  assert.deepEqual(report.qualityCategoryPrefixes, ['quality-', 'quality-logs']);
+  assert.equal(report.summary.total, 1);
+  assert.equal(report.records.length, 1);
+  assert.equal(report.records[0].sessionId, failedLogsSessionId);
 });
 
 test('runTeamHistory preserves session ordering under concurrency', async () => {
