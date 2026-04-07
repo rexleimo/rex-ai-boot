@@ -951,6 +951,7 @@ export async function readHudDispatchSummary({
       sessionId: null,
       provider: normalizeProvider(provider) || null,
       latestDispatch: null,
+      latestQualityGate: null,
       dispatchHindsight: null,
       dispatchFixHint: null,
       warnings: ['Missing sessionId for dispatch summary.'],
@@ -965,9 +966,11 @@ export async function readHudDispatchSummary({
   }
 
   const providerInferred = normalizeProvider(provider) || inferProviderFromAgent(sessionMeta?.agent || '');
+  const eventsPath = path.join(getSessionsRoot(rootDir), normalizedSessionId, 'l2-events.jsonl');
 
-  const [dispatch, dispatchEvidence] = await Promise.all([
+  const [dispatch, latestQualityGate, dispatchEvidence] = await Promise.all([
     findLatestDispatchArtifact(rootDir, normalizedSessionId),
+    readLatestQualityGateEvent(eventsPath),
     collectRecentDispatchEvidence(rootDir, normalizedSessionId, { limit }),
   ]);
 
@@ -1010,6 +1013,7 @@ export async function readHudDispatchSummary({
     sessionId: normalizedSessionId,
     provider: providerInferred || null,
     latestDispatch,
+    latestQualityGate,
     dispatchHindsight,
     dispatchFixHint,
     warnings,

@@ -136,6 +136,17 @@ function formatHistoryLine(record) {
       ? `dispatch=ok jobs=${dispatch.jobCount}`
       : `dispatch=blocked blocked=${dispatch.blockedJobs} jobs=${dispatch.jobCount}`
     : 'dispatch=none';
+  const qualityGate = record.qualityGate && typeof record.qualityGate === 'object'
+    ? record.qualityGate
+    : null;
+  const qualityOutcomeRaw = normalizeText(qualityGate?.outcome).toLowerCase();
+  const qualityOutcome = qualityOutcomeRaw === 'retry-needed'
+    ? 'failed'
+    : qualityOutcomeRaw;
+  const qualityCategory = normalizeText(qualityGate?.failureCategory) || normalizeText(qualityGate?.categoryRef);
+  const qualityLabel = qualityOutcome
+    ? (qualityCategory ? `quality=${qualityOutcome}(${qualityCategory})` : `quality=${qualityOutcome}`)
+    : '';
   const hindsight = record.dispatchHindsight && typeof record.dispatchHindsight === 'object'
     ? record.dispatchHindsight
     : null;
@@ -163,6 +174,7 @@ function formatHistoryLine(record) {
     sessionId ? `session=${sessionId}` : '',
     status ? `status=${status}` : '',
     dispatchLabel,
+    qualityLabel,
     hindsightLabel,
     fixHintLabel,
     goal ? `goal="${goal.length > 80 ? goal.slice(0, 79) + '…' : goal}"` : '',
@@ -175,6 +187,7 @@ function summarizeHistory(records = []) {
   let dispatchBlocked = 0;
   let hindsightUnstable = 0;
   const topFailureCounts = new Map();
+  const topQualityFailureCounts = new Map();
   const fixHintCounts = new Map();
   const topJobCounts = new Map();
 
@@ -211,6 +224,18 @@ function summarizeHistory(records = []) {
     if (fixHintId) {
       fixHintCounts.set(fixHintId, (fixHintCounts.get(fixHintId) || 0) + 1);
     }
+
+    const qualityGate = record?.qualityGate && typeof record.qualityGate === 'object'
+      ? record.qualityGate
+      : null;
+    const qualityOutcomeRaw = normalizeText(qualityGate?.outcome).toLowerCase();
+    const qualityOutcome = qualityOutcomeRaw === 'retry-needed'
+      ? 'failed'
+      : qualityOutcomeRaw;
+    const qualityCategory = normalizeText(qualityGate?.failureCategory);
+    if (qualityOutcome === 'failed' && qualityCategory) {
+      topQualityFailureCounts.set(qualityCategory, (topQualityFailureCounts.get(qualityCategory) || 0) + 1);
+    }
   }
 
   const topFailures = Array.from(topFailureCounts.entries())
@@ -225,12 +250,17 @@ function summarizeHistory(records = []) {
     .map(([jobId, count]) => ({ jobId, count }))
     .sort((left, right) => right.count - left.count || left.jobId.localeCompare(right.jobId))
     .slice(0, 5);
+  const topQualityFailures = Array.from(topQualityFailureCounts.entries())
+    .map(([failureCategory, count]) => ({ failureCategory, count }))
+    .sort((left, right) => right.count - left.count || left.failureCategory.localeCompare(right.failureCategory))
+    .slice(0, 5);
 
   return {
     total,
     dispatchBlocked,
     hindsightUnstable,
     topFailures,
+    topQualityFailures,
     topFixHints,
     topJobs,
   };
@@ -281,6 +311,9 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
     const fixHint = state.dispatchFixHint && typeof state.dispatchFixHint === 'object'
       ? state.dispatchFixHint
       : null;
+    const qualityGate = state.latestQualityGate && typeof state.latestQualityGate === 'object'
+      ? state.latestQualityGate
+      : null;
     return {
       sessionId,
       updatedAt: normalizeText(meta.updatedAt) || normalizeText(meta.createdAt),
@@ -303,6 +336,13 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
           regressions: normalizeCounter(hindsight.regressions),
           topFailureClass: normalizeText(topFailure?.failureClass) || null,
           topRepeatedJobId: normalizeText(topJob?.jobId) || null,
+        }
+        : null,
+      qualityGate: qualityGate
+        ? {
+          outcome: normalizeText(qualityGate.outcome) || null,
+          categoryRef: normalizeText(qualityGate.categoryRef) || null,
+          failureCategory: normalizeText(qualityGate.failureCategory) || null,
         }
         : null,
       dispatchFixHint: fixHint
@@ -335,7 +375,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
 
   const lines = [
     `AIOS Team History (provider=${provider} agent=${agent})`,
-    `Summary: sessions=${summary.total} dispatchBlocked=${summary.dispatchBlocked} hindsightUnstable=${summary.hindsightUnstable} topFailures=${summary.topFailures.map((item) => `${item.failureClass}=${item.count}`).join(', ') || 'none'} topFixHints=${summary.topFixHints.map((item) => `${item.targetId}=${item.count}`).join(', ') || 'none'} topJobs=${summary.topJobs.map((item) => `${item.jobId}=${item.count}`).join(', ') || 'none'}`,
+    `Summary: sessions=${summary.total} dispatchBlocked=${summary.dispatchBlocked} hindsightUnstable=${summary.hindsightUnstable} topFailures=${summary.topFailures.map((item) => `${item.failureClass}=${item.count}`).join(', ') || 'none'} topQualityFailures=${summary.topQualityFailures.map((item) => `${item.failureCategory}=${item.count}`).join(', ') || 'none'} topFixHints=${summary.topFixHints.map((item) => `${item.targetId}=${item.count}`).join(', ') || 'none'} topJobs=${summary.topJobs.map((item) => `${item.jobId}=${item.count}`).join(', ') || 'none'}`,
     ...(records.length > 0 ? records.map((record) => formatHistoryLine(record)) : ['- (none)']),
   ];
   io.log(lines.join('\n') + '\n');

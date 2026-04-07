@@ -773,6 +773,23 @@ test('readHudDispatchSummary includes latest dispatch, hindsight, and fix hint',
       finalOutputs: [],
     },
   });
+  await writeJsonLines(path.join(sessionDir, 'l2-events.jsonl'), [
+    {
+      seq: 1,
+      ts: '2026-04-05T03:00:00.000Z',
+      role: 'assistant',
+      kind: 'verification.quality-gate',
+      text: 'quality gate failed',
+      turn: {
+        turnId: 'quality-gate:20260405T030000Z:summary',
+        turnType: 'verification',
+        environment: 'quality-gate',
+        hindsightStatus: 'evaluated',
+        outcome: 'retry-needed',
+        nextStateRefs: ['category:quality-logs'],
+      },
+    },
+  ]);
 
   const summary = await readHudDispatchSummary({ rootDir, sessionId, provider: 'codex', meta });
   assert.equal(summary.sessionId, sessionId);
@@ -783,6 +800,9 @@ test('readHudDispatchSummary includes latest dispatch, hindsight, and fix hint',
   assert.ok(String(summary.latestDispatch?.artifactPath || '').includes('dispatch-run-20260405T030000Z.json'));
   assert.equal(summary.dispatchHindsight?.pairsAnalyzed, 1);
   assert.equal(summary.dispatchHindsight?.repeatedBlockedTurns, 1);
+  assert.equal(summary.latestQualityGate?.turnId, 'quality-gate:20260405T030000Z:summary');
+  assert.equal(summary.latestQualityGate?.categoryRef, 'category:quality-logs');
+  assert.equal(summary.latestQualityGate?.failureCategory, 'quality-logs');
   assert.equal(summary.dispatchFixHint?.targetId, 'runbook.dispatch-merge-triage');
   assert.match(
     summary.dispatchFixHint?.nextCommand ?? '',
@@ -901,6 +921,23 @@ test('runTeamHistory includes dispatch hindsight summary and fix hint', async ()
       finalOutputs: [],
     },
   });
+  await writeJsonLines(path.join(sessionDir, 'l2-events.jsonl'), [
+    {
+      seq: 1,
+      ts: '2026-04-05T03:00:00.000Z',
+      role: 'assistant',
+      kind: 'verification.quality-gate',
+      text: 'quality gate failed',
+      turn: {
+        turnId: 'quality-gate:20260405T030000Z:summary',
+        turnType: 'verification',
+        environment: 'quality-gate',
+        hindsightStatus: 'evaluated',
+        outcome: 'retry-needed',
+        nextStateRefs: ['check:logs', 'category:quality-logs'],
+      },
+    },
+  ]);
 
   const logs = [];
   await runTeamHistory(
@@ -912,6 +949,7 @@ test('runTeamHistory includes dispatch hindsight summary and fix hint', async ()
   assert.equal(report.summary.dispatchBlocked, 1);
   assert.equal(report.summary.hindsightUnstable, 1);
   assert.equal(report.summary.topFailures?.[0]?.failureClass, 'ownership-policy');
+  assert.equal(report.summary.topQualityFailures?.[0]?.failureCategory, 'quality-logs');
   assert.equal(report.summary.topFixHints?.[0]?.targetId, 'runbook.dispatch-merge-triage');
   assert.equal(report.summary.topJobs?.[0]?.jobId, 'phase.implement.wi.1');
   const record = report.records.find((item) => item.sessionId === sessionId);
@@ -920,6 +958,8 @@ test('runTeamHistory includes dispatch hindsight summary and fix hint', async ()
   assert.equal(record.dispatchHindsight.repeatedBlockedTurns, 1);
   assert.equal(record.dispatchHindsight.topFailureClass, 'ownership-policy');
   assert.equal(record.dispatchHindsight.topRepeatedJobId, 'phase.implement.wi.1');
+  assert.equal(record.qualityGate.outcome, 'retry-needed');
+  assert.equal(record.qualityGate.failureCategory, 'quality-logs');
   assert.equal(record.dispatchFixHint.targetId, 'runbook.dispatch-merge-triage');
   assert.match(
     record.dispatchFixHint.nextCommand ?? '',
@@ -959,6 +999,23 @@ test('runTeamHistory fast mode skips dispatch hindsight and fix hint', async () 
       finalOutputs: [],
     },
   });
+  await writeJsonLines(path.join(sessionDir, 'l2-events.jsonl'), [
+    {
+      seq: 1,
+      ts: '2026-04-06T03:00:00.000Z',
+      role: 'assistant',
+      kind: 'verification.quality-gate',
+      text: 'quality gate failed',
+      turn: {
+        turnId: 'quality-gate:20260406T030000Z:summary',
+        turnType: 'verification',
+        environment: 'quality-gate',
+        hindsightStatus: 'evaluated',
+        outcome: 'retry-needed',
+        nextStateRefs: ['category:quality-logs'],
+      },
+    },
+  ]);
 
   const logs = [];
   await runTeamHistory(
@@ -972,6 +1029,8 @@ test('runTeamHistory fast mode skips dispatch hindsight and fix hint', async () 
   assert.equal(record.sessionId, sessionId);
   assert.equal(record.dispatchHindsight, null);
   assert.equal(record.dispatchFixHint, null);
+  assert.equal(record.qualityGate.outcome, 'retry-needed');
+  assert.equal(record.qualityGate.failureCategory, 'quality-logs');
 });
 
 test('runTeamHistory preserves session ordering under concurrency', async () => {
