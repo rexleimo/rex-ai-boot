@@ -313,6 +313,7 @@ function createDefaultTeamHistoryOptions() {
     fast: false,
     qualityFailedOnly: false,
     qualityCategory: '',
+    qualityCategoryPrefix: '',
     since: '',
     status: '',
     json: false,
@@ -363,6 +364,10 @@ function parseTeamHistoryArgs(argv) {
         break;
       case '--quality-category':
         options.qualityCategory = String(takeValue(rest, index, '--quality-category') ?? '').trim();
+        index += 1;
+        break;
+      case '--quality-category-prefix':
+        options.qualityCategoryPrefix = String(takeValue(rest, index, '--quality-category-prefix') ?? '').trim();
         index += 1;
         break;
       case '--since':

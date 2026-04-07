@@ -59,6 +59,12 @@ function matchesQualityCategory(record, categoryFilter) {
   return normalizeQualityCategory(resolveQualityCategory(record)) === categoryFilter;
 }
 
+function matchesQualityCategoryPrefix(record, categoryPrefixFilter) {
+  if (!categoryPrefixFilter) return true;
+  if (!hasFailedQualityGate(record)) return false;
+  return normalizeQualityCategory(resolveQualityCategory(record)).startsWith(categoryPrefixFilter);
+}
+
 async function mapWithConcurrency(items, concurrency, mapper) {
   if (!Array.isArray(items) || items.length === 0) return [];
 
@@ -301,6 +307,8 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
   const qualityFailedOnly = rawOptions.qualityFailedOnly === true;
   const qualityCategory = normalizeText(rawOptions.qualityCategory);
   const qualityCategoryFilter = normalizeQualityCategory(qualityCategory);
+  const qualityCategoryPrefix = normalizeText(rawOptions.qualityCategoryPrefix);
+  const qualityCategoryPrefixFilter = normalizeQualityCategory(qualityCategoryPrefix);
   const sinceIso = normalizeText(rawOptions.since);
   const statusFilter = normalizeText(rawOptions.status);
 
@@ -310,7 +318,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
       ? 'gemini-cli'
       : 'codex-cli';
 
-  const scanLimit = (sinceIso || statusFilter || qualityFailedOnly || qualityCategoryFilter)
+  const scanLimit = (sinceIso || statusFilter || qualityFailedOnly || qualityCategoryFilter || qualityCategoryPrefixFilter)
     ? Math.max(resolvedLimit, resolvedLimit * 8)
     : resolvedLimit;
   const sessions = await listContextDbSessions(rootDir, { agent, limit: scanLimit });
@@ -325,7 +333,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
     }
     return true;
   });
-  const targetSessions = (qualityFailedOnly || qualityCategoryFilter)
+  const targetSessions = (qualityFailedOnly || qualityCategoryFilter || qualityCategoryPrefixFilter)
     ? filteredSessions
     : filteredSessions.slice(0, resolvedLimit);
 
@@ -395,9 +403,12 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
   const filteredByCategory = qualityCategoryFilter
     ? filteredByQualityFailed.filter((record) => matchesQualityCategory(record, qualityCategoryFilter))
     : filteredByQualityFailed;
-  const selectedRecords = (qualityFailedOnly || qualityCategoryFilter)
-    ? filteredByCategory.slice(0, resolvedLimit)
+  const filteredByCategoryPrefix = qualityCategoryPrefixFilter
+    ? filteredByCategory.filter((record) => matchesQualityCategoryPrefix(record, qualityCategoryPrefixFilter))
     : filteredByCategory;
+  const selectedRecords = (qualityFailedOnly || qualityCategoryFilter || qualityCategoryPrefixFilter)
+    ? filteredByCategoryPrefix.slice(0, resolvedLimit)
+    : filteredByCategoryPrefix;
   const summary = summarizeHistory(selectedRecords);
   if (json) {
     io.log(JSON.stringify({
@@ -409,6 +420,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
       fast,
       qualityFailedOnly,
       qualityCategory: qualityCategory || null,
+      qualityCategoryPrefix: qualityCategoryPrefix || null,
       since: sinceIso || null,
       status: statusFilter || null,
       summary,
@@ -420,6 +432,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
   const filterLabels = [];
   if (qualityFailedOnly) filterLabels.push('quality-gate failed only');
   if (qualityCategoryFilter) filterLabels.push(`quality-category=${qualityCategory}`);
+  if (qualityCategoryPrefixFilter) filterLabels.push(`quality-category-prefix=${qualityCategoryPrefix}`);
 
   const lines = [
     `AIOS Team History (provider=${provider} agent=${agent})`,
