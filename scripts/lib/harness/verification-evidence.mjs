@@ -5,6 +5,10 @@ import { runContextDbCli } from '../contextdb-cli.mjs';
 
 export const QUALITY_GATE_VERIFICATION_KIND = 'verification.quality-gate';
 
+function normalizeText(value) {
+  return String(value ?? '').trim();
+}
+
 function formatArtifactTimestamp(ts = new Date()) {
   return ts.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
 }
@@ -15,6 +19,37 @@ function buildArtifactPath(sessionId, stamp) {
 
 function summarizeChecks(results = []) {
   return results.map((item) => `${item.label}:${item.status}`).join(', ');
+}
+
+function formatRefsCsv(refs = []) {
+  const seen = new Set();
+  const values = [];
+  for (const item of refs) {
+    const text = normalizeText(item);
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    values.push(text);
+  }
+  return values.join(',');
+}
+
+function buildEventText(report, artifactPath) {
+  const statusLabel = report.ok ? 'passed' : 'failed';
+  const failedChecks = Array.isArray(report.failedChecks) ? report.failedChecks.join(',') : '';
+  const failedSummary = failedChecks ? ` failed=${failedChecks}` : '';
+  return `quality-gate ${normalizeText(report.mode || 'full')} ${statusLabel}: profile=${normalizeText(report.profile || 'standard')} checks=${Array.isArray(report.results) ? report.results.length : 0}${failedSummary}; artifact=${artifactPath}`;
+}
+
+function collectNextStateRefs(report) {
+  const refs = [];
+  const failedChecks = Array.isArray(report.failedChecks) ? report.failedChecks : [];
+  for (const check of failedChecks) {
+    const label = normalizeText(check).toLowerCase().replace(/\s+/g, '-');
+    if (label) refs.push(`check:${label}`);
+  }
+  const category = normalizeText(report.failureCategory);
+  if (category) refs.push(`category:${category}`);
+  return refs;
 }
 
 function buildCheckpointSummary(report) {
@@ -80,6 +115,44 @@ export async function persistQualityGateEvidence({ rootDir, sessionId, report, e
   await writeArtifact(artifactAbsPath, artifactPayload);
 
   try {
+    const eventTurnId = `quality-gate:${stamp}:summary`;
+    const eventArgs = [
+      'event:add',
+      '--workspace',
+      rootDir,
+      '--session',
+      sessionId,
+      '--role',
+      'assistant',
+      '--kind',
+      QUALITY_GATE_VERIFICATION_KIND,
+      '--text',
+      buildEventText(report, artifactPath),
+      '--turn-id',
+      eventTurnId,
+      '--turn-type',
+      'verification',
+      '--environment',
+      'quality-gate',
+      '--hindsight-status',
+      'evaluated',
+      '--outcome',
+      report.ok ? 'success' : 'retry-needed',
+      '--refs',
+      formatRefsCsv([
+        artifactPath,
+        'env:quality-gate',
+        `quality-mode:${normalizeText(report.mode || 'full')}`,
+        `quality-profile:${normalizeText(report.profile || 'standard')}`,
+      ]),
+    ];
+    const nextStateRefs = collectNextStateRefs(report);
+    if (nextStateRefs.length > 0) {
+      eventArgs.push('--next-state-refs', nextStateRefs.join(','));
+    }
+    const event = runContextDbCli(eventArgs);
+    const eventId = `${sessionId}#${event.seq}`;
+
     const checkpointStatus = report.ok ? 'done' : 'blocked';
     const checkpointArgs = [
       'checkpoint',
@@ -98,7 +171,7 @@ export async function persistQualityGateEvidence({ rootDir, sessionId, report, e
       '--verify-result',
       report.ok ? 'passed' : 'failed',
       '--verify-evidence',
-      `mode=${report.mode || 'full'}; profile=${report.profile || 'standard'}; verificationArtifact=${artifactPath}; checks=${summarizeChecks(report.results)}`,
+      `mode=${report.mode || 'full'}; profile=${report.profile || 'standard'}; verificationArtifact=${artifactPath}; checks=${summarizeChecks(report.results)}; event=${eventId}`,
       '--retry-count',
       '0',
       '--elapsed-ms',
@@ -119,6 +192,8 @@ export async function persistQualityGateEvidence({ rootDir, sessionId, report, e
       persisted: true,
       mode: 'contextdb',
       artifactPath,
+      eventKind: QUALITY_GATE_VERIFICATION_KIND,
+      eventId,
       checkpointId: `${sessionId}#C${checkpoint.seq}`,
       checkpointStatus,
     };

@@ -272,6 +272,17 @@ test('runQualityGate persists verification checkpoint when session is provided',
   assert.match(latest.telemetry.verification.evidence, /mode=full/);
   assert.equal(Array.isArray(latest.artifacts), true);
   assert.equal(latest.artifacts.length, 1);
+
+  const eventsPath = path.join(rootDir, 'memory', 'context-db', 'sessions', 'quality-session', 'l2-events.jsonl');
+  const eventsRaw = await readFile(eventsPath, 'utf8');
+  const events = eventsRaw.trim().split(/\n+/).map((line) => JSON.parse(line));
+  const verificationEvent = events.find((item) => item.kind === 'verification.quality-gate');
+  assert.equal(Boolean(verificationEvent), true);
+  assert.equal(verificationEvent?.turn?.turnType, 'verification');
+  assert.equal(verificationEvent?.turn?.environment, 'quality-gate');
+  assert.equal(verificationEvent?.turn?.hindsightStatus, 'evaluated');
+  assert.equal(verificationEvent?.turn?.outcome, 'success');
+  assert.match(String(verificationEvent?.turn?.turnId || ''), /^quality-gate:[^:]+:summary$/);
 });
 
 test('runQualityGate persists quality-specific failure category when session is provided', async () => {
@@ -307,6 +318,15 @@ test('runQualityGate persists quality-specific failure category when session is 
   assert.equal(latest.status, 'blocked');
   assert.equal(latest.telemetry.verification.result, 'failed');
   assert.equal(latest.telemetry.failureCategory, 'quality-logs');
+
+  const eventsPath = path.join(rootDir, 'memory', 'context-db', 'sessions', 'quality-logs-session', 'l2-events.jsonl');
+  const eventsRaw = await readFile(eventsPath, 'utf8');
+  const events = eventsRaw.trim().split(/\n+/).map((line) => JSON.parse(line));
+  const verificationEvent = events.find((item) => item.kind === 'verification.quality-gate');
+  assert.equal(Boolean(verificationEvent), true);
+  assert.equal(verificationEvent?.turn?.outcome, 'retry-needed');
+  assert.equal(Array.isArray(verificationEvent?.turn?.nextStateRefs), true);
+  assert.equal(verificationEvent?.turn?.nextStateRefs.includes('category:quality-logs'), true);
 });
 
 test('executeEntropyGc dry-run keeps newest artifacts and skips referenced checkpoints', async () => {
