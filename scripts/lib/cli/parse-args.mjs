@@ -311,6 +311,7 @@ function createDefaultTeamHistoryOptions() {
     limit: 10,
     concurrency: 4,
     fast: false,
+    qualityFailedOnly: false,
     since: '',
     status: '',
     json: false,
@@ -355,6 +356,9 @@ function parseTeamHistoryArgs(argv) {
         break;
       case '--fast':
         options.fast = true;
+        break;
+      case '--quality-failed-only':
+        options.qualityFailedOnly = true;
         break;
       case '--since':
         options.since = normalizeSinceIso(takeValue(rest, index, '--since'));

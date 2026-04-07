@@ -180,6 +180,7 @@ Options:
   --json                        (team status/history) Output structured JSON instead of text
   --concurrency <n>             (team history) Process sessions concurrently (default: 4)
   --fast                        (team history) Skip dispatch hindsight evaluation for faster scans
+  --quality-failed-only         (team history) Only include sessions with failed quality-gate outcomes
   --fast                        (team status/hud) In --watch + minimal preset, skip heavy reads and throttle state refresh to ~1s
   --no-fast                     (team status/hud) Force disable fast mode (overrides auto-fast)
   --since <iso>                 (team history) Only include sessions updated at/after ISO timestamp

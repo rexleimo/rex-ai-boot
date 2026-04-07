@@ -28,6 +28,20 @@ function normalizeProvider(value) {
   return 'codex';
 }
 
+function normalizeQualityOutcome(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized === 'retry-needed') return 'failed';
+  if (normalized === 'success') return 'ok';
+  return normalized;
+}
+
+function hasFailedQualityGate(record) {
+  const qualityGate = record?.qualityGate && typeof record.qualityGate === 'object'
+    ? record.qualityGate
+    : null;
+  return normalizeQualityOutcome(qualityGate?.outcome) === 'failed';
+}
+
 async function mapWithConcurrency(items, concurrency, mapper) {
   if (!Array.isArray(items) || items.length === 0) return [];
 
@@ -139,10 +153,7 @@ function formatHistoryLine(record) {
   const qualityGate = record.qualityGate && typeof record.qualityGate === 'object'
     ? record.qualityGate
     : null;
-  const qualityOutcomeRaw = normalizeText(qualityGate?.outcome).toLowerCase();
-  const qualityOutcome = qualityOutcomeRaw === 'retry-needed'
-    ? 'failed'
-    : qualityOutcomeRaw;
+  const qualityOutcome = normalizeQualityOutcome(qualityGate?.outcome);
   const qualityCategory = normalizeText(qualityGate?.failureCategory) || normalizeText(qualityGate?.categoryRef);
   const qualityLabel = qualityOutcome
     ? (qualityCategory ? `quality=${qualityOutcome}(${qualityCategory})` : `quality=${qualityOutcome}`)
@@ -228,10 +239,7 @@ function summarizeHistory(records = []) {
     const qualityGate = record?.qualityGate && typeof record.qualityGate === 'object'
       ? record.qualityGate
       : null;
-    const qualityOutcomeRaw = normalizeText(qualityGate?.outcome).toLowerCase();
-    const qualityOutcome = qualityOutcomeRaw === 'retry-needed'
-      ? 'failed'
-      : qualityOutcomeRaw;
+    const qualityOutcome = normalizeQualityOutcome(qualityGate?.outcome);
     const qualityCategory = normalizeText(qualityGate?.failureCategory);
     if (qualityOutcome === 'failed' && qualityCategory) {
       topQualityFailureCounts.set(qualityCategory, (topQualityFailureCounts.get(qualityCategory) || 0) + 1);
@@ -273,6 +281,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
   const json = rawOptions.json === true;
   const concurrency = normalizeConcurrency(rawOptions.concurrency, 4);
   const fast = rawOptions.fast === true;
+  const qualityFailedOnly = rawOptions.qualityFailedOnly === true;
   const sinceIso = normalizeText(rawOptions.since);
   const statusFilter = normalizeText(rawOptions.status);
 
@@ -282,7 +291,9 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
       ? 'gemini-cli'
       : 'codex-cli';
 
-  const scanLimit = (sinceIso || statusFilter) ? Math.max(resolvedLimit, resolvedLimit * 8) : resolvedLimit;
+  const scanLimit = (sinceIso || statusFilter || qualityFailedOnly)
+    ? Math.max(resolvedLimit, resolvedLimit * 8)
+    : resolvedLimit;
   const sessions = await listContextDbSessions(rootDir, { agent, limit: scanLimit });
   const sinceMs = sinceIso ? Date.parse(sinceIso) : NaN;
 
@@ -294,9 +305,12 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
       if (!Number.isFinite(updatedMs) || !Number.isFinite(sinceMs) || updatedMs < sinceMs) return false;
     }
     return true;
-  }).slice(0, resolvedLimit);
+  });
+  const targetSessions = qualityFailedOnly
+    ? filteredSessions
+    : filteredSessions.slice(0, resolvedLimit);
 
-  const records = await mapWithConcurrency(filteredSessions, concurrency, async (meta) => {
+  const records = await mapWithConcurrency(targetSessions, concurrency, async (meta) => {
     const sessionId = normalizeText(meta.sessionId);
     const state = await readHudDispatchSummary({ rootDir, sessionId, provider, meta, includeHindsight: !fast });
     const hindsight = state.dispatchHindsight && typeof state.dispatchHindsight === 'object'
@@ -356,7 +370,10 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
     };
   });
 
-  const summary = summarizeHistory(records);
+  const selectedRecords = qualityFailedOnly
+    ? records.filter((record) => hasFailedQualityGate(record)).slice(0, resolvedLimit)
+    : records;
+  const summary = summarizeHistory(selectedRecords);
   if (json) {
     io.log(JSON.stringify({
       schemaVersion: 1,
@@ -365,18 +382,20 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
       agent,
       limit: resolvedLimit,
       fast,
+      qualityFailedOnly,
       since: sinceIso || null,
       status: statusFilter || null,
       summary,
-      records,
+      records: selectedRecords,
     }, null, 2));
     return { exitCode: 0 };
   }
 
   const lines = [
     `AIOS Team History (provider=${provider} agent=${agent})`,
+    qualityFailedOnly ? 'Filter: quality-gate failed only' : '',
     `Summary: sessions=${summary.total} dispatchBlocked=${summary.dispatchBlocked} hindsightUnstable=${summary.hindsightUnstable} topFailures=${summary.topFailures.map((item) => `${item.failureClass}=${item.count}`).join(', ') || 'none'} topQualityFailures=${summary.topQualityFailures.map((item) => `${item.failureCategory}=${item.count}`).join(', ') || 'none'} topFixHints=${summary.topFixHints.map((item) => `${item.targetId}=${item.count}`).join(', ') || 'none'} topJobs=${summary.topJobs.map((item) => `${item.jobId}=${item.count}`).join(', ') || 'none'}`,
-    ...(records.length > 0 ? records.map((record) => formatHistoryLine(record)) : ['- (none)']),
+    ...(selectedRecords.length > 0 ? selectedRecords.map((record) => formatHistoryLine(record)) : ['- (none)']),
   ];
   io.log(lines.join('\n') + '\n');
   return { exitCode: 0 };
