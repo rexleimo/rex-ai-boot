@@ -504,6 +504,7 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
   assert.ok(state.suggestedCommands.some((cmd) => cmd.includes('doctor')));
 
   const rendered = renderHud(state, { preset: 'focused' });
+  assert.match(rendered, /Quality: failed \(quality-logs\)/);
   assert.match(rendered, /Dispatch Hindsight: pairs=1/);
   assert.match(rendered, /FixHint: \[runbook\.dispatch-merge-triage\]/);
 });

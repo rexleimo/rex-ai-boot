@@ -275,6 +275,28 @@ function formatMinimalQualityLabel(state) {
   return `quality=${outcomeLabel}`;
 }
 
+function formatQualityGateLine(state) {
+  const qualityGate = state?.latestQualityGate && typeof state.latestQualityGate === 'object'
+    ? state.latestQualityGate
+    : null;
+  if (!qualityGate) return '';
+
+  const outcomeRaw = normalizeText(qualityGate.outcome).toLowerCase();
+  const outcomeLabel = outcomeRaw === 'retry-needed'
+    ? 'failed'
+    : outcomeRaw === 'success'
+      ? 'ok'
+      : outcomeRaw;
+  if (!outcomeLabel) return '';
+
+  const failureCategory = normalizeText(qualityGate.failureCategory);
+  const categoryRef = normalizeText(qualityGate.categoryRef).replace(/^category:/, '');
+  const category = failureCategory || categoryRef;
+  return category
+    ? `Quality: ${outcomeLabel} (${category})`
+    : `Quality: ${outcomeLabel}`;
+}
+
 export function normalizeHudPreset(raw = 'focused') {
   const value = normalizeText(raw).toLowerCase();
   if (value === 'minimal' || value === 'focused' || value === 'full') return value;
@@ -304,6 +326,11 @@ export function renderHud(state, { preset = 'focused', watchMeta = null } = {}) 
     formatCheckpointLine(state),
     formatDispatchLine(state),
   ];
+
+  const qualityGateLine = formatQualityGateLine(state);
+  if (qualityGateLine) {
+    lines.push(qualityGateLine);
+  }
 
   const hindsight = formatDispatchHindsightLine(state);
   if (hindsight) {
