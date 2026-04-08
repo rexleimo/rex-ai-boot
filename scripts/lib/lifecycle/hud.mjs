@@ -1,5 +1,6 @@
 import { readHudState } from '../hud/state.mjs';
 import { normalizeHudPreset, renderHud } from '../hud/render.mjs';
+import { formatSkillCandidateDetails } from '../hud/skill-candidates.mjs';
 import { buildWatchMeta } from '../hud/watch-meta.mjs';
 import { resolveWatchCadence } from '../hud/watch-cadence.mjs';
 import { createThrottledWatchRender, watchRenderLoop } from '../hud/watch.mjs';
@@ -18,6 +19,7 @@ export function normalizeHudOptions(rawOptions = {}) {
     preset: normalizeHudPreset(rawOptions.preset || 'focused'),
     watch: rawOptions.watch === true,
     fast: rawOptions.fast === true,
+    showSkillCandidates: rawOptions.showSkillCandidates === true,
     json: rawOptions.json === true,
     intervalMs: cadence.renderIntervalMs,
     intervalLabel: cadence.renderIntervalLabel,
@@ -27,6 +29,7 @@ export function normalizeHudOptions(rawOptions = {}) {
 
 export async function runHud(rawOptions = {}, { rootDir, io = console, env = process.env } = {}) {
   const options = normalizeHudOptions(rawOptions);
+  const skillCandidateLimit = options.showSkillCandidates ? 6 : 0;
   const fastWatchMinimal = options.fast && options.watch && !options.json && options.preset === 'minimal';
   const dataRefreshMs = fastWatchMinimal
     ? Math.max(options.intervalMs, FAST_WATCH_DATA_REFRESH_MS)
@@ -43,6 +46,7 @@ export async function runHud(rawOptions = {}, { rootDir, io = console, env = pro
       sessionId: options.sessionId,
       provider: options.provider,
       fast: fastWatchMinimal,
+      skillCandidateLimit,
     });
 
     if (options.json) {
@@ -50,7 +54,7 @@ export async function runHud(rawOptions = {}, { rootDir, io = console, env = pro
       return { exitCode: state.selection?.sessionId ? 0 : 1, state };
     }
 
-    io.log(renderHud(state, {
+    const hudText = renderHud(state, {
       preset: options.preset,
       watchMeta: options.watch
         ? buildWatchMeta(state, {
@@ -61,7 +65,11 @@ export async function runHud(rawOptions = {}, { rootDir, io = console, env = pro
           fast: fastWatchMinimal,
         })
         : null,
-    }));
+    }).trimEnd();
+    const skillCandidateText = options.showSkillCandidates
+      ? formatSkillCandidateDetails(state, { limit: skillCandidateLimit })
+      : '';
+    io.log([hudText, skillCandidateText].filter(Boolean).join('\n') + '\n');
     return { exitCode: state.selection?.sessionId ? 0 : 1, state };
   };
 
@@ -78,8 +86,9 @@ export async function runHud(rawOptions = {}, { rootDir, io = console, env = pro
       sessionId: options.sessionId,
       provider: options.provider,
       fast: fastWatchMinimal,
+      skillCandidateLimit,
     });
-    return renderHud(state, {
+    const hudText = renderHud(state, {
       preset: options.preset,
       watchMeta: buildWatchMeta(state, {
         renderIntervalMs: options.intervalMs,
@@ -88,7 +97,11 @@ export async function runHud(rawOptions = {}, { rootDir, io = console, env = pro
         dataRefreshLabel,
         fast: fastWatchMinimal,
       }),
-    });
+    }).trimEnd();
+    const skillCandidateText = options.showSkillCandidates
+      ? formatSkillCandidateDetails(state, { limit: skillCandidateLimit })
+      : '';
+    return [hudText, skillCandidateText].filter(Boolean).join('\n') + '\n';
   };
 
   const watchRender = fastWatchMinimal

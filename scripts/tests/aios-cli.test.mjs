@@ -228,10 +228,18 @@ test('parseArgs accepts team shorthand and runtime overrides', () => {
 });
 
 test('parseArgs accepts hud command options', () => {
+  const defaultsResult = parseArgs(['hud']);
+  assert.equal(defaultsResult.command, 'hud');
+  assert.equal(defaultsResult.options.showSkillCandidates, false);
+
   const jsonResult = parseArgs(['hud', '--provider', 'codex', '--json']);
   assert.equal(jsonResult.command, 'hud');
   assert.equal(jsonResult.options.provider, 'codex');
   assert.equal(jsonResult.options.json, true);
+
+  const showSkillCandidates = parseArgs(['hud', '--show-skill-candidates']);
+  assert.equal(showSkillCandidates.command, 'hud');
+  assert.equal(showSkillCandidates.options.showSkillCandidates, true);
 
   const sessionResult = parseArgs(['hud', '--session', 'session-123', '--preset', 'full']);
   assert.equal(sessionResult.command, 'hud');

@@ -8,6 +8,7 @@ import { buildHindsightEval } from '../lib/harness/hindsight-eval.mjs';
 import { readHudDispatchSummary, readHudState, selectHudSessionId } from '../lib/hud/state.mjs';
 import { renderHud } from '../lib/hud/render.mjs';
 import { computeAdaptiveNextIntervalMs, createThrottledWatchRender, watchRenderLoop } from '../lib/hud/watch.mjs';
+import { runHud } from '../lib/lifecycle/hud.mjs';
 import { runTeamHistory, runTeamStatus } from '../lib/lifecycle/team-ops.mjs';
 
 async function writeJson(filePath, value) {
@@ -1282,6 +1283,55 @@ test('runTeamStatus --show-skill-candidates renders detailed candidate rows', as
   assert.match(output, /Skill Candidates:/);
   assert.match(output, /skill=skill-constraints/);
   assert.match(output, /draft=draft\.skill\.repeat-blocked\.ownership-policy/);
+  assert.match(output, /skill=debug/);
+  assert.match(output, /draft=draft\.skill\.repeat-blocked\.runtime-error/);
+});
+
+test('runHud --show-skill-candidates renders detailed candidate rows', async () => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-hud-skill-candidates-'));
+  const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');
+  const sessionId = 'hud-skill-candidate-session';
+  const sessionDir = path.join(sessionsRoot, sessionId);
+
+  await writeJson(
+    path.join(sessionDir, 'meta.json'),
+    makeSessionMeta({ sessionId, agent: 'codex-cli', updatedAt: '2026-04-06T09:00:00.000Z' })
+  );
+  await writeJson(path.join(sessionDir, 'state.json'), {
+    sessionId,
+    status: 'running',
+    updatedAt: '2026-04-06T09:00:00.000Z',
+  });
+  await writeJson(path.join(sessionDir, 'artifacts', 'skill-candidate-20260406T090000Z-debug-runtime-error.json'), {
+    schemaVersion: 1,
+    kind: 'learn-eval.skill-candidate',
+    sessionId,
+    generatedAt: '2026-04-06T09:00:00.000Z',
+    persistedAt: '2026-04-06T09:00:00.000Z',
+    lessonCluster: {
+      kind: 'repeat-blocked',
+      failureClass: 'runtime-error',
+      count: 1,
+    },
+    candidate: {
+      skillId: 'debug',
+      scope: 'runtime-triage',
+      patchHint: 'Run evidence-first runtime triage.',
+    },
+    review: {
+      status: 'candidate',
+      mode: 'manual',
+      sourceDraftTargetId: 'draft.skill.repeat-blocked.runtime-error',
+    },
+  });
+
+  const logs = [];
+  await runHud(
+    { provider: 'codex', sessionId, showSkillCandidates: true, preset: 'focused' },
+    { rootDir, io: { log: (line) => logs.push(line) } }
+  );
+  const output = logs.join('\n');
+  assert.match(output, /Skill Candidates:/);
   assert.match(output, /skill=debug/);
   assert.match(output, /draft=draft\.skill\.repeat-blocked\.runtime-error/);
 });

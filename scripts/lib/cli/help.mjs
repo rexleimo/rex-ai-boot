@@ -204,6 +204,7 @@ Options:
   --watch                       Refresh display on an interval (TTY-only)
   --fast                        In --watch + minimal preset, skip heavy reads and throttle state refresh to ~1s
   --no-fast                     Force disable fast mode (overrides auto-fast)
+  --show-skill-candidates       Show detailed skill-candidate artifact rows under HUD output
   --interval-ms <n|auto>        Watch refresh interval (default: 1000; use "auto" for 250-2000ms adaptive cadence; auto-fast enabled when <=500 or auto with watch+minimal)
   --json                        Output structured JSON instead of text
   -h, --help

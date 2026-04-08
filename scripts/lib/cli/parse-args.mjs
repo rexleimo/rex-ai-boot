@@ -106,6 +106,7 @@ function createDefaultHudOptions() {
     preset: 'focused',
     watch: false,
     fast: false,
+    showSkillCandidates: false,
     json: false,
     intervalMs: 1000,
   };
@@ -151,6 +152,9 @@ function parseHudArgs(argv) {
       case '--no-fast':
         options.fast = false;
         fastExplicit = true;
+        break;
+      case '--show-skill-candidates':
+        options.showSkillCandidates = true;
         break;
       case '--json':
         options.json = true;
