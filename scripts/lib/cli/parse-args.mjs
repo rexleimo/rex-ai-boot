@@ -212,6 +212,7 @@ function createDefaultTeamStatusOptions() {
     preset: 'focused',
     watch: false,
     fast: false,
+    showSkillCandidates: false,
     json: false,
     intervalMs: 1000,
   };
@@ -264,6 +265,9 @@ function parseTeamStatusArgs(argv) {
       case '--fast':
         options.fast = true;
         fastExplicit = true;
+        break;
+      case '--show-skill-candidates':
+        options.showSkillCandidates = true;
         break;
       case '--no-fast':
         options.fast = false;

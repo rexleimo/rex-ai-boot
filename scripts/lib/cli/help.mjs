@@ -180,6 +180,7 @@ Options:
   --json                        (team status/history) Output structured JSON instead of text
   --concurrency <n>             (team history) Process sessions concurrently (default: 4)
   --fast                        (team history) Skip dispatch hindsight evaluation for faster scans
+  --show-skill-candidates       (team status) Show detailed skill-candidate artifact rows under HUD output
   --quality-failed-only         (team history) Only include sessions with failed quality-gate outcomes
   --quality-category <name>     (team history) Only include sessions with failed quality-gate category match
   --quality-category-prefix <name> (team history) Only include sessions with failed quality-gate category prefix match (comma-separated)

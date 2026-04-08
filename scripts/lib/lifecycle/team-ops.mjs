@@ -10,6 +10,12 @@ function normalizeText(value) {
   return String(value ?? '').trim();
 }
 
+function clipLine(value, maxLen = 180) {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  if (text.length <= maxLen) return text;
+  return `${text.slice(0, maxLen)}…`;
+}
+
 function normalizeCounter(value) {
   return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }
@@ -107,6 +113,49 @@ async function mapWithConcurrency(items, concurrency, mapper) {
   return results;
 }
 
+function formatSkillCandidateDetails(state, { limit = 6 } = {}) {
+  const resolvedLimit = Number.isFinite(limit) ? Math.max(1, Math.floor(limit)) : 6;
+  const recentCandidates = Array.isArray(state?.recentSkillCandidates)
+    ? state.recentSkillCandidates
+    : [];
+  const fallbackLatest = state?.latestSkillCandidate && typeof state.latestSkillCandidate === 'object'
+    ? [state.latestSkillCandidate]
+    : [];
+  const items = (recentCandidates.length > 0 ? recentCandidates : fallbackLatest).slice(0, resolvedLimit);
+
+  const lines = ['', 'Skill Candidates:'];
+  if (items.length === 0) {
+    lines.push('- (none)');
+    return lines.join('\n');
+  }
+
+  for (const candidate of items) {
+    const skillId = normalizeText(candidate?.skillId) || 'unknown-skill';
+    const scope = normalizeText(candidate?.scope) || 'general';
+    const failureClass = normalizeText(candidate?.failureClass) || 'unknown';
+    const lessonCount = normalizeCounter(candidate?.lessonCount);
+    const reviewMode = normalizeText(candidate?.reviewMode) || 'manual';
+    const reviewStatus = normalizeText(candidate?.reviewStatus) || 'candidate';
+    const draftTargetId = normalizeText(candidate?.sourceDraftTargetId);
+    const artifactPath = normalizeText(candidate?.artifactPath);
+    const patchHint = clipLine(candidate?.patchHint, 120);
+
+    const bits = [
+      `skill=${skillId}`,
+      `scope=${scope}`,
+      `failure=${failureClass}`,
+      lessonCount > 0 ? `lessons=${lessonCount}` : '',
+      `review=${reviewMode}/${reviewStatus}`,
+      draftTargetId ? `draft=${draftTargetId}` : '',
+      artifactPath ? `artifact=${artifactPath}` : '',
+      patchHint ? `hint="${patchHint}"` : '',
+    ].filter(Boolean);
+    lines.push(`- ${bits.join(' ')}`);
+  }
+
+  return lines.join('\n');
+}
+
 export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, env = process.env } = {}) {
   const sessionId = normalizeText(rawOptions.sessionId || rawOptions.resumeSessionId);
   const provider = normalizeProvider(rawOptions.provider);
@@ -114,6 +163,8 @@ export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, en
   const watch = rawOptions.watch === true;
   const fast = rawOptions.fast === true;
   const json = rawOptions.json === true;
+  const showSkillCandidates = rawOptions.showSkillCandidates === true;
+  const skillCandidateLimit = showSkillCandidates ? 6 : 0;
   const watchCadence = resolveWatchCadence(rawOptions.intervalMs, { fallbackMs: 1000 });
   const intervalMs = watchCadence.renderIntervalMs;
   const fastWatchMinimal = fast && watch && !json && preset === 'minimal';
@@ -127,12 +178,18 @@ export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, en
     : `${dataRefreshMs}ms`;
 
   const renderOnce = async () => {
-    const state = await readHudState({ rootDir, sessionId, provider, fast: fastWatchMinimal });
+    const state = await readHudState({
+      rootDir,
+      sessionId,
+      provider,
+      fast: fastWatchMinimal,
+      skillCandidateLimit,
+    });
     if (json) {
       io.log(JSON.stringify(state, null, 2));
       return { exitCode: state.selection?.sessionId ? 0 : 1 };
     }
-    io.log(renderHud(state, {
+    const hudText = renderHud(state, {
       preset,
       watchMeta: watch
         ? buildWatchMeta(state, {
@@ -143,7 +200,11 @@ export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, en
           fast: fastWatchMinimal,
         })
         : null,
-    }));
+    }).trimEnd();
+    const skillCandidateText = showSkillCandidates
+      ? formatSkillCandidateDetails(state, { limit: skillCandidateLimit })
+      : '';
+    io.log([hudText, skillCandidateText].filter(Boolean).join('\n') + '\n');
     return { exitCode: state.selection?.sessionId ? 0 : 1 };
   };
 
@@ -155,8 +216,14 @@ export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, en
   }
 
   const readAndRender = async () => {
-    const state = await readHudState({ rootDir, sessionId, provider, fast: fastWatchMinimal });
-    return renderHud(state, {
+    const state = await readHudState({
+      rootDir,
+      sessionId,
+      provider,
+      fast: fastWatchMinimal,
+      skillCandidateLimit,
+    });
+    const hudText = renderHud(state, {
       preset,
       watchMeta: buildWatchMeta(state, {
         renderIntervalMs: intervalMs,
@@ -165,7 +232,11 @@ export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, en
         dataRefreshLabel,
         fast: fastWatchMinimal,
       }),
-    });
+    }).trimEnd();
+    const skillCandidateText = showSkillCandidates
+      ? formatSkillCandidateDetails(state, { limit: skillCandidateLimit })
+      : '';
+    return [hudText, skillCandidateText].filter(Boolean).join('\n') + '\n';
   };
 
   const watchRender = fastWatchMinimal

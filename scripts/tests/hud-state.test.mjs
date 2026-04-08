@@ -8,7 +8,7 @@ import { buildHindsightEval } from '../lib/harness/hindsight-eval.mjs';
 import { readHudDispatchSummary, readHudState, selectHudSessionId } from '../lib/hud/state.mjs';
 import { renderHud } from '../lib/hud/render.mjs';
 import { computeAdaptiveNextIntervalMs, createThrottledWatchRender, watchRenderLoop } from '../lib/hud/watch.mjs';
-import { runTeamHistory } from '../lib/lifecycle/team-ops.mjs';
+import { runTeamHistory, runTeamStatus } from '../lib/lifecycle/team-ops.mjs';
 
 async function writeJson(filePath, value) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -1186,6 +1186,104 @@ test('runTeamHistory fast mode skips dispatch hindsight and fix hint', async () 
   assert.equal(record.skillCandidate.lessonCount, 2);
   assert.equal(record.qualityGate.outcome, 'retry-needed');
   assert.equal(record.qualityGate.failureCategory, 'quality-logs');
+});
+
+test('runTeamStatus --show-skill-candidates renders detailed candidate rows', async () => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-team-status-skill-candidates-'));
+  const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');
+  const sessionId = 'status-skill-candidate-session';
+  const sessionDir = path.join(sessionsRoot, sessionId);
+
+  await writeJson(
+    path.join(sessionDir, 'meta.json'),
+    makeSessionMeta({ sessionId, agent: 'codex-cli', updatedAt: '2026-04-06T08:00:00.000Z' })
+  );
+  await writeJson(path.join(sessionDir, 'state.json'), {
+    sessionId,
+    status: 'running',
+    updatedAt: '2026-04-06T08:00:00.000Z',
+  });
+  await writeJsonLines(path.join(sessionDir, 'l1-checkpoints.jsonl'), [
+    {
+      seq: 1,
+      ts: '2026-04-06T08:00:00.000Z',
+      status: 'running',
+      summary: 'Checkpoint',
+      nextActions: [],
+      artifacts: [],
+    },
+  ]);
+
+  await writeJson(path.join(sessionDir, 'artifacts', 'dispatch-run-20260406T080000Z.json'), {
+    schemaVersion: 1,
+    kind: 'orchestration.dispatch-run',
+    sessionId,
+    persistedAt: '2026-04-06T08:00:00.000Z',
+    dispatchRun: {
+      ok: true,
+      mode: 'dry-run',
+      executorRegistry: ['local-dry-run'],
+      jobRuns: [],
+      finalOutputs: [],
+    },
+  });
+
+  await writeJson(path.join(sessionDir, 'artifacts', 'skill-candidate-20260406T080100Z-skill-constraints-ownership-policy.json'), {
+    schemaVersion: 1,
+    kind: 'learn-eval.skill-candidate',
+    sessionId,
+    generatedAt: '2026-04-06T08:01:00.000Z',
+    persistedAt: '2026-04-06T08:01:00.000Z',
+    lessonCluster: {
+      kind: 'repeat-blocked',
+      failureClass: 'ownership-policy',
+      count: 2,
+    },
+    candidate: {
+      skillId: 'skill-constraints',
+      scope: 'ownership-policy',
+      patchHint: 'Add ownership boundary guidance.',
+    },
+    review: {
+      status: 'candidate',
+      mode: 'manual',
+      sourceDraftTargetId: 'draft.skill.repeat-blocked.ownership-policy',
+    },
+  });
+  await writeJson(path.join(sessionDir, 'artifacts', 'skill-candidate-20260406T080000Z-debug-runtime-error.json'), {
+    schemaVersion: 1,
+    kind: 'learn-eval.skill-candidate',
+    sessionId,
+    generatedAt: '2026-04-06T08:00:00.000Z',
+    persistedAt: '2026-04-06T08:00:00.000Z',
+    lessonCluster: {
+      kind: 'repeat-blocked',
+      failureClass: 'runtime-error',
+      count: 1,
+    },
+    candidate: {
+      skillId: 'debug',
+      scope: 'runtime-triage',
+      patchHint: 'Run evidence-first runtime triage.',
+    },
+    review: {
+      status: 'candidate',
+      mode: 'manual',
+      sourceDraftTargetId: 'draft.skill.repeat-blocked.runtime-error',
+    },
+  });
+
+  const logs = [];
+  await runTeamStatus(
+    { provider: 'codex', sessionId, showSkillCandidates: true, preset: 'focused' },
+    { rootDir, io: { log: (line) => logs.push(line) } }
+  );
+  const output = logs.join('\n');
+  assert.match(output, /Skill Candidates:/);
+  assert.match(output, /skill=skill-constraints/);
+  assert.match(output, /draft=draft\.skill\.repeat-blocked\.ownership-policy/);
+  assert.match(output, /skill=debug/);
+  assert.match(output, /draft=draft\.skill\.repeat-blocked\.runtime-error/);
 });
 
 test('runTeamHistory quality-failed-only filters sessions by quality gate outcome', async () => {

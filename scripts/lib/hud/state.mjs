@@ -818,6 +818,31 @@ async function findLatestSkillCandidateArtifact(rootDir, sessionId) {
   return result;
 }
 
+async function collectRecentSkillCandidates(rootDir, sessionId, { limit = 5 } = {}) {
+  const normalizedSessionId = normalizeText(sessionId);
+  const max = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 5;
+  if (!normalizedSessionId || max <= 0) return [];
+
+  const index = await loadDispatchIndex(rootDir, normalizedSessionId);
+  const names = Array.isArray(index.skillCandidateNames) ? index.skillCandidateNames.slice(0, max) : [];
+  if (names.length === 0) return [];
+
+  const parsed = await mapWithConcurrency(names, 4, async (name) => {
+    if (index.latestSkillCandidate && index.latestSkillCandidateName === name) {
+      return index.latestSkillCandidate;
+    }
+    const absPath = path.join(index.artifactsDir, name);
+    const artifact = await safeReadJson(absPath);
+    return normalizeSkillCandidateArtifactPayload({
+      rootDir,
+      absPath,
+      artifact,
+    });
+  });
+
+  return parsed.filter(Boolean);
+}
+
 function inferProviderFromAgent(agent = '') {
   return AGENT_PROVIDER_MAP[normalizeText(agent)] || '';
 }
@@ -917,10 +942,13 @@ function buildSuggestedCommands({ sessionId, provider, latestDispatch, latestSki
   return normalizeStringArray(commands);
 }
 
-export async function readHudState({ rootDir, sessionId = '', provider = '', fast = false } = {}) {
+export async function readHudState({ rootDir, sessionId = '', provider = '', fast = false, skillCandidateLimit = 0 } = {}) {
   const selection = await selectHudSessionId({ rootDir, sessionId, provider });
   const generatedAt = nowIso();
   const fastMode = fast === true;
+  const resolvedSkillCandidateLimit = Number.isFinite(skillCandidateLimit)
+    ? Math.max(0, Math.floor(skillCandidateLimit))
+    : 0;
 
   if (!selection.sessionId) {
     return {
@@ -932,6 +960,7 @@ export async function readHudState({ rootDir, sessionId = '', provider = '', fas
       latestCheckpoint: null,
       latestDispatch: null,
       latestSkillCandidate: null,
+      recentSkillCandidates: [],
       latestQualityGate: null,
       suggestedCommands: [],
       warnings: ['No ContextDB sessions found in this repo.'],
@@ -950,22 +979,25 @@ export async function readHudState({ rootDir, sessionId = '', provider = '', fas
   let checkpoint = null;
   let dispatch = null;
   let skillCandidate = null;
+  let recentSkillCandidates = [];
   let qualityGateEvent = null;
   let dispatchEvidence = [];
   if (fastMode) {
-    [meta, dispatch, skillCandidate, qualityGateEvent] = await Promise.all([
+    [meta, dispatch, skillCandidate, recentSkillCandidates, qualityGateEvent] = await Promise.all([
       safeReadJsonCached(metaPath),
       findLatestDispatchArtifact(rootDir, selection.sessionId),
       findLatestSkillCandidateArtifact(rootDir, selection.sessionId),
+      collectRecentSkillCandidates(rootDir, selection.sessionId, { limit: resolvedSkillCandidateLimit }),
       readLatestQualityGateEvent(eventsPath),
     ]);
   } else {
-    [meta, state, checkpoint, dispatch, skillCandidate, qualityGateEvent, dispatchEvidence] = await Promise.all([
+    [meta, state, checkpoint, dispatch, skillCandidate, recentSkillCandidates, qualityGateEvent, dispatchEvidence] = await Promise.all([
       safeReadJsonCached(metaPath),
       safeReadJsonCached(statePath),
       readLastJsonLine(checkpointPath),
       findLatestDispatchArtifact(rootDir, selection.sessionId),
       findLatestSkillCandidateArtifact(rootDir, selection.sessionId),
+      collectRecentSkillCandidates(rootDir, selection.sessionId, { limit: resolvedSkillCandidateLimit }),
       readLatestQualityGateEvent(eventsPath),
       collectRecentDispatchEvidence(rootDir, selection.sessionId),
     ]);
@@ -1001,6 +1033,7 @@ export async function readHudState({ rootDir, sessionId = '', provider = '', fas
       latestCheckpoint: null,
       latestDispatch,
       latestSkillCandidate: skillCandidate,
+      recentSkillCandidates,
       latestQualityGate: qualityGateEvent,
       dispatchHindsight: null,
       dispatchFixHint: null,
@@ -1049,6 +1082,7 @@ export async function readHudState({ rootDir, sessionId = '', provider = '', fas
     latestCheckpoint: checkpoint,
     latestDispatch,
     latestSkillCandidate: skillCandidate,
+    recentSkillCandidates,
     latestQualityGate: qualityGateEvent,
     dispatchHindsight,
     dispatchFixHint,

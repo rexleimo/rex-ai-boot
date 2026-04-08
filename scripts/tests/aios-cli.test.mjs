@@ -283,6 +283,12 @@ test('parseArgs accepts team status/history subcommands', () => {
   assert.equal(statusDefaults.options.subcommand, 'status');
   assert.equal(statusDefaults.options.preset, 'focused');
   assert.equal(statusDefaults.options.watch, false);
+  assert.equal(statusDefaults.options.showSkillCandidates, false);
+
+  const statusShowSkillCandidates = parseArgs(['team', 'status', '--show-skill-candidates']);
+  assert.equal(statusShowSkillCandidates.command, 'team');
+  assert.equal(statusShowSkillCandidates.options.subcommand, 'status');
+  assert.equal(statusShowSkillCandidates.options.showSkillCandidates, true);
 
   const statusWatchDefaults = parseArgs(['team', 'status', '--watch']);
   assert.equal(statusWatchDefaults.command, 'team');
