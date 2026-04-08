@@ -312,6 +312,11 @@ test('renderHud minimal shows watch visibility and quality category labels', () 
   const rendered = renderHud({
     selection: { sessionId: 's-1', provider: 'codex', agent: 'codex-cli' },
     latestDispatch: { ok: false, blockedJobs: 2 },
+    latestSkillCandidate: {
+      skillId: 'skill-constraints',
+      failureClass: 'ownership-policy',
+      lessonCount: 2,
+    },
     latestQualityGate: {
       outcome: 'retry-needed',
       categoryRef: 'category:quality-logs',
@@ -329,6 +334,7 @@ test('renderHud minimal shows watch visibility and quality category labels', () 
   assert.match(rendered, /session=s-1/);
   assert.match(rendered, /dispatch=blocked\(2\)/);
   assert.match(rendered, /quality=failed\(category:quality-logs\)/);
+  assert.match(rendered, /skill=skill-constraints\/ownership-policy#2/);
   assert.match(rendered, /watch: render=250ms data-refresh=1000ms fast=on data-age=20000ms/);
 });
 
@@ -449,6 +455,34 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
       ],
     },
   });
+  await writeJson(path.join(sessionDir, 'artifacts', 'skill-candidate-20260405T010100Z-skill-constraints-ownership-policy.json'), {
+    schemaVersion: 1,
+    kind: 'learn-eval.skill-candidate',
+    sessionId,
+    generatedAt: '2026-04-05T01:00:10.000Z',
+    persistedAt: '2026-04-05T01:01:00.000Z',
+    lessonCluster: {
+      kind: 'repeat-blocked',
+      failureClass: 'ownership-policy',
+      count: 2,
+      jobIds: ['phase.implement.wi.1'],
+      workItemRefs: ['wi.1'],
+      hints: ['Add ownership boundary guidance.'],
+    },
+    candidate: {
+      skillId: 'skill-constraints',
+      scope: 'ownership-policy',
+      patchHint: 'Add ownership boundary guidance.',
+    },
+    evidence: {
+      sourceArtifactPath: 'memory/context-db/sessions/session-2/artifacts/dispatch-run-20260405T010000Z.json',
+    },
+    review: {
+      status: 'candidate',
+      mode: 'manual',
+      sourceDraftTargetId: 'draft.skill.repeat-blocked.ownership-policy',
+    },
+  });
   await writeJsonLines(path.join(sessionDir, 'l2-events.jsonl'), [
     {
       seq: 1,
@@ -486,6 +520,11 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
   assert.equal(state.latestDispatch?.blocked?.[0]?.attempts, 2);
   assert.equal(state.latestDispatch?.blocked?.[0]?.failureClass, 'ownership-policy');
   assert.equal(state.latestDispatch?.blocked?.[0]?.retryClass, 'same-hypothesis');
+  assert.equal(state.latestSkillCandidate?.skillId, 'skill-constraints');
+  assert.equal(state.latestSkillCandidate?.scope, 'ownership-policy');
+  assert.equal(state.latestSkillCandidate?.failureClass, 'ownership-policy');
+  assert.equal(state.latestSkillCandidate?.lessonCount, 2);
+  assert.equal(state.latestSkillCandidate?.reviewMode, 'manual');
   assert.equal(state.latestQualityGate?.kind, 'verification.quality-gate');
   assert.equal(state.latestQualityGate?.turnId, 'quality-gate:20260405T010000Z:summary');
   assert.equal(state.latestQualityGate?.outcome, 'retry-needed');
@@ -507,6 +546,7 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
   assert.match(rendered, /Quality: failed \(quality-logs\)/);
   assert.match(rendered, /Dispatch Hindsight: pairs=1/);
   assert.match(rendered, /FixHint: \[runbook\.dispatch-merge-triage\]/);
+  assert.match(rendered, /SkillCandidate: skill=skill-constraints/);
 });
 
 test('readHudState caches latest checkpoint tail until file changes', async () => {
@@ -615,6 +655,31 @@ test('readHudState fast mode skips non-minimal heavy reads', async () => {
       finalOutputs: [],
     },
   });
+  await writeJson(path.join(sessionDir, 'artifacts', 'skill-candidate-20260406T020100Z-skill-constraints-ownership-policy.json'), {
+    schemaVersion: 1,
+    kind: 'learn-eval.skill-candidate',
+    sessionId,
+    generatedAt: '2026-04-06T02:00:10.000Z',
+    persistedAt: '2026-04-06T02:01:00.000Z',
+    lessonCluster: {
+      kind: 'repeat-blocked',
+      failureClass: 'ownership-policy',
+      count: 2,
+    },
+    candidate: {
+      skillId: 'skill-constraints',
+      scope: 'ownership-policy',
+      patchHint: 'Add ownership policy checks.',
+    },
+    evidence: {
+      sourceArtifactPath: 'memory/context-db/sessions/fast-state-session/artifacts/dispatch-run-20260406T020000Z.json',
+    },
+    review: {
+      status: 'candidate',
+      mode: 'manual',
+      sourceDraftTargetId: 'draft.skill.repeat-blocked.ownership-policy',
+    },
+  });
   await writeJsonLines(path.join(sessionDir, 'l2-events.jsonl'), [
     {
       seq: 1,
@@ -657,6 +722,9 @@ test('readHudState fast mode skips non-minimal heavy reads', async () => {
     assert.equal(state.latestCheckpoint, null);
     assert.equal(state.latestDispatch?.ok, false);
     assert.equal(state.latestDispatch?.blockedJobs, 1);
+    assert.equal(state.latestSkillCandidate?.skillId, 'skill-constraints');
+    assert.equal(state.latestSkillCandidate?.failureClass, 'ownership-policy');
+    assert.equal(state.latestSkillCandidate?.lessonCount, 2);
     assert.equal(state.latestQualityGate?.turnId, 'quality-gate:20260406T020000Z:summary');
     assert.equal(state.latestQualityGate?.categoryRef, 'category:quality-logs');
     assert.equal(state.dispatchHindsight, null);
@@ -774,6 +842,31 @@ test('readHudDispatchSummary includes latest dispatch, hindsight, and fix hint',
       finalOutputs: [],
     },
   });
+  await writeJson(path.join(sessionDir, 'artifacts', 'skill-candidate-20260405T030100Z-skill-constraints-ownership-policy.json'), {
+    schemaVersion: 1,
+    kind: 'learn-eval.skill-candidate',
+    sessionId,
+    generatedAt: '2026-04-05T03:00:10.000Z',
+    persistedAt: '2026-04-05T03:01:00.000Z',
+    lessonCluster: {
+      kind: 'repeat-blocked',
+      failureClass: 'ownership-policy',
+      count: 2,
+    },
+    candidate: {
+      skillId: 'skill-constraints',
+      scope: 'ownership-policy',
+      patchHint: 'Add ownership boundary guidance.',
+    },
+    evidence: {
+      sourceArtifactPath: 'memory/context-db/sessions/dispatch-summary-session/artifacts/dispatch-run-20260405T030000Z.json',
+    },
+    review: {
+      status: 'candidate',
+      mode: 'manual',
+      sourceDraftTargetId: 'draft.skill.repeat-blocked.ownership-policy',
+    },
+  });
   await writeJsonLines(path.join(sessionDir, 'l2-events.jsonl'), [
     {
       seq: 1,
@@ -799,6 +892,11 @@ test('readHudDispatchSummary includes latest dispatch, hindsight, and fix hint',
   assert.equal(summary.latestDispatch?.jobCount, 2);
   assert.equal(summary.latestDispatch?.blockedJobs, 1);
   assert.ok(String(summary.latestDispatch?.artifactPath || '').includes('dispatch-run-20260405T030000Z.json'));
+  assert.equal(summary.latestSkillCandidate?.skillId, 'skill-constraints');
+  assert.equal(summary.latestSkillCandidate?.scope, 'ownership-policy');
+  assert.equal(summary.latestSkillCandidate?.failureClass, 'ownership-policy');
+  assert.equal(summary.latestSkillCandidate?.lessonCount, 2);
+  assert.ok(String(summary.latestSkillCandidate?.artifactPath || '').includes('skill-candidate-20260405T030100Z-skill-constraints-ownership-policy.json'));
   assert.equal(summary.dispatchHindsight?.pairsAnalyzed, 1);
   assert.equal(summary.dispatchHindsight?.repeatedBlockedTurns, 1);
   assert.equal(summary.latestQualityGate?.turnId, 'quality-gate:20260405T030000Z:summary');
@@ -922,6 +1020,28 @@ test('runTeamHistory includes dispatch hindsight summary and fix hint', async ()
       finalOutputs: [],
     },
   });
+  await writeJson(path.join(sessionDir, 'artifacts', 'skill-candidate-20260405T030100Z-skill-constraints-ownership-policy.json'), {
+    schemaVersion: 1,
+    kind: 'learn-eval.skill-candidate',
+    sessionId,
+    generatedAt: '2026-04-05T03:00:10.000Z',
+    persistedAt: '2026-04-05T03:01:00.000Z',
+    lessonCluster: {
+      kind: 'repeat-blocked',
+      failureClass: 'ownership-policy',
+      count: 2,
+    },
+    candidate: {
+      skillId: 'skill-constraints',
+      scope: 'ownership-policy',
+      patchHint: 'Add ownership boundary guidance.',
+    },
+    review: {
+      status: 'candidate',
+      mode: 'manual',
+      sourceDraftTargetId: 'draft.skill.repeat-blocked.ownership-policy',
+    },
+  });
   await writeJsonLines(path.join(sessionDir, 'l2-events.jsonl'), [
     {
       seq: 1,
@@ -953,6 +1073,8 @@ test('runTeamHistory includes dispatch hindsight summary and fix hint', async ()
   assert.equal(report.summary.topQualityFailures?.[0]?.failureCategory, 'quality-logs');
   assert.equal(report.summary.topFixHints?.[0]?.targetId, 'runbook.dispatch-merge-triage');
   assert.equal(report.summary.topJobs?.[0]?.jobId, 'phase.implement.wi.1');
+  assert.equal(report.summary.topSkillCandidates?.[0]?.skillId, 'skill-constraints');
+  assert.equal(report.summary.topSkillCandidates?.[0]?.failureClass, 'ownership-policy');
   const record = report.records.find((item) => item.sessionId === sessionId);
   assert.ok(record, 'expected history record');
   assert.equal(record.dispatchHindsight.pairsAnalyzed, 1);
@@ -962,6 +1084,11 @@ test('runTeamHistory includes dispatch hindsight summary and fix hint', async ()
   assert.equal(record.qualityGate.outcome, 'retry-needed');
   assert.equal(record.qualityGate.failureCategory, 'quality-logs');
   assert.equal(record.dispatchFixHint.targetId, 'runbook.dispatch-merge-triage');
+  assert.equal(record.skillCandidate.skillId, 'skill-constraints');
+  assert.equal(record.skillCandidate.failureClass, 'ownership-policy');
+  assert.equal(record.skillCandidate.lessonCount, 2);
+  assert.equal(record.skillCandidate.reviewMode, 'manual');
+  assert.ok(String(record.skillCandidate.artifactPath || '').includes('skill-candidate-20260405T030100Z-skill-constraints-ownership-policy.json'));
   assert.match(
     record.dispatchFixHint.nextCommand ?? '',
     /orchestrate --session history-session --dispatch local --execute dry-run --format json/
@@ -1000,6 +1127,28 @@ test('runTeamHistory fast mode skips dispatch hindsight and fix hint', async () 
       finalOutputs: [],
     },
   });
+  await writeJson(path.join(sessionDir, 'artifacts', 'skill-candidate-20260406T030100Z-skill-constraints-ownership-policy.json'), {
+    schemaVersion: 1,
+    kind: 'learn-eval.skill-candidate',
+    sessionId,
+    generatedAt: '2026-04-06T03:00:10.000Z',
+    persistedAt: '2026-04-06T03:01:00.000Z',
+    lessonCluster: {
+      kind: 'repeat-blocked',
+      failureClass: 'ownership-policy',
+      count: 2,
+    },
+    candidate: {
+      skillId: 'skill-constraints',
+      scope: 'ownership-policy',
+      patchHint: 'Add ownership policy checks.',
+    },
+    review: {
+      status: 'candidate',
+      mode: 'manual',
+      sourceDraftTargetId: 'draft.skill.repeat-blocked.ownership-policy',
+    },
+  });
   await writeJsonLines(path.join(sessionDir, 'l2-events.jsonl'), [
     {
       seq: 1,
@@ -1030,6 +1179,9 @@ test('runTeamHistory fast mode skips dispatch hindsight and fix hint', async () 
   assert.equal(record.sessionId, sessionId);
   assert.equal(record.dispatchHindsight, null);
   assert.equal(record.dispatchFixHint, null);
+  assert.equal(record.skillCandidate.skillId, 'skill-constraints');
+  assert.equal(record.skillCandidate.failureClass, 'ownership-policy');
+  assert.equal(record.skillCandidate.lessonCount, 2);
   assert.equal(record.qualityGate.outcome, 'retry-needed');
   assert.equal(record.qualityGate.failureCategory, 'quality-logs');
 });

@@ -223,6 +223,15 @@ function formatHistoryLine(record) {
     ? record.dispatchFixHint
     : null;
   const fixHintLabel = normalizeText(fixHint?.targetId) ? `fixHint=${normalizeText(fixHint.targetId)}` : '';
+  const skillCandidate = record.skillCandidate && typeof record.skillCandidate === 'object'
+    ? record.skillCandidate
+    : null;
+  const skillId = normalizeText(skillCandidate?.skillId);
+  const skillFailure = normalizeText(skillCandidate?.failureClass) || normalizeText(skillCandidate?.scope);
+  const skillLessons = normalizeCounter(skillCandidate?.lessonCount);
+  const skillCandidateLabel = skillId
+    ? `skillCandidate=${skillId}${skillFailure ? `/${skillFailure}` : ''}${skillLessons > 0 ? `#${skillLessons}` : ''}`
+    : '';
 
   const bits = [
     updatedAt ? `[${updatedAt}]` : '',
@@ -232,6 +241,7 @@ function formatHistoryLine(record) {
     qualityLabel,
     hindsightLabel,
     fixHintLabel,
+    skillCandidateLabel,
     goal ? `goal="${goal.length > 80 ? goal.slice(0, 79) + '…' : goal}"` : '',
   ].filter(Boolean);
   return `- ${bits.join(' | ')}`;
@@ -245,6 +255,7 @@ function summarizeHistory(records = []) {
   const topQualityFailureCounts = new Map();
   const fixHintCounts = new Map();
   const topJobCounts = new Map();
+  const topSkillCandidateCounts = new Map();
 
   for (const record of Array.isArray(records) ? records : []) {
     const dispatch = record?.dispatch && typeof record.dispatch === 'object' ? record.dispatch : null;
@@ -280,6 +291,24 @@ function summarizeHistory(records = []) {
       fixHintCounts.set(fixHintId, (fixHintCounts.get(fixHintId) || 0) + 1);
     }
 
+    const skillCandidate = record?.skillCandidate && typeof record.skillCandidate === 'object'
+      ? record.skillCandidate
+      : null;
+    const skillId = normalizeText(skillCandidate?.skillId);
+    if (skillId) {
+      const failureClass = normalizeText(skillCandidate?.failureClass);
+      const scope = normalizeText(skillCandidate?.scope);
+      const key = `${skillId}::${failureClass || scope || ''}`;
+      const existing = topSkillCandidateCounts.get(key) || {
+        skillId,
+        failureClass: failureClass || null,
+        scope: scope || null,
+        count: 0,
+      };
+      existing.count += 1;
+      topSkillCandidateCounts.set(key, existing);
+    }
+
     const qualityGate = record?.qualityGate && typeof record.qualityGate === 'object'
       ? record.qualityGate
       : null;
@@ -306,6 +335,11 @@ function summarizeHistory(records = []) {
     .map(([failureCategory, count]) => ({ failureCategory, count }))
     .sort((left, right) => right.count - left.count || left.failureCategory.localeCompare(right.failureCategory))
     .slice(0, 5);
+  const topSkillCandidates = Array.from(topSkillCandidateCounts.values())
+    .sort((left, right) => right.count - left.count
+      || left.skillId.localeCompare(right.skillId)
+      || String(left.failureClass || left.scope || '').localeCompare(String(right.failureClass || right.scope || '')))
+    .slice(0, 5);
 
   return {
     total,
@@ -315,6 +349,7 @@ function summarizeHistory(records = []) {
     topQualityFailures,
     topFixHints,
     topJobs,
+    topSkillCandidates,
   };
 }
 
@@ -382,6 +417,9 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
     const qualityGate = state.latestQualityGate && typeof state.latestQualityGate === 'object'
       ? state.latestQualityGate
       : null;
+    const skillCandidate = state.latestSkillCandidate && typeof state.latestSkillCandidate === 'object'
+      ? state.latestSkillCandidate
+      : null;
     return {
       sessionId,
       updatedAt: normalizeText(meta.updatedAt) || normalizeText(meta.createdAt),
@@ -419,6 +457,18 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
           evidence: normalizeText(fixHint.evidence) || null,
           nextCommand: normalizeText(fixHint.nextCommand) || null,
           nextArtifact: normalizeText(fixHint.nextArtifact) || null,
+        }
+        : null,
+      skillCandidate: skillCandidate
+        ? {
+          skillId: normalizeText(skillCandidate.skillId) || null,
+          scope: normalizeText(skillCandidate.scope) || null,
+          failureClass: normalizeText(skillCandidate.failureClass) || null,
+          lessonKind: normalizeText(skillCandidate.lessonKind) || null,
+          lessonCount: normalizeCounter(skillCandidate.lessonCount),
+          reviewMode: normalizeText(skillCandidate.reviewMode) || null,
+          reviewStatus: normalizeText(skillCandidate.reviewStatus) || null,
+          artifactPath: normalizeText(skillCandidate.artifactPath) || null,
         }
         : null,
     };
@@ -467,7 +517,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
   const lines = [
     `AIOS Team History (provider=${provider} agent=${agent})`,
     filterLabels.length > 0 ? `Filter: ${filterLabels.join('; ')}` : '',
-    `Summary: sessions=${summary.total} dispatchBlocked=${summary.dispatchBlocked} hindsightUnstable=${summary.hindsightUnstable} topFailures=${summary.topFailures.map((item) => `${item.failureClass}=${item.count}`).join(', ') || 'none'} topQualityFailures=${summary.topQualityFailures.map((item) => `${item.failureCategory}=${item.count}`).join(', ') || 'none'} topFixHints=${summary.topFixHints.map((item) => `${item.targetId}=${item.count}`).join(', ') || 'none'} topJobs=${summary.topJobs.map((item) => `${item.jobId}=${item.count}`).join(', ') || 'none'}`,
+    `Summary: sessions=${summary.total} dispatchBlocked=${summary.dispatchBlocked} hindsightUnstable=${summary.hindsightUnstable} topFailures=${summary.topFailures.map((item) => `${item.failureClass}=${item.count}`).join(', ') || 'none'} topQualityFailures=${summary.topQualityFailures.map((item) => `${item.failureCategory}=${item.count}`).join(', ') || 'none'} topFixHints=${summary.topFixHints.map((item) => `${item.targetId}=${item.count}`).join(', ') || 'none'} topJobs=${summary.topJobs.map((item) => `${item.jobId}=${item.count}`).join(', ') || 'none'} topSkillCandidates=${summary.topSkillCandidates.map((item) => `${item.skillId}${item.failureClass ? `/${item.failureClass}` : item.scope ? `/${item.scope}` : ''}=${item.count}`).join(', ') || 'none'}`,
     ...(selectedRecords.length > 0 ? selectedRecords.map((record) => formatHistoryLine(record)) : ['- (none)']),
   ];
   io.log(lines.join('\n') + '\n');

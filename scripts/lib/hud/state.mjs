@@ -34,6 +34,8 @@ const DISPATCH_INDEX_CACHE_MAX_ENTRIES = 32;
 const DISPATCH_INDEX_CACHE_MAX_NAMES = 200;
 const DISPATCH_INDEX_CACHE = new Map();
 const DISPATCH_INDEX_IN_FLIGHT = new Map();
+const SKILL_CANDIDATE_ARTIFACT_FILE_PATTERN = /^skill-candidate-.*\.json$/i;
+const SKILL_CANDIDATE_ARTIFACT_KIND = 'learn-eval.skill-candidate';
 const DISPATCH_HINDSIGHT_FIX_HINT_ACTIONS = Object.freeze({
   'ownership-policy': 'runbook.dispatch-merge-triage',
   contract: 'runbook.dispatch-merge-triage',
@@ -462,6 +464,9 @@ async function loadDispatchIndex(rootDir, sessionId) {
       names: [],
       latestName: '',
       latestDispatch: null,
+      skillCandidateNames: [],
+      latestSkillCandidateName: '',
+      latestSkillCandidate: null,
     };
   }
 
@@ -497,11 +502,19 @@ async function loadDispatchIndex(rootDir, sessionId) {
       .filter((name) => /^dispatch-run-.*\.json$/i.test(String(name || '').trim()))
       .sort((left, right) => String(right).localeCompare(String(left)))
       .slice(0, DISPATCH_INDEX_CACHE_MAX_NAMES);
+    const skillCandidateNames = files
+      .filter((name) => SKILL_CANDIDATE_ARTIFACT_FILE_PATTERN.test(String(name || '').trim()))
+      .sort((left, right) => String(right).localeCompare(String(left)))
+      .slice(0, DISPATCH_INDEX_CACHE_MAX_NAMES);
 
     const latestName = names[0] || '';
+    const latestSkillCandidateName = skillCandidateNames[0] || '';
     const previous = DISPATCH_INDEX_CACHE.get(cacheKey);
     const latestDispatch = previous && previous.latestName === latestName
       ? previous.latestDispatch
+      : null;
+    const latestSkillCandidate = previous && previous.latestSkillCandidateName === latestSkillCandidateName
+      ? previous.latestSkillCandidate
       : null;
 
     const entry = {
@@ -512,6 +525,9 @@ async function loadDispatchIndex(rootDir, sessionId) {
       names,
       latestName,
       latestDispatch,
+      skillCandidateNames,
+      latestSkillCandidateName,
+      latestSkillCandidate,
     };
 
     setLruCache(DISPATCH_INDEX_CACHE, cacheKey, entry, DISPATCH_INDEX_CACHE_MAX_ENTRIES);
@@ -712,6 +728,96 @@ async function findLatestDispatchArtifact(rootDir, sessionId) {
   return result;
 }
 
+function normalizeSkillCandidateArtifactPayload({
+  rootDir,
+  absPath,
+  artifact,
+} = {}) {
+  const artifactPath = toPosixPath(path.relative(rootDir, absPath));
+  const parsedArtifact = artifact && typeof artifact === 'object' ? artifact : null;
+  if (!parsedArtifact) {
+    return {
+      artifactPath,
+      persistedAt: '',
+      generatedAt: '',
+      kind: '',
+      skillId: '',
+      scope: '',
+      failureClass: '',
+      lessonKind: '',
+      lessonCount: 0,
+      patchHint: '',
+      sourceArtifactPath: '',
+      sourceDraftTargetId: '',
+      reviewStatus: '',
+      reviewMode: '',
+      raw: null,
+      parseError: 'invalid-json',
+    };
+  }
+
+  const candidate = parsedArtifact.candidate && typeof parsedArtifact.candidate === 'object'
+    ? parsedArtifact.candidate
+    : null;
+  const lessonCluster = parsedArtifact.lessonCluster && typeof parsedArtifact.lessonCluster === 'object'
+    ? parsedArtifact.lessonCluster
+    : null;
+  const evidence = parsedArtifact.evidence && typeof parsedArtifact.evidence === 'object'
+    ? parsedArtifact.evidence
+    : null;
+  const review = parsedArtifact.review && typeof parsedArtifact.review === 'object'
+    ? parsedArtifact.review
+    : null;
+  const kind = normalizeText(parsedArtifact.kind);
+
+  return {
+    artifactPath,
+    persistedAt: normalizeText(parsedArtifact.persistedAt),
+    generatedAt: normalizeText(parsedArtifact.generatedAt),
+    kind,
+    skillId: normalizeText(candidate?.skillId),
+    scope: normalizeText(candidate?.scope),
+    failureClass: normalizeText(lessonCluster?.failureClass),
+    lessonKind: normalizeText(lessonCluster?.kind),
+    lessonCount: Number.isFinite(lessonCluster?.count) ? Math.max(0, Math.floor(lessonCluster.count)) : 0,
+    patchHint: clipText(candidate?.patchHint, 200),
+    sourceArtifactPath: normalizeText(evidence?.sourceArtifactPath),
+    sourceDraftTargetId: normalizeText(review?.sourceDraftTargetId),
+    reviewStatus: normalizeText(review?.status),
+    reviewMode: normalizeText(review?.mode),
+    raw: parsedArtifact,
+    parseError: kind && kind !== SKILL_CANDIDATE_ARTIFACT_KIND ? 'kind-mismatch' : '',
+  };
+}
+
+async function findLatestSkillCandidateArtifact(rootDir, sessionId) {
+  const normalizedSessionId = normalizeText(sessionId);
+  if (!normalizedSessionId) return null;
+
+  const index = await loadDispatchIndex(rootDir, normalizedSessionId);
+  const latestName = index.latestSkillCandidateName || index.skillCandidateNames?.[0] || '';
+  if (!latestName) return null;
+
+  if (index.latestSkillCandidate && index.latestSkillCandidateName === latestName) {
+    return index.latestSkillCandidate;
+  }
+
+  const absPath = path.join(index.artifactsDir, latestName);
+  const artifact = await safeReadJson(absPath);
+  const result = normalizeSkillCandidateArtifactPayload({
+    rootDir,
+    absPath,
+    artifact,
+  });
+
+  if (index.cacheKey) {
+    index.latestSkillCandidateName = latestName;
+    index.latestSkillCandidate = result;
+  }
+
+  return result;
+}
+
 function inferProviderFromAgent(agent = '') {
   return AGENT_PROVIDER_MAP[normalizeText(agent)] || '';
 }
@@ -815,6 +921,7 @@ export async function readHudState({ rootDir, sessionId = '', provider = '', fas
       sessionState: null,
       latestCheckpoint: null,
       latestDispatch: null,
+      latestSkillCandidate: null,
       latestQualityGate: null,
       suggestedCommands: [],
       warnings: ['No ContextDB sessions found in this repo.'],
@@ -832,20 +939,23 @@ export async function readHudState({ rootDir, sessionId = '', provider = '', fas
   let state = null;
   let checkpoint = null;
   let dispatch = null;
+  let skillCandidate = null;
   let qualityGateEvent = null;
   let dispatchEvidence = [];
   if (fastMode) {
-    [meta, dispatch, qualityGateEvent] = await Promise.all([
+    [meta, dispatch, skillCandidate, qualityGateEvent] = await Promise.all([
       safeReadJsonCached(metaPath),
       findLatestDispatchArtifact(rootDir, selection.sessionId),
+      findLatestSkillCandidateArtifact(rootDir, selection.sessionId),
       readLatestQualityGateEvent(eventsPath),
     ]);
   } else {
-    [meta, state, checkpoint, dispatch, qualityGateEvent, dispatchEvidence] = await Promise.all([
+    [meta, state, checkpoint, dispatch, skillCandidate, qualityGateEvent, dispatchEvidence] = await Promise.all([
       safeReadJsonCached(metaPath),
       safeReadJsonCached(statePath),
       readLastJsonLine(checkpointPath),
       findLatestDispatchArtifact(rootDir, selection.sessionId),
+      findLatestSkillCandidateArtifact(rootDir, selection.sessionId),
       readLatestQualityGateEvent(eventsPath),
       collectRecentDispatchEvidence(rootDir, selection.sessionId),
     ]);
@@ -880,6 +990,7 @@ export async function readHudState({ rootDir, sessionId = '', provider = '', fas
       sessionState: null,
       latestCheckpoint: null,
       latestDispatch,
+      latestSkillCandidate: skillCandidate,
       latestQualityGate: qualityGateEvent,
       dispatchHindsight: null,
       dispatchFixHint: null,
@@ -926,6 +1037,7 @@ export async function readHudState({ rootDir, sessionId = '', provider = '', fas
     sessionState: state,
     latestCheckpoint: checkpoint,
     latestDispatch,
+    latestSkillCandidate: skillCandidate,
     latestQualityGate: qualityGateEvent,
     dispatchHindsight,
     dispatchFixHint,
@@ -951,6 +1063,7 @@ export async function readHudDispatchSummary({
       sessionId: null,
       provider: normalizeProvider(provider) || null,
       latestDispatch: null,
+      latestSkillCandidate: null,
       latestQualityGate: null,
       dispatchHindsight: null,
       dispatchFixHint: null,
@@ -968,8 +1081,9 @@ export async function readHudDispatchSummary({
   const providerInferred = normalizeProvider(provider) || inferProviderFromAgent(sessionMeta?.agent || '');
   const eventsPath = path.join(getSessionsRoot(rootDir), normalizedSessionId, 'l2-events.jsonl');
 
-  const [dispatch, latestQualityGate, dispatchEvidence] = await Promise.all([
+  const [dispatch, latestSkillCandidate, latestQualityGate, dispatchEvidence] = await Promise.all([
     findLatestDispatchArtifact(rootDir, normalizedSessionId),
+    findLatestSkillCandidateArtifact(rootDir, normalizedSessionId),
     readLatestQualityGateEvent(eventsPath),
     collectRecentDispatchEvidence(rootDir, normalizedSessionId, { limit }),
   ]);
@@ -1013,6 +1127,7 @@ export async function readHudDispatchSummary({
     sessionId: normalizedSessionId,
     provider: providerInferred || null,
     latestDispatch,
+    latestSkillCandidate,
     latestQualityGate,
     dispatchHindsight,
     dispatchFixHint,

@@ -149,6 +149,33 @@ function formatDispatchFixHintLine(state) {
   return clipLine(`FixHint: [${targetId}] ${title}${suffix}`, 200);
 }
 
+function formatSkillCandidateLine(state) {
+  const candidate = state?.latestSkillCandidate && typeof state.latestSkillCandidate === 'object'
+    ? state.latestSkillCandidate
+    : null;
+  if (!candidate) return '';
+
+  const skillId = normalizeText(candidate.skillId);
+  const scope = normalizeText(candidate.scope);
+  const failureClass = normalizeText(candidate.failureClass);
+  const lessonCount = Number.isFinite(candidate.lessonCount) ? Math.max(0, Math.floor(candidate.lessonCount)) : 0;
+  const reviewMode = normalizeText(candidate.reviewMode);
+  const reviewStatus = normalizeText(candidate.reviewStatus);
+  const artifactPath = normalizeText(candidate.artifactPath);
+
+  const parts = [];
+  if (skillId) parts.push(`skill=${skillId}`);
+  if (scope) parts.push(`scope=${scope}`);
+  if (failureClass) parts.push(`failure=${failureClass}`);
+  if (lessonCount > 0) parts.push(`lessons=${lessonCount}`);
+  if (reviewMode) parts.push(`review=${reviewMode}`);
+  if (reviewStatus) parts.push(`status=${reviewStatus}`);
+  if (artifactPath) parts.push(`artifact=${artifactPath}`);
+  if (parts.length === 0) return '';
+
+  return clipLine(`SkillCandidate: ${parts.join(' ')}`, 220);
+}
+
 function formatDispatchHindsightLessons(state) {
   const hindsight = state?.dispatchHindsight && typeof state.dispatchHindsight === 'object'
     ? state.dispatchHindsight
@@ -275,6 +302,25 @@ function formatMinimalQualityLabel(state) {
   return `quality=${outcomeLabel}`;
 }
 
+function formatMinimalSkillCandidateLabel(state) {
+  const candidate = state?.latestSkillCandidate && typeof state.latestSkillCandidate === 'object'
+    ? state.latestSkillCandidate
+    : null;
+  if (!candidate) return '';
+
+  const skillId = normalizeText(candidate.skillId);
+  const failureClass = normalizeText(candidate.failureClass);
+  const scope = normalizeText(candidate.scope);
+  const lessonCount = Number.isFinite(candidate.lessonCount) ? Math.max(0, Math.floor(candidate.lessonCount)) : 0;
+  if (!skillId) return '';
+
+  const scopeOrFailure = failureClass || scope || '';
+  const countLabel = lessonCount > 0 ? `#${lessonCount}` : '';
+  return scopeOrFailure
+    ? `skill=${skillId}/${scopeOrFailure}${countLabel}`
+    : `skill=${skillId}${countLabel}`;
+}
+
 function formatQualityGateLine(state) {
   const qualityGate = state?.latestQualityGate && typeof state.latestQualityGate === 'object'
     ? state.latestQualityGate
@@ -311,7 +357,8 @@ export function renderHud(state, { preset = 'focused', watchMeta = null } = {}) 
     const dispatch = state?.latestDispatch || null;
     const dispatchLabel = dispatch ? (dispatch.ok === true ? 'dispatch=ok' : `dispatch=blocked(${dispatch.blockedJobs || 0})`) : 'dispatch=none';
     const qualityLabel = formatMinimalQualityLabel(state);
-    const statusLine = [dispatchLabel, qualityLabel].filter(Boolean).join(' ');
+    const skillCandidateLabel = formatMinimalSkillCandidateLabel(state);
+    const statusLine = [dispatchLabel, qualityLabel, skillCandidateLabel].filter(Boolean).join(' ');
     const watchLine = formatWatchMetaLine(watchMeta || state?.watchMeta || null);
     return watchLine
       ? `${sessionLine}\n${statusLine}\n${watchLine}\n`
@@ -339,6 +386,10 @@ export function renderHud(state, { preset = 'focused', watchMeta = null } = {}) 
   const fixHint = formatDispatchFixHintLine(state);
   if (fixHint) {
     lines.push(fixHint);
+  }
+  const skillCandidate = formatSkillCandidateLine(state);
+  if (skillCandidate) {
+    lines.push(skillCandidate);
   }
 
   const workItems = formatWorkItemsLine(state);
