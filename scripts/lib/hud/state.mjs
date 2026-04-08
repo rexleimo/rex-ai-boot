@@ -803,7 +803,7 @@ async function findLatestSkillCandidateArtifact(rootDir, sessionId) {
   }
 
   const absPath = path.join(index.artifactsDir, latestName);
-  const artifact = await safeReadJson(absPath);
+  const artifact = await safeReadJsonCached(absPath);
   const result = normalizeSkillCandidateArtifactPayload({
     rootDir,
     absPath,
@@ -832,7 +832,7 @@ async function collectRecentSkillCandidates(rootDir, sessionId, { limit = 5 } = 
       return index.latestSkillCandidate;
     }
     const absPath = path.join(index.artifactsDir, name);
-    const artifact = await safeReadJson(absPath);
+    const artifact = await safeReadJsonCached(absPath);
     return normalizeSkillCandidateArtifactPayload({
       rootDir,
       absPath,

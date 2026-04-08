@@ -791,6 +791,94 @@ test('readHudState caches meta/state JSON reads until files change', async () =>
   }
 });
 
+test('readHudState caches skill-candidate artifact reads until files change', async () => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-hud-skill-candidate-cache-'));
+  const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');
+  const sessionId = 'skill-candidate-cache-session';
+  const sessionDir = path.join(sessionsRoot, sessionId);
+  const artifactsDir = path.join(sessionDir, 'artifacts');
+  const candidatePath = path.join(sessionDir, 'artifacts', 'skill-candidate-20260406T010000Z-debug-runtime-error.json');
+
+  await writeJson(
+    path.join(sessionDir, 'meta.json'),
+    makeSessionMeta({ sessionId, agent: 'codex-cli', updatedAt: '2026-04-06T01:00:00.000Z' })
+  );
+  await writeJson(candidatePath, {
+    schemaVersion: 1,
+    kind: 'learn-eval.skill-candidate',
+    sessionId,
+    generatedAt: '2026-04-06T01:00:00.000Z',
+    persistedAt: '2026-04-06T01:00:00.000Z',
+    lessonCluster: {
+      kind: 'repeat-blocked',
+      failureClass: 'runtime-error',
+      count: 1,
+    },
+    candidate: {
+      skillId: 'debug',
+      scope: 'runtime-triage',
+      patchHint: 'first hint',
+    },
+    review: {
+      status: 'candidate',
+      mode: 'manual',
+      sourceDraftTargetId: 'draft.skill.repeat-blocked.runtime-error',
+    },
+  });
+
+  const originalReadFile = fs.readFile;
+  const reads = { candidate: 0 };
+  fs.readFile = async (filePath, ...rest) => {
+    const normalized = String(filePath);
+    if (normalized.startsWith(artifactsDir) && normalized.includes('skill-candidate-')) {
+      reads.candidate += 1;
+    }
+    return await originalReadFile(filePath, ...rest);
+  };
+
+  try {
+    const first = await readHudState({ rootDir, sessionId, fast: true, skillCandidateLimit: 3 });
+    const firstReadCount = reads.candidate;
+    const second = await readHudState({ rootDir, sessionId, fast: true, skillCandidateLimit: 3 });
+
+    assert.equal(first.latestSkillCandidate?.skillId, 'debug');
+    assert.equal(first.recentSkillCandidates.length, 1);
+    assert.equal(second.recentSkillCandidates.length, 1);
+    assert.ok(firstReadCount >= 1);
+    assert.equal(reads.candidate, firstReadCount);
+
+    const nextCandidatePath = path.join(sessionDir, 'artifacts', 'skill-candidate-20260406T010010Z-debug-runtime-error.json');
+    await writeJson(nextCandidatePath, {
+      schemaVersion: 1,
+      kind: 'learn-eval.skill-candidate',
+      sessionId,
+      generatedAt: '2026-04-06T01:00:00.000Z',
+      persistedAt: '2026-04-06T01:00:10.000Z',
+      lessonCluster: {
+        kind: 'repeat-blocked',
+        failureClass: 'runtime-error',
+        count: 1,
+      },
+      candidate: {
+        skillId: 'debug',
+        scope: 'runtime-triage',
+        patchHint: 'updated hint',
+      },
+      review: {
+        status: 'candidate',
+        mode: 'manual',
+        sourceDraftTargetId: 'draft.skill.repeat-blocked.runtime-error',
+      },
+    });
+
+    const third = await readHudState({ rootDir, sessionId, fast: true, skillCandidateLimit: 3 });
+    assert.equal(third.latestSkillCandidate?.patchHint, 'updated hint');
+    assert.ok(reads.candidate > firstReadCount);
+  } finally {
+    fs.readFile = originalReadFile;
+  }
+});
+
 test('readHudDispatchSummary includes latest dispatch, hindsight, and fix hint', async () => {
   const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-hud-summary-'));
   const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');
