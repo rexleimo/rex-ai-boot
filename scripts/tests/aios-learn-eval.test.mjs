@@ -779,6 +779,114 @@ test('buildLearnEvalReport compares consecutive dispatch artifacts to surface hi
   assert.match(rendered, /repeatBlocked=1 regressions=1/);
   assert.match(rendered, /topRepeatedFailureClasses ownership-policy=1/);
 });
+
+test('buildLearnEvalReport emits hindsight memo and gate draft candidates for high-confidence lesson clusters', async () => {
+  const rootDir = await makeRootDir();
+  const sessionId = 'dispatch-hindsight-drafts';
+
+  await writeSession(rootDir, sessionId, { updatedAt: '2026-03-09T05:30:00.000Z' }, [
+    {
+      seq: 1,
+      ts: '2026-03-09T05:00:00.000Z',
+      status: 'blocked',
+      summary: 'Merge gate repeatedly blocked',
+      nextActions: [],
+      artifacts: [],
+      telemetry: {
+        verification: { result: 'failed', evidence: 'dispatch dry-run blocked' },
+        retryCount: 1,
+        failureCategory: 'merge-gate-blocked',
+        elapsedMs: 900,
+      },
+    },
+  ]);
+
+  const phaseRun = { jobId: 'phase.plan', jobType: 'phase', role: 'planner', status: 'simulated', turnId: 'turn-plan', workItemRefs: ['wi.plan'], output: { outputType: 'handoff' } };
+  const mergeBlockedRun = {
+    jobId: 'merge.final-checks',
+    jobType: 'merge-gate',
+    role: 'merge-gate',
+    status: 'blocked',
+    turnId: 'turn-merge',
+    workItemRefs: ['wi.merge'],
+    output: { outputType: 'merged-handoff' },
+  };
+
+  await writeDispatchEvidence(rootDir, sessionId, {
+    seq: 1,
+    ts: '2026-03-09T05:06:00.000Z',
+    ok: false,
+    artifactName: 'dispatch-run-20260309T050600Z.json',
+    jobRuns: [phaseRun, mergeBlockedRun],
+    workItemTelemetry: {
+      schemaVersion: 1,
+      generatedAt: '2026-03-09T05:06:00.000Z',
+      totals: { total: 2, queued: 0, running: 0, blocked: 1, done: 1 },
+      items: [
+        { itemId: 'phase.plan', itemType: 'phase', role: 'planner', status: 'done', failureClass: 'none', retryClass: 'none' },
+        { itemId: 'merge.final-checks', itemType: 'merge-gate', role: 'merge-gate', status: 'blocked', failureClass: 'ownership-policy', retryClass: 'same-hypothesis' },
+      ],
+    },
+  });
+  await writeDispatchEvidence(rootDir, sessionId, {
+    seq: 2,
+    ts: '2026-03-09T05:07:00.000Z',
+    ok: false,
+    artifactName: 'dispatch-run-20260309T050700Z.json',
+    jobRuns: [phaseRun, mergeBlockedRun],
+    workItemTelemetry: {
+      schemaVersion: 1,
+      generatedAt: '2026-03-09T05:07:00.000Z',
+      totals: { total: 2, queued: 0, running: 0, blocked: 1, done: 1 },
+      items: [
+        { itemId: 'phase.plan', itemType: 'phase', role: 'planner', status: 'done', failureClass: 'none', retryClass: 'none' },
+        { itemId: 'merge.final-checks', itemType: 'merge-gate', role: 'merge-gate', status: 'blocked', failureClass: 'ownership-policy', retryClass: 'same-hypothesis' },
+      ],
+    },
+  });
+  await writeDispatchEvidence(rootDir, sessionId, {
+    seq: 3,
+    ts: '2026-03-09T05:08:00.000Z',
+    ok: false,
+    artifactName: 'dispatch-run-20260309T050800Z.json',
+    jobRuns: [phaseRun, mergeBlockedRun],
+    workItemTelemetry: {
+      schemaVersion: 1,
+      generatedAt: '2026-03-09T05:08:00.000Z',
+      totals: { total: 2, queued: 0, running: 0, blocked: 1, done: 1 },
+      items: [
+        { itemId: 'phase.plan', itemType: 'phase', role: 'planner', status: 'done', failureClass: 'none', retryClass: 'none' },
+        { itemId: 'merge.final-checks', itemType: 'merge-gate', role: 'merge-gate', status: 'blocked', failureClass: 'ownership-policy', retryClass: 'same-hypothesis' },
+      ],
+    },
+  });
+
+  const report = await buildLearnEvalReport({ sessionId, limit: 5 }, { rootDir });
+  assert.equal(report.signals.dispatch.hindsight.repeatedBlockedTurns, 2);
+
+  const memoDraft = report.recommendations.observe.find((item) => item.targetId === 'draft.memo.repeat-blocked.ownership-policy');
+  assertRecommendationShape(memoDraft, {
+    kind: 'observe',
+    targetType: 'sample',
+    targetId: 'draft.memo.repeat-blocked.ownership-policy',
+  });
+  assert.match(memoDraft?.evidence ?? '', /lessons=2/);
+  assert.match(memoDraft?.nextCommand ?? '', /memo add/);
+
+  const gateDraft = report.recommendations.observe.find((item) => item.targetId === 'draft.gate.repeat-blocked.ownership-policy');
+  assertRecommendationShape(gateDraft, {
+    kind: 'observe',
+    targetType: 'gate',
+    targetId: 'draft.gate.repeat-blocked.ownership-policy',
+  });
+  assert.match(gateDraft?.evidence ?? '', /candidate=gate\.blocked-triage/);
+  assert.match(gateDraft?.nextCommand ?? '', /quality-gate pre-pr/);
+
+  const rendered = renderLearnEvalReport(report);
+  assert.match(rendered, /draft\.memo\.repeat-blocked\.ownership-policy/);
+  assert.match(rendered, /draft\.gate\.repeat-blocked\.ownership-policy/);
+});
+
 test('runLearnEval preserves json and text output modes', async () => {
   const rootDir = await makeRootDir();
   await writeSession(
