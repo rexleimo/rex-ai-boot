@@ -215,6 +215,9 @@ Options:
   --session <id>
   --limit <n>
   --format <text|json>
+  --apply-draft <targetId>      Apply a single draft.* recommendation action
+  --apply-drafts                Apply all draft.* recommendation actions in priority order
+  --apply-dry-run               Preview draft actions without executing
   -h, --help
 `;
     case 'entropy-gc':

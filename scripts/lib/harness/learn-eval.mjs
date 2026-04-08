@@ -259,6 +259,10 @@ function buildHindsightDraftRecommendations(summary, recommendations = []) {
       reason: `High-confidence hindsight lesson cluster detected. Review this memo draft before persisting it. ${topHint}`,
       evidence: evidenceParts.join(' '),
       nextCommand: `node scripts/aios.mjs memo add ${JSON.stringify(memoText)}`,
+      draftAction: {
+        kind: 'memo-add',
+        text: memoText,
+      },
       nextArtifact: latestArtifactPath || undefined,
       priority: 20,
     }),
@@ -276,6 +280,11 @@ function buildHindsightDraftRecommendations(summary, recommendations = []) {
         reason: `Hindsight evidence is stable enough to draft ${gateTargetId}; keep manual review in the loop before enforcing it.`,
         evidence: [...evidenceParts, `candidate=${gateTargetId}`].join(' '),
         nextCommand: getQualityGateFixCommand(),
+        draftAction: {
+          kind: 'quality-gate',
+          mode: 'pre-pr',
+          candidateTargetId: gateTargetId,
+        },
         nextArtifact: latestArtifactPath || undefined,
         priority: 15,
       }));
@@ -294,6 +303,7 @@ function createRecommendation({
   evidence,
   nextCommand,
   nextArtifact,
+  draftAction,
   priority = 0,
 }) {
   const targetDefinition = targetId ? getHarnessTarget(targetId) : null;
@@ -309,6 +319,7 @@ function createRecommendation({
     priority: RECOMMENDATION_KIND_BASE_PRIORITY[kind] + Math.max(0, Math.floor(priority)),
     ...(resolvedNextCommand ? { nextCommand: resolvedNextCommand } : {}),
     ...(nextArtifact ? { nextArtifact } : {}),
+    ...(draftAction && typeof draftAction === 'object' ? { draftAction: { ...draftAction } } : {}),
   };
 }
 

@@ -233,6 +233,9 @@ export function createDefaultLearnEvalOptions() {
     sessionId: '',
     limit: 10,
     format: 'text',
+    applyDraftId: '',
+    applyDrafts: false,
+    applyDryRun: false,
   };
 }
 

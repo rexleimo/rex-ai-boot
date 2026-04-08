@@ -814,6 +814,25 @@ function parseTopLevelArgs(command, argv) {
         options.limit = parsePositiveInteger(takeValue(rest, index, '--limit'), '--limit');
         index += 1;
         break;
+      case '--apply-draft':
+        if (command !== 'learn-eval') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.applyDraftId = takeValue(rest, index, '--apply-draft');
+        index += 1;
+        break;
+      case '--apply-drafts':
+        if (command !== 'learn-eval') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.applyDrafts = true;
+        break;
+      case '--apply-dry-run':
+        if (command !== 'learn-eval') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.applyDryRun = true;
+        break;
       case '--recommendation':
         if (command !== 'orchestrate') {
           throw new Error(`Unknown option: ${arg}`);

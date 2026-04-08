@@ -109,9 +109,28 @@ test('parseArgs accepts learn-eval options', () => {
   assert.equal(result.options.format, 'json');
 });
 
+test('parseArgs accepts learn-eval draft apply options', () => {
+  const result = parseArgs(['learn-eval', '--session', 'session-123', '--apply-draft', 'draft.memo.repeat-blocked.ownership-policy', '--apply-dry-run']);
+  assert.equal(result.command, 'learn-eval');
+  assert.equal(result.options.sessionId, 'session-123');
+  assert.equal(result.options.applyDraftId, 'draft.memo.repeat-blocked.ownership-policy');
+  assert.equal(result.options.applyDrafts, false);
+  assert.equal(result.options.applyDryRun, true);
+});
+
 test('planLearnEval emits stable preview', () => {
   const plan = planLearnEval({ sessionId: 'session-123', limit: 5, format: 'json' });
   assert.match(plan.preview, /learn-eval --session session-123 --limit 5 --format json/);
+});
+
+test('planLearnEval includes draft apply flags in preview', () => {
+  const plan = planLearnEval({
+    sessionId: 'session-123',
+    applyDraftId: 'draft.memo.repeat-blocked.ownership-policy',
+    applyDryRun: true,
+  });
+  assert.match(plan.preview, /--apply-draft draft\.memo\.repeat-blocked\.ownership-policy/);
+  assert.match(plan.preview, /--apply-dry-run/);
 });
 
 test('buildLearnEvalReport promotes stable workflows from telemetry', async () => {
@@ -958,6 +977,125 @@ test('runLearnEval preserves json and text output modes', async () => {
   assert.match(textOutput, /AIOS LEARN-EVAL/);
   assert.equal(textOutput.indexOf('Fix:') < textOutput.indexOf('Observe:'), true);
   assert.equal(textOutput.indexOf('Observe:') < textOutput.indexOf('Promote:'), true);
+});
+
+test('runLearnEval apply-draft executes selected draft recommendation via injected executor', async () => {
+  const rootDir = await makeRootDir();
+  const logs = [];
+  const calls = [];
+  const report = {
+    session: {
+      sessionId: 'draft-session',
+      agent: 'codex-cli',
+      project: 'rex-ai-boot',
+      goal: 'Draft apply smoke',
+      updatedAt: '2026-03-09T07:00:00.000Z',
+    },
+    sample: { totalCheckpoints: 1, analyzedCheckpoints: 1, telemetryCheckpoints: 1, limit: 10 },
+    status: { counts: { running: 0, blocked: 1, done: 0 } },
+    signals: {
+      verification: { counts: { unknown: 0, passed: 0, failed: 1, partial: 0 }, knownCount: 1, passRate: 0, unknownRate: 0 },
+      retry: { total: 0, average: 0, max: 0 },
+      elapsed: { average: 100, max: 100 },
+      failures: { top: [] },
+      cost: { inputTokens: 0, outputTokens: 0, totalTokens: 0, usd: 0 },
+      dispatch: { runs: 0, successfulRuns: 0, blockedRuns: 0, blockedJobs: 0, executorUsage: [], workItems: { total: 0, blocked: 0, done: 0, blockedRate: 0, byType: [], failureClasses: [], retryClasses: [] }, latestArtifactPath: null, latestEventId: null },
+    },
+    recommendations: {
+      all: [
+        {
+          kind: 'observe',
+          targetType: 'sample',
+          targetId: 'draft.memo.repeat-blocked.ownership-policy',
+          title: 'hindsight memo candidate',
+          reason: 'Draft memo',
+          evidence: 'lessons=2',
+          priority: 220,
+          nextCommand: 'node scripts/aios.mjs memo add "draft text"',
+          draftAction: { kind: 'memo-add', text: 'draft text' },
+        },
+      ],
+      fix: [],
+      observe: [],
+      promote: [],
+    },
+  };
+
+  await runLearnEval(
+    {
+      sessionId: 'draft-session',
+      format: 'json',
+      applyDraftId: 'draft.memo.repeat-blocked.ownership-policy',
+      applyDryRun: true,
+    },
+    {
+      rootDir,
+      io: { log: (line) => logs.push(line) },
+      persistHindsightEvidence: async () => null,
+      buildReport: async () => ({ ...report }),
+      executeDrafts: async (items, options) => {
+        calls.push({ items, options });
+        return {
+          mode: 'single',
+          dryRun: options.dryRun,
+          selectedTargetIds: items.map((item) => item.targetId),
+          counts: { selected: 1, applied: 0, failed: 0, skipped: 0, dryRun: 1 },
+          results: [{ targetId: items[0].targetId, status: 'dry-run', summary: 'Would apply draftAction: memo-add' }],
+        };
+      },
+    }
+  );
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].items.length, 1);
+  assert.equal(calls[0].items[0].targetId, 'draft.memo.repeat-blocked.ownership-policy');
+  assert.equal(calls[0].options.sessionId, 'draft-session');
+  assert.equal(calls[0].options.dryRun, true);
+
+  const parsed = JSON.parse(logs.join('\n'));
+  assert.equal(parsed.draftApply.mode, 'single');
+  assert.equal(parsed.draftApply.dryRun, true);
+  assert.equal(parsed.draftApply.counts.selected, 1);
+  assert.equal(parsed.draftApply.counts.dryRun, 1);
+});
+
+test('runLearnEval apply-draft fails for unknown draft target id', async () => {
+  const rootDir = await makeRootDir();
+  await assert.rejects(
+    runLearnEval(
+      {
+        sessionId: 'draft-session',
+        format: 'json',
+        applyDraftId: 'draft.memo.unknown',
+      },
+      {
+        rootDir,
+        io: { log: () => {} },
+        persistHindsightEvidence: async () => null,
+        buildReport: async () => ({
+          session: { sessionId: 'draft-session' },
+          recommendations: {
+            all: [
+              {
+                kind: 'observe',
+                targetType: 'sample',
+                targetId: 'draft.memo.repeat-blocked.ownership-policy',
+                title: 'hindsight memo candidate',
+                reason: 'Draft memo',
+                evidence: 'lessons=2',
+                priority: 220,
+                nextCommand: 'node scripts/aios.mjs memo add "draft text"',
+              },
+            ],
+            fix: [],
+            observe: [],
+            promote: [],
+          },
+        }),
+      }
+    ),
+    /Unknown draft recommendation: draft\.memo\.unknown/
+  );
 });
 
 test('runLearnEval persists turn-linked hindsight evidence and skips duplicate writes', async () => {
