@@ -9,7 +9,7 @@ import { readHudDispatchSummary, readHudState, selectHudSessionId } from '../lib
 import { renderHud } from '../lib/hud/render.mjs';
 import { computeAdaptiveNextIntervalMs, createThrottledWatchRender, watchRenderLoop } from '../lib/hud/watch.mjs';
 import { runHud } from '../lib/lifecycle/hud.mjs';
-import { runTeamHistory, runTeamStatus } from '../lib/lifecycle/team-ops.mjs';
+import { resolveStatusSkillCandidateOptions, runTeamHistory, runTeamStatus } from '../lib/lifecycle/team-ops.mjs';
 
 async function writeJson(filePath, value) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -307,6 +307,53 @@ test('computeAdaptiveNextIntervalMs backs off on idle and resets on change', () 
     maxIntervalMs: 2000,
     backoffMultiplier: 2,
   }), 250);
+});
+
+test('resolveStatusSkillCandidateOptions adapts default limit for fast watch', () => {
+  assert.deepEqual(
+    resolveStatusSkillCandidateOptions({
+      showSkillCandidates: false,
+      requestedSkillCandidateLimit: 0,
+      fastWatchMinimal: false,
+    }),
+    { showSkillCandidates: false, skillCandidateLimit: 0 }
+  );
+
+  assert.deepEqual(
+    resolveStatusSkillCandidateOptions({
+      showSkillCandidates: true,
+      requestedSkillCandidateLimit: 0,
+      fastWatchMinimal: false,
+    }),
+    { showSkillCandidates: true, skillCandidateLimit: 6 }
+  );
+
+  assert.deepEqual(
+    resolveStatusSkillCandidateOptions({
+      showSkillCandidates: true,
+      requestedSkillCandidateLimit: 0,
+      fastWatchMinimal: true,
+    }),
+    { showSkillCandidates: true, skillCandidateLimit: 3 }
+  );
+
+  assert.deepEqual(
+    resolveStatusSkillCandidateOptions({
+      showSkillCandidates: false,
+      requestedSkillCandidateLimit: 4,
+      fastWatchMinimal: true,
+    }),
+    { showSkillCandidates: true, skillCandidateLimit: 4 }
+  );
+
+  assert.deepEqual(
+    resolveStatusSkillCandidateOptions({
+      showSkillCandidates: true,
+      requestedSkillCandidateLimit: 99,
+      fastWatchMinimal: false,
+    }),
+    { showSkillCandidates: true, skillCandidateLimit: 20 }
+  );
 });
 
 test('renderHud minimal shows watch visibility and quality category labels', () => {

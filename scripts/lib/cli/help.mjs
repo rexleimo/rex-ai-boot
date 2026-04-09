@@ -181,7 +181,7 @@ Options:
   --concurrency <n>             (team history) Process sessions concurrently (default: 4)
   --fast                        (team history) Skip dispatch hindsight evaluation for faster scans
   --show-skill-candidates       (team status) Show detailed skill-candidate artifact rows under HUD output
-  --skill-candidate-limit <n>   (team status/hud) Cap detailed skill-candidate rows (implies --show-skill-candidates, default 6)
+  --skill-candidate-limit <n>   (team status/hud) Cap detailed skill-candidate rows (implies --show-skill-candidates; default 6, team status --watch --fast defaults to 3)
   --quality-failed-only         (team history) Only include sessions with failed quality-gate outcomes
   --quality-category <name>     (team history) Only include sessions with failed quality-gate category match
   --quality-category-prefix <name> (team history) Only include sessions with failed quality-gate category prefix match (comma-separated)

@@ -7,6 +7,7 @@ import { createThrottledWatchRender, watchRenderLoop } from '../hud/watch.mjs';
 
 const FAST_WATCH_DATA_REFRESH_MS = 1000;
 const DEFAULT_SKILL_CANDIDATE_LIMIT = 6;
+const FAST_WATCH_MINIMAL_SKILL_CANDIDATE_LIMIT = 3;
 const MAX_SKILL_CANDIDATE_LIMIT = 20;
 
 function normalizeText(value) {
@@ -110,6 +111,29 @@ async function mapWithConcurrency(items, concurrency, mapper) {
   return results;
 }
 
+export function resolveStatusSkillCandidateOptions({
+  showSkillCandidates = false,
+  requestedSkillCandidateLimit = 0,
+  fastWatchMinimal = false,
+} = {}) {
+  const requestedLimit = Number.isFinite(requestedSkillCandidateLimit)
+    ? Math.max(0, Math.floor(requestedSkillCandidateLimit))
+    : 0;
+  const shouldShowSkillCandidates = showSkillCandidates === true || requestedLimit > 0;
+  const boundedRequestedLimit = Math.min(MAX_SKILL_CANDIDATE_LIMIT, requestedLimit);
+  const defaultLimit = fastWatchMinimal
+    ? FAST_WATCH_MINIMAL_SKILL_CANDIDATE_LIMIT
+    : DEFAULT_SKILL_CANDIDATE_LIMIT;
+  const skillCandidateLimit = shouldShowSkillCandidates
+    ? Math.max(1, boundedRequestedLimit || defaultLimit)
+    : 0;
+
+  return {
+    showSkillCandidates: shouldShowSkillCandidates,
+    skillCandidateLimit,
+  };
+}
+
 export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, env = process.env } = {}) {
   const sessionId = normalizeText(rawOptions.sessionId || rawOptions.resumeSessionId);
   const provider = normalizeProvider(rawOptions.provider);
@@ -117,17 +141,14 @@ export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, en
   const watch = rawOptions.watch === true;
   const fast = rawOptions.fast === true;
   const json = rawOptions.json === true;
-  const requestedSkillCandidateLimit = Number.isFinite(rawOptions.skillCandidateLimit)
-    ? Math.max(0, Math.floor(rawOptions.skillCandidateLimit))
-    : 0;
-  const showSkillCandidates = rawOptions.showSkillCandidates === true || requestedSkillCandidateLimit > 0;
-  const resolvedSkillCandidateLimit = Math.min(MAX_SKILL_CANDIDATE_LIMIT, requestedSkillCandidateLimit);
-  const skillCandidateLimit = showSkillCandidates
-    ? Math.max(1, resolvedSkillCandidateLimit || DEFAULT_SKILL_CANDIDATE_LIMIT)
-    : 0;
   const watchCadence = resolveWatchCadence(rawOptions.intervalMs, { fallbackMs: 1000 });
   const intervalMs = watchCadence.renderIntervalMs;
   const fastWatchMinimal = fast && watch && !json && preset === 'minimal';
+  const { showSkillCandidates, skillCandidateLimit } = resolveStatusSkillCandidateOptions({
+    showSkillCandidates: rawOptions.showSkillCandidates === true,
+    requestedSkillCandidateLimit: rawOptions.skillCandidateLimit,
+    fastWatchMinimal,
+  });
   const dataRefreshMs = fastWatchMinimal
     ? Math.max(intervalMs, FAST_WATCH_DATA_REFRESH_MS)
     : intervalMs;
