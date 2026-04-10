@@ -39,6 +39,7 @@ Examples:
   node scripts/aios.mjs learn-eval --limit 5
   node scripts/aios.mjs entropy-gc auto --session codex-cli-20260303T080437-065e16c0
   node scripts/aios.mjs internal browser doctor --fix
+  node scripts/aios.mjs internal browser mcp-migrate
   node scripts/aios.mjs internal browser cdp-start
   node scripts/aios.mjs internal browser cdp-status
 `;
@@ -57,7 +58,7 @@ Options:
   --scope <global|project>       Skills install scope (default: global)
   --install-mode <copy|link>     Skills install mode (default: copy)
   --skills <list>                Comma list of skill names to install
-  --skip-playwright-install
+  --skip-playwright-install     Skip browser-use runtime installation (legacy flag name)
   --skip-doctor
   -h, --help
 `;
@@ -72,7 +73,7 @@ Options:
   --scope <global|project>       Skills install scope (default: global)
   --install-mode <copy|link>     Skills install mode (default: copy)
   --skills <list>                Comma list of skill names to install
-  --with-playwright-install
+  --with-playwright-install     Force browser-use runtime installation (legacy flag name)
   --skip-doctor
   -h, --help
 `;
@@ -333,6 +334,12 @@ export function getInternalHelpText(target, action) {
   if (target === 'browser' && action === 'doctor') {
     return `Usage:
   node scripts/aios.mjs internal browser doctor [--fix] [--dry-run]
+`;
+  }
+
+  if (target === 'browser' && action === 'mcp-migrate') {
+    return `Usage:
+  node scripts/aios.mjs internal browser mcp-migrate [--dry-run]
 `;
   }
 

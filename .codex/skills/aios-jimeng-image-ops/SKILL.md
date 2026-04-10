@@ -11,9 +11,9 @@ Use this runbook for stable image generation on Jimeng. It includes selectors, c
 ## Preconditions
 - Browser profile has valid Jimeng login session.
 - `default` profile should connect to fingerprint browser via CDP (port `9222` by default).
-- MCP tools available: `browser_launch`, `browser_navigate`, `browser_auth_check`, `browser_challenge_check`, `browser_type`, `browser_click`, `browser_snapshot`, `browser_screenshot`.
-- For page understanding, prefer `browser_snapshot` fields in this order: `pageSummary` -> `regions` -> `elements` -> `textBlocks` -> `visualHints`.
-- Use `browser_screenshot` only when `visualHints.needsVisualFallback=true`, and prefer `selector`-scoped capture over full-page screenshots.
+- MCP tools available: `chrome.launch_cdp`, `browser.connect_cdp`, `page.goto`, `page.click`, `page.type`, `page.extract_text`, `page.get_html`, `page.screenshot`, `browser.close`.
+- For page understanding, prefer `page.extract_text` first, then `page.get_html` for structure details.
+- Use `page.screenshot` only when text/HTML evidence is insufficient, and prefer target-area capture over full-page screenshots when supported.
 - Prompt is policy-safe (avoid risky terms, political/person-identifiable/sensitive wording).
 
 ## Execution Flow (Updated 2026-03-13)
@@ -21,7 +21,7 @@ Use this runbook for stable image generation on Jimeng. It includes selectors, c
    - Navigate to home: `https://jimeng.jianying.com/ai-tool/home/`
    - Click "图片生成" button (selector: `button.button-RNHVcx:has-text("图片生成")`)
    - Or use direct URL: `https://jimeng.jianying.com/ai-tool/generate?enter_from=ai_feature&from_page=explore&ai_feature_name=image`
-2. Run `browser_auth_check` and `browser_challenge_check`; if either returns `requiresHumanAction=true`, ask user to complete login/challenge and resume.
+2. Use `page.extract_text` / `page.get_html` to detect login/challenge markers (captcha, risk check, 2FA, login wall); if detected, ask user to complete human action and resume.
 3. Confirm prompt box exists:
    - Selector: `div.tiptap.ProseMirror` (NOT textarea, this is a rich text editor)
 4. Click prompt box to activate, then fill prompt.
@@ -32,7 +32,7 @@ Use this runbook for stable image generation on Jimeng. It includes selectors, c
 6. **Generate Button**:
    - Primary: `button.lv-btn.lv-btn-primary` (position x:976, y:647)
    - Note: Button may show as `collapsed-submit-button` class, enabled only after prompt is entered
-7. Poll snapshots until completion:
+7. Poll `page.extract_text` (and `page.get_html` when needed) until completion:
    - Success markers: latest task has image tiles + `重新编辑` and `再次生成`
    - Policy failure: `你输入的文字不符合平台规则，请修改后重试`
    - Timeout: still `生成中` after budget

@@ -12,7 +12,7 @@ description: Use when executing any skill or browser automation task - enforces 
 ## When to Use
 
 - 执行任何浏览器自动化操作时
-- 使用 MCP 工具（browser_snapshot, browser_screenshot 等）时
+- 使用 MCP 工具（`page.extract_text`, `page.get_html`, `page.screenshot` 等）时
 - 进行任何运营操作（发布笔记、点赞、评论等）时
 
 ## Core Pattern
@@ -20,24 +20,23 @@ description: Use when executing any skill or browser automation task - enforces 
 ### 浏览器操作
 
 ```markdown
-0. 启动浏览器时默认要求可见界面
-   - 优先：`browser_launch { profile: 'default', visible: true }`
-   - 仅在无图形环境或后台 smoke test 时才用 `headless: true`
-   - 当同一 `userDataDir` 被其他进程占用时，MCP 会默认自动切到隔离 profile 目录重试（`BROWSER_ISOLATE_ON_LOCK=true`）
-   - 若目标是“多个 agent 共享同一登录态”，优先使用 CDP 连接同一个已启动浏览器，而不是共享本地 profile 目录
+0. 启动浏览器时默认要求可见界面并走 CDP
+   - 优先：`chrome.launch_cdp { port: 9222, user_data_dir: '~/.chrome-cdp-profile' }`
+   - 随后：`browser.connect_cdp { cdp_url: 'http://127.0.0.1:9222' }`
+   - 仅在无图形环境或后台 smoke test 时才允许 headless 模式
+   - 当同一 `userDataDir` 被其他进程占用时，优先复用已启动浏览器，不共享被锁目录
+   - 若目标是“多个 agent 共享同一登录态”，统一连接同一个 CDP endpoint
 
-1. 优先使用 browser_snapshot 获取布局快照
-   - 先读 `pageSummary`、`regions`、`elements`、`textBlocks`、`visualHints`
-   - 比整页截图更高效，仍保留页面结构感
-   - 格式：{ profile: 'default' }
-   - 约定：`default` 应映射为 CDP 指纹浏览器；本地启动浏览器请显式用 `profile: 'local'`
-   - 不使用 `chrome-devtools` 工具链执行业务流程，统一走 `puppeteer-stealth` 的 `browser_*` 工具
+1. 优先使用文本/DOM证据做决策
+   - 先读 `page.extract_text`，必要时补充 `page.get_html`
+   - 比整页截图更高效，可快速定位按钮文案和页面状态
+   - 不使用 `chrome-devtools` 工具链执行业务流程，统一走 `puppeteer-stealth` 的 browser-use 工具链（`chrome.*` / `browser.*` / `page.*`）
 
-2. 只有视觉降级时才截图，并保存到 temp/ 目录
-   - 条件：`visualHints.needsVisualFallback=true` 或 DOM/布局信息不足
-   - 优先使用元素级截图：`browser_screenshot { selector: '<target>' }`
-   - 路径：aios/temp/{操作类型}_{时间戳}.png
-   - 示例：login_20240301_120000.png
+2. 只有视觉信息不足时才截图，并保存到 temp/ 目录
+   - 条件：文本/HTML 证据不足以判断状态
+   - 使用：`page.screenshot`
+   - 路径：`aios/temp/{操作类型}_{时间戳}.png`
+   - 示例：`login_20240301_120000.png`
 ```
 
 ### 操作间隔
@@ -65,37 +64,37 @@ sleep $((RANDOM % 26 + 5))
 |------|------|
 | 操作前执行反检测 | 使用 skill/反检测脚本.json |
 | 截图保存到 temp/ | 路径固定为 aios/temp/ |
-| 先读布局字段 | `pageSummary -> regions -> elements -> textBlocks` |
+| 先读文本/DOM | `page.extract_text -> page.get_html` |
 | 使用 grep 搜索快照 | 而非目视查看截图 |
 | 记录到历史 | 关键操作写入 memory/history/ |
-| 登录态检测 | `browser_auth_check` 返回 `requiresHumanAction=true` 时先提示用户协作登录 |
+| 登录态检测 | 识别到登录页/验证码/2FA 时先提示用户协作登录 |
 
 ### MCP 工具优先级
 
-1. **browser_snapshot** - 首选，获取布局快照并做主决策
-2. **browser_screenshot** - 仅在视觉降级时使用，优先局部截图
-3. **browser_click** - 通过 selector 操作
-4. **browser_type** - 通过 selector 输入
+1. **page.extract_text** - 首选，获取页面文本证据并做主决策
+2. **page.get_html** - 补充 DOM 结构和属性信息
+3. **page.screenshot** - 仅在视觉降级时使用
+4. **page.click** - 通过 selector 操作
+5. **page.type** - 通过 selector 输入
 
 ## Examples
 
 ### Good
 
 ```json
-// 启动可见浏览器
-browser_launch { profile: 'default', visible: true }
+// 启动并连接 CDP 浏览器
+chrome.launch_cdp { port: 9222, user_data_dir: '~/.chrome-cdp-profile' }
+browser.connect_cdp { cdp_url: 'http://127.0.0.1:9222' }
 
-// 获取页面快照
-browser_snapshot { profile: 'default' }
-
-// 先读取这些字段做决策
-// pageSummary / regions / elements / textBlocks / visualHints
+// 获取文本/DOM证据
+page.extract_text { session_id: '<session_id>' }
+page.get_html { session_id: '<session_id>' }
 
 // 搜索内容
 grep "关注" snapshot.txt
 
-// 仅视觉降级时做局部截图并保存到正确位置
-browser_screenshot { profile: 'default', selector: '[aria-label="发布"]', filePath: 'aios/temp/publish_20240301_120000.png' }
+// 仅视觉降级时截图，并保存到正确位置
+page.screenshot { session_id: '<session_id>', path: 'aios/temp/publish_20240301_120000.png' }
 ```
 
 ### Bad
@@ -105,8 +104,8 @@ browser_screenshot { profile: 'default', selector: '[aria-label="发布"]', file
 [直接在回复中嵌入截图]
 
 // 跳过间隔
-browser_click()  // 立即执行
-browser_click()  // 没有等待
+page.click()  // 立即执行
+page.click()  // 没有等待
 ```
 
 ## Common Mistakes

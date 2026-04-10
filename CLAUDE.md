@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **Xiaohongshu (小红书) Operations Assistant** - an AI agent framework that uses Claude Code with the repo-local browser MCP (`puppeteer-stealth` server alias, `browser_*` tools from `mcp-server/`) to automate operations on Xiaohongshu (xiaohongshu.com), a Chinese social media platform.
+This is a **Xiaohongshu (小红书) Operations Assistant** - an AI agent framework that uses Claude Code with the repo-local browser MCP (`puppeteer-stealth` alias routed to browser-use MCP) to automate operations on Xiaohongshu (xiaohongshu.com), a Chinese social media platform.
 
 ## Core Architecture
 
 ```
-User Task → Claude Code → repo-local browser MCP (`browser_*`) → Xiaohongshu Web
+User Task → Claude Code → repo-local browser MCP (`chrome.launch_cdp` / `browser.connect_cdp` / `page.*`) → Xiaohongshu Web
                      ↓
               Memory System (JSON files)
               - skills/      # Learned skills
@@ -45,7 +45,7 @@ This is not a traditional code project with build/test commands. Instead:
 
 1. **Task Execution**: User gives natural language tasks (e.g., "帮我发布一篇笔记", "关注10个博主")
 2. **Skill Retrieval**: Claude Code looks up relevant skills in `memory/skills/`
-3. **Browser Control**: Uses the repo-local `browser_*` MCP tools to execute operations
+3. **Browser Control**: Uses the repo-local browser-use MCP tools (`chrome.launch_cdp`, `browser.connect_cdp`, `page.*`) to execute operations
 4. **Learning**: Results are recorded to `memory/history/` for future improvement
 
 ## Images Directory
@@ -112,49 +112,49 @@ aios/
   - `memory/skills/人类行为模拟.json` - human behavior
   - `config/stealth-chrome-args.json` - Chrome args
 
-## Browser MCP (Playwright-based)
+## Browser MCP (browser-use CDP)
 
-The project now includes a **Playwright-based browser MCP** (参照 OpenClaw 架构):
+The project now defaults to **browser-use MCP over CDP**:
 
 ### MCP Server
 
-- **Path**: `mcp-server/`
-- **Build**: `cd mcp-server && npm run build`
-- **Dev**: `cd mcp-server && npm run dev`
+- **Launcher**: `scripts/run-browser-use-mcp.sh`
+- **Migration command**: `node scripts/aios.mjs internal browser mcp-migrate`
+- **Doctor**: `node scripts/aios.mjs internal browser doctor --fix --dry-run`
 
 ### Available Tools
 
 | Tool | Description |
 |------|-------------|
-| `browser_launch` | Launch browser with optional profile |
-| `browser_navigate` | Navigate to URL |
-| `browser_click` | Click element |
-| `browser_type` | Type text into element |
-| `browser_snapshot` | Get page snapshot |
-| `browser_auth_check` | Detect login/session gate and human handoff |
-| `browser_screenshot` | Take screenshot |
-| `browser_close` | Close browser |
-| `browser_list_tabs` | List all tabs |
+| `chrome.launch_cdp` | Launch local Chrome/Chromium with CDP and profile dir |
+| `browser.connect_cdp` | Connect to CDP browser and create session |
+| `page.goto` | Navigate to URL |
+| `page.click` / `page.type` / `page.press` | Interaction primitives |
+| `page.extract_text` / `page.get_html` | Text/HTML extraction |
+| `page.screenshot` | Take screenshot |
+| `browser.close` | Close browser session |
+| `diagnostics.sannysoft` | Fingerprint diagnostics snapshot |
 
 ### Profile Support
 
 Multi-profile support for isolated browser instances:
 - Each profile has independent user data directory
 - Config: `config/browser-profiles.json`
-- Recommended convention: `default` = CDP fingerprint browser, `local` = Playwright local launch
+- Recommended convention: `default` = CDP fingerprint browser
 - Login pages (Google/Meta/Jimeng auth walls) require human completion; automation should resume after login
 
 ### Tech Stack
 
-- Playwright (与 OpenClaw 相同)
+- browser-use + MCP (Python runtime)
+- CDP real Chrome profile reuse
 - TypeScript
 - MCP SDK
 
 ## Important Notes
 
-- All normal browser automation should use the repo-local `puppeteer-stealth` MCP alias and its `browser_*` tools
+- All normal browser automation should use the repo-local `puppeteer-stealth` MCP alias and browser-use tools (`chrome.launch_cdp` + `browser.connect_cdp` + `page.*`)
 - If multiple browser MCPs are installed, reserve `chrome-devtools` for low-level debugging only
-- For interactive work, prefer `browser_launch {"profile":"default","visible":true}`
+- For interactive work, prefer `chrome.launch_cdp {"port":9222}` then `browser.connect_cdp`
 - The system maintains a file-based memory system in JSON format
 - Before executing any plan, use `superpowers:brainstorming` skill
 - When implementing features, use `superpowers:test-driven-development`

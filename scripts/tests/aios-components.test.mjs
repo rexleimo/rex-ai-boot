@@ -17,6 +17,7 @@ import {
   installOrchestratorAgents,
   uninstallOrchestratorAgents,
 } from '../lib/components/agents.mjs';
+import { migrateBrowserMcpConfig } from '../lib/components/browser.mjs';
 import {
   commandExists,
   getCommandSpawnSpec,
@@ -227,6 +228,106 @@ test('skills install copies repo-managed skills by default and uninstall removes
     missing = true;
   }
   assert.equal(missing, true);
+});
+
+test('browser mcp-migrate updates local and client mcp json configs', async () => {
+  const rootDir = await makeTemp('aios-browser-migrate-root-');
+  const scriptsDir = path.join(rootDir, 'scripts');
+  const mcpServerDir = path.join(rootDir, 'mcp-server');
+  const configDir = path.join(rootDir, 'config');
+  const codexHome = await makeTemp('aios-browser-migrate-codex-');
+  const claudeHome = await makeTemp('aios-browser-migrate-claude-');
+  const geminiHome = await makeTemp('aios-browser-migrate-gemini-');
+  const opencodeHome = await makeTemp('aios-browser-migrate-opencode-');
+
+  await mkdir(scriptsDir, { recursive: true });
+  await mkdir(mcpServerDir, { recursive: true });
+  await mkdir(configDir, { recursive: true });
+  await writeFile(path.join(scriptsDir, 'run-browser-use-mcp.sh'), '#!/usr/bin/env bash\n', 'utf8');
+  await writeFile(path.join(scriptsDir, 'browser-use-bootstrap.py'), 'print("ok")\n', 'utf8');
+  await writeFile(path.join(configDir, 'browser-profiles.json'), JSON.stringify({
+    profiles: {
+      default: { cdpPort: 9333 },
+    },
+  }, null, 2), 'utf8');
+
+  const legacyConfig = {
+    mcpServers: {
+      'puppeteer-stealth': {
+        command: 'node',
+        args: ['/legacy/dist/index.js'],
+        env: { KEEP_ME: '1' },
+      },
+      'playwright-browser-mcp': {
+        command: 'node',
+        args: ['/legacy/dist/index.js'],
+      },
+    },
+  };
+
+  await writeFile(path.join(rootDir, '.mcp.json'), `${JSON.stringify(legacyConfig, null, 2)}\n`, 'utf8');
+  await writeFile(path.join(mcpServerDir, '.mcp.json'), `${JSON.stringify(legacyConfig, null, 2)}\n`, 'utf8');
+  await mkdir(claudeHome, { recursive: true });
+  await writeFile(path.join(claudeHome, 'mcp.json'), `${JSON.stringify(legacyConfig, null, 2)}\n`, 'utf8');
+
+  const logs = [];
+  const result = await migrateBrowserMcpConfig({
+    rootDir,
+    io: { log: (line) => logs.push(String(line)) },
+    clientHomes: {
+      codex: codexHome,
+      claude: claudeHome,
+      gemini: geminiHome,
+      opencode: opencodeHome,
+    },
+  });
+
+  assert.equal(result.errors, 0);
+  assert.equal(result.created >= 0, true);
+  assert.equal(result.updated >= 3, true);
+
+  const rootMcp = JSON.parse(await readFile(path.join(rootDir, '.mcp.json'), 'utf8'));
+  assert.equal(rootMcp.mcpServers['puppeteer-stealth'].command, 'bash');
+  assert.deepEqual(rootMcp.mcpServers['puppeteer-stealth'].args, [path.join(rootDir, 'scripts', 'run-browser-use-mcp.sh')]);
+  assert.equal(rootMcp.mcpServers['puppeteer-stealth'].env.KEEP_ME, '1');
+  assert.equal(rootMcp.mcpServers['puppeteer-stealth'].env.BROWSER_USE_CDP_URL, 'http://127.0.0.1:9333');
+  assert.equal(rootMcp.mcpServers['playwright-browser-mcp'], undefined);
+
+  const claudeMcp = JSON.parse(await readFile(path.join(claudeHome, 'mcp.json'), 'utf8'));
+  assert.equal(claudeMcp.mcpServers['puppeteer-stealth'].command, 'bash');
+  assert.equal(claudeMcp.mcpServers['playwright-browser-mcp'], undefined);
+  assert.match(logs.join('\n'), /mcp-migrate summary:/);
+});
+
+test('browser mcp-migrate --dry-run does not modify files', async () => {
+  const rootDir = await makeTemp('aios-browser-migrate-dry-run-root-');
+  const scriptsDir = path.join(rootDir, 'scripts');
+  const configDir = path.join(rootDir, 'config');
+
+  await mkdir(scriptsDir, { recursive: true });
+  await mkdir(configDir, { recursive: true });
+  await writeFile(path.join(scriptsDir, 'run-browser-use-mcp.sh'), '#!/usr/bin/env bash\n', 'utf8');
+  await writeFile(path.join(scriptsDir, 'browser-use-bootstrap.py'), 'print("ok")\n', 'utf8');
+  await writeFile(path.join(configDir, 'browser-profiles.json'), JSON.stringify({
+    profiles: {
+      default: { cdpPort: 9222 },
+    },
+  }, null, 2), 'utf8');
+
+  const before = JSON.stringify({
+    mcpServers: {
+      'puppeteer-stealth': { command: 'node', args: ['/old.js'] },
+    },
+  }, null, 2) + '\n';
+
+  const localMcpPath = path.join(rootDir, '.mcp.json');
+  await writeFile(localMcpPath, before, 'utf8');
+
+  const result = await migrateBrowserMcpConfig({ rootDir, dryRun: true, clientHomes: {} });
+  const after = await readFile(localMcpPath, 'utf8');
+  assert.equal(after, before);
+  assert.equal(result.dryRun, true);
+  assert.equal(result.updated + result.created >= 1, true);
 });
 
 test('windows npm resolves to the bundled npm cli script', async () => {

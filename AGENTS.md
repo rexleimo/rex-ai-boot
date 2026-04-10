@@ -3,7 +3,9 @@
 ## Project Structure & Module Organization
 This repository is a local-first AI agent workspace centered on browser automation via MCP.
 
-- `mcp-server/`: TypeScript Playwright MCP server (main runtime code).
+- `mcp-server/`: TypeScript Playwright MCP server (legacy/compat runtime code).
+- `scripts/run-browser-use-mcp.sh`: default MCP launcher that bridges to `/Users/molei/codes/ai-browser-book/mcp-browser-use`.
+- `scripts/browser-use-bootstrap.py`: browser-use bootstrap with optional module shims.
 - `mcp-server/src/index.ts`: MCP server entry point and tool routing.
 - `mcp-server/src/browser/`: browser launcher, profile manager, auth checks, and tool actions.
 - `config/`: runtime configuration such as `browser-profiles.json` and safety-related settings.
@@ -33,7 +35,7 @@ npm run typecheck && npm run build
 - Language: TypeScript (ESM, strict mode).
 - Indentation: 2 spaces; keep semicolons.
 - File names: kebab-case for action modules (for example `auth-check.ts`), `index.ts` for module entry points.
-- Tool names exposed to MCP should follow `browser_*` naming.
+- For `mcp-server` internals, tool names follow `browser_*`. For default runtime (browser-use), use `chrome.launch_cdp` / `browser.connect_cdp` / `page.*`.
 - Keep configuration JSON keys stable; prefer additive changes over renaming.
 - Repo-local discoverable skills must live under `.codex/skills/` or `.claude/skills/` (optionally `.agents/skills/` only when the target client actually supports it). Do not invent parallel skill roots such as `.baoyu-skills/*/SKILL.md`; those are non-discoverable and should be plain docs or extension config only.
 
@@ -43,7 +45,7 @@ Minimum verification for behavior changes:
 
 1. `npm run test:scripts` (repo root)
 2. `cd mcp-server && npm run typecheck && npm run test && npm run build`
-3. Manual MCP smoke test (`browser_launch` -> `browser_navigate` -> `browser_snapshot`/`browser_auth_check` -> `browser_close`) when browser-flow behavior changes
+3. Manual MCP smoke test (`chrome.launch_cdp` -> `browser.connect_cdp` -> `page.goto` -> `page.screenshot` -> `browser.close`) when browser-flow behavior changes
 
 Document manual test steps in PRs when behavior changes.
 
@@ -65,10 +67,10 @@ PRs should include:
 - Preserve human-in-the-loop checks for auth walls and sensitive outbound actions.
 
 ## Browser MCP Selection
-- In this repo, prefer the `puppeteer-stealth` MCP server alias that exposes `browser_*` tools from `mcp-server/`.
-- For interactive browser work, use `browser_launch {"profile":"default","visible":true}` unless the task explicitly needs headless mode.
+- In this repo, prefer the `puppeteer-stealth` MCP server alias that now routes to browser-use MCP (`scripts/run-browser-use-mcp.sh`).
+- For interactive browser work, use `chrome.launch_cdp {"port":9222,"user_data_dir":"~/.chrome-cdp-profile"}` then `browser.connect_cdp`.
 - If multiple browser MCPs are available, do **not** use `chrome-devtools` for normal business flows; reserve it for low-level inspection/debugging only.
-- Default reasoning order for page understanding: `browser_auth_check` / `browser_challenge_check` -> `browser_snapshot` layout fields -> `browser_screenshot(selector)` only if visual fallback is needed.
+- Default reasoning order for page understanding: `page.extract_text` / `page.get_html` first, `page.screenshot` as visual fallback.
 
 ## Default Superpowers Route
 For substantial user requests, use this route by default:

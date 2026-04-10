@@ -4,9 +4,13 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { commandExists, captureCommand, runCommand } from '../platform/process.mjs';
+import { getClientHomes } from '../platform/paths.mjs';
 
 const DEFAULT_CDP_SERVICE_PORT = 9222;
 const CDP_SERVICE_LABEL_PREFIX = 'com.aios.cdp';
+const DEFAULT_BROWSER_USE_REPO = '/Users/molei/codes/ai-browser-book';
+const LEGACY_BROWSER_ALIAS = 'playwright-browser-mcp';
+const PRIMARY_BROWSER_ALIAS = 'puppeteer-stealth';
 
 function requireCommand(name) {
   if (!commandExists(name)) {
@@ -14,48 +18,217 @@ function requireCommand(name) {
   }
 }
 
-function printSnippet(io, distPath) {
+function printSnippet(io, launcherPath, cdpUrl) {
   io.log('');
-  io.log('Done. Add this MCP server block to your client config:');
+  io.log('Done. Use this MCP server block in your client config:');
+  io.log('- If `puppeteer-stealth` already exists, replace its block in-place (do not delete the alias name).');
+  io.log('- If legacy `playwright-browser-mcp` exists, remove it to avoid parallel old/new browser stacks.');
   io.log('');
   io.log('{');
   io.log('  "mcpServers": {');
-  io.log('    "playwright-browser-mcp": {');
-  io.log('      "command": "node",');
-  io.log(`      "args": ["${distPath}"]`);
+  io.log('    "puppeteer-stealth": {');
+  io.log('      "type": "stdio",');
+  io.log('      "command": "bash",');
+  io.log(`      "args": ["${launcherPath}"],`);
+  io.log('      "env": {');
+  io.log(`        "BROWSER_USE_CDP_URL": "${cdpUrl}"`);
+  io.log('      }');
   io.log('    }');
   io.log('  }');
   io.log('}');
 }
 
-export async function installBrowserMcp({ rootDir, skipPlaywrightInstall = false, dryRun = false, io = console } = {}) {
-  const mcpDir = path.join(rootDir, 'mcp-server');
-  const distEntry = path.join(mcpDir, 'dist', 'index.js');
+function buildPreferredMcpServer(rootDir, existingAlias = {}) {
+  const launcherScript = path.join(rootDir, 'scripts', 'run-browser-use-mcp.sh');
+  const cdpUrl = resolveDefaultCdpUrl(rootDir);
+  const browserUseRepo = resolveBrowserUseRepo(rootDir);
+  const nextEnv = {
+    ...(existingAlias && typeof existingAlias.env === 'object' ? existingAlias.env : {}),
+    AIOS_BROWSER_USE_REPO: browserUseRepo,
+    BROWSER_USE_CDP_URL: cdpUrl,
+  };
 
-  if (!fs.existsSync(mcpDir)) {
-    throw new Error(`mcp-server directory not found: ${mcpDir}`);
+  return {
+    type: 'stdio',
+    command: 'bash',
+    args: [launcherScript],
+    env: nextEnv,
+  };
+}
+
+function migrateOneMcpJsonFile(filePath, rootDir) {
+  const exists = fs.existsSync(filePath);
+  const raw = exists ? fs.readFileSync(filePath, 'utf8') : '';
+
+  let parsed = {};
+  if (exists && raw.trim()) {
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      return {
+        status: 'error',
+        reason: `JSON parse failed: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
   }
 
-  requireCommand('node');
-  requireCommand('npm');
-  requireCommand('npx');
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    parsed = {};
+  }
 
-  const runInMcp = (command, args) => {
-    io.log(`+ (cd ${mcpDir} && ${command} ${args.join(' ')})`);
+  if (!parsed.mcpServers || typeof parsed.mcpServers !== 'object' || Array.isArray(parsed.mcpServers)) {
+    parsed.mcpServers = {};
+  }
+
+  const mcpServers = parsed.mcpServers;
+  const existingAlias = mcpServers[PRIMARY_BROWSER_ALIAS];
+  mcpServers[PRIMARY_BROWSER_ALIAS] = buildPreferredMcpServer(rootDir, existingAlias);
+  delete mcpServers[LEGACY_BROWSER_ALIAS];
+
+  const nextRaw = `${JSON.stringify(parsed, null, 2)}\n`;
+  if (exists && raw === nextRaw) {
+    return { status: 'unchanged' };
+  }
+
+  return {
+    status: exists ? 'updated' : 'created',
+    nextRaw,
+  };
+}
+
+export async function migrateBrowserMcpConfig({ rootDir, io = console, dryRun = false, clientHomes = null } = {}) {
+  const launcherScript = path.join(rootDir, 'scripts', 'run-browser-use-mcp.sh');
+  const bootstrapScript = path.join(rootDir, 'scripts', 'browser-use-bootstrap.py');
+  if (!fs.existsSync(launcherScript)) {
+    throw new Error(`browser-use launcher script not found: ${launcherScript}`);
+  }
+  if (!fs.existsSync(bootstrapScript)) {
+    throw new Error(`browser-use bootstrap script not found: ${bootstrapScript}`);
+  }
+
+  const homes = clientHomes && typeof clientHomes === 'object' ? clientHomes : getClientHomes(process.env, os.homedir());
+  const candidates = [
+    { path: path.join(rootDir, '.mcp.json'), createIfMissing: true },
+    { path: path.join(rootDir, 'mcp-server', '.mcp.json'), createIfMissing: true },
+    { path: path.join(homes.codex || '', 'mcp.json'), createIfMissing: false },
+    { path: path.join(homes.claude || '', 'mcp.json'), createIfMissing: false },
+    { path: path.join(homes.gemini || '', 'mcp.json'), createIfMissing: false },
+    { path: path.join(homes.opencode || '', 'mcp.json'), createIfMissing: false },
+  ];
+
+  const seen = new Set();
+  const targets = candidates.filter((candidate) => {
+    if (!candidate.path) return false;
+    const abs = path.resolve(candidate.path);
+    if (seen.has(abs)) return false;
+    seen.add(abs);
+    return candidate.createIfMissing || fs.existsSync(abs);
+  });
+
+  let created = 0;
+  let updated = 0;
+  let unchanged = 0;
+  let errors = 0;
+  const changedPaths = [];
+
+  for (const target of targets) {
+    const absPath = path.resolve(target.path);
+    const result = migrateOneMcpJsonFile(absPath, rootDir);
+    if (result.status === 'error') {
+      io.log(`ERR  mcp-migrate skipped (invalid json): ${absPath}; ${result.reason}`);
+      errors += 1;
+      continue;
+    }
+
+    if (result.status === 'unchanged') {
+      io.log(`OK   mcp-migrate unchanged: ${absPath}`);
+      unchanged += 1;
+      continue;
+    }
+
+    if (dryRun) {
+      io.log(`PLAN mcp-migrate ${result.status}: ${absPath}`);
+    } else {
+      fs.mkdirSync(path.dirname(absPath), { recursive: true });
+      fs.writeFileSync(absPath, result.nextRaw, 'utf8');
+      io.log(`OK   mcp-migrate ${result.status}: ${absPath}`);
+    }
+
+    changedPaths.push(absPath);
+    if (result.status === 'created') created += 1;
+    if (result.status === 'updated') updated += 1;
+  }
+
+  io.log(
+    `mcp-migrate summary: created=${created} updated=${updated} unchanged=${unchanged} ` +
+    `errors=${errors} dryRun=${dryRun ? 'true' : 'false'}`
+  );
+
+  return {
+    created,
+    updated,
+    unchanged,
+    errors,
+    dryRun,
+    changedPaths,
+  };
+}
+
+export async function installBrowserMcp({ rootDir, skipPlaywrightInstall = false, dryRun = false, io = console } = {}) {
+  requireCommand('node');
+
+  const launcherScript = path.join(rootDir, 'scripts', 'run-browser-use-mcp.sh');
+  const bootstrapScript = path.join(rootDir, 'scripts', 'browser-use-bootstrap.py');
+  if (!fs.existsSync(launcherScript)) {
+    throw new Error(`browser-use launcher script not found: ${launcherScript}`);
+  }
+  if (!fs.existsSync(bootstrapScript)) {
+    throw new Error(`browser-use bootstrap script not found: ${bootstrapScript}`);
+  }
+
+  const browserUseRepo = resolveBrowserUseRepo(rootDir);
+  const browserUseProjectDir = path.join(browserUseRepo, 'mcp-browser-use');
+  const browserUsePyproject = path.join(browserUseProjectDir, 'pyproject.toml');
+  if (!fs.existsSync(browserUsePyproject)) {
+    throw new Error(
+      `browser-use MCP project not found: ${browserUseProjectDir}.\n` +
+      'Set AIOS_BROWSER_USE_REPO to your ai-browser-book repository path.'
+    );
+  }
+
+  const runInBrowserUse = (command, args) => {
+    io.log(`+ (cd ${browserUseProjectDir} && ${command} ${args.join(' ')})`);
     if (!dryRun) {
-      runCommand(command, args, { cwd: mcpDir });
+      runCommand(command, args, { cwd: browserUseProjectDir });
     }
   };
 
-  runInMcp('npm', ['install']);
   if (!skipPlaywrightInstall) {
-    runInMcp('npx', ['playwright', 'install', 'chromium']);
+    const venvPython = path.join(browserUseProjectDir, '.venv', 'bin', 'python');
+    if (fs.existsSync(venvPython)) {
+      io.log(`+ browser-use runtime found: ${venvPython}`);
+    } else if (commandExists('uv')) {
+      runInBrowserUse('uv', ['sync']);
+    } else {
+      requireCommand('python3');
+      runInBrowserUse('python3', ['-m', 'venv', '.venv']);
+      const venvPython = path.join(browserUseProjectDir, '.venv', 'bin', 'python');
+      runInBrowserUse(venvPython, ['-m', 'pip', 'install', '-U', 'pip']);
+      runInBrowserUse(venvPython, ['-m', 'pip', 'install', '-e', '.[dev]']);
+    }
   }
-  runInMcp('npm', ['run', 'build']);
 
-  const distPath = dryRun ? '<ABSOLUTE_PATH_TO_REPO>/mcp-server/dist/index.js' : fs.realpathSync(distEntry);
-  printSnippet(io, distPath);
-  return { distPath };
+  const launcherPath = dryRun
+    ? '<ABSOLUTE_PATH_TO_REPO>/scripts/run-browser-use-mcp.sh'
+    : fs.realpathSync(launcherScript);
+  const cdpUrl = resolveDefaultCdpUrl(rootDir);
+  printSnippet(io, launcherPath, cdpUrl);
+
+  return {
+    launcherPath,
+    cdpUrl,
+    browserUseProjectDir,
+  };
 }
 
 function testPortOpen(port) {
@@ -95,32 +268,41 @@ function resolveDefaultCdpPort(rootDir) {
   }
 }
 
-function uniqueStrings(values = []) {
-  const seen = new Set();
-  const out = [];
-  for (const value of values) {
-    const text = String(value ?? '').trim();
-    if (!text || seen.has(text)) continue;
-    seen.add(text);
-    out.push(text);
+function resolveDefaultCdpUrl(rootDir) {
+  const profileConfig = path.join(rootDir, 'config', 'browser-profiles.json');
+  if (!fs.existsSync(profileConfig)) {
+    return `http://127.0.0.1:${DEFAULT_CDP_SERVICE_PORT}`;
   }
-  return out;
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(profileConfig, 'utf8'));
+    const defaultProfile = parsed?.profiles?.default ?? {};
+    const cdpUrl = String(defaultProfile.cdpUrl || '').trim();
+    if (cdpUrl) return cdpUrl;
+    const cdpPort = normalizeCdpPort(defaultProfile.cdpPort);
+    return `http://127.0.0.1:${cdpPort}`;
+  } catch {
+    return `http://127.0.0.1:${DEFAULT_CDP_SERVICE_PORT}`;
+  }
 }
 
-function resolveNodeCandidates() {
-  const homeDir = process.env.HOME || os.homedir() || '';
-  const versionedFnmNode = homeDir
-    ? path.join(homeDir, '.local', 'share', 'fnm', 'node-versions', `v${process.versions.node}`, 'installation', 'bin', 'node')
-    : '';
+function resolveBrowserUseRepo(rootDir) {
+  const envRepo = String(process.env.AIOS_BROWSER_USE_REPO || '').trim();
+  const candidates = [
+    envRepo,
+    path.resolve(rootDir, '..', 'ai-browser-book'),
+    path.resolve(rootDir, 'ai-browser-book'),
+    DEFAULT_BROWSER_USE_REPO,
+  ].filter(Boolean);
 
-  return uniqueStrings([
-    process.execPath,
-    process.argv?.[0],
-    versionedFnmNode,
-    '/opt/homebrew/bin/node',
-    '/usr/local/bin/node',
-    '/usr/bin/node',
-  ]);
+  for (const candidate of candidates) {
+    const projectDir = path.join(candidate, 'mcp-browser-use');
+    if (fs.existsSync(path.join(projectDir, 'pyproject.toml'))) {
+      return candidate;
+    }
+  }
+
+  return envRepo || DEFAULT_BROWSER_USE_REPO;
 }
 
 function resolveCdpServiceLayout(rootDir, port = DEFAULT_CDP_SERVICE_PORT) {
@@ -148,59 +330,59 @@ function resolveCdpServiceLayout(rootDir, port = DEFAULT_CDP_SERVICE_PORT) {
     stdoutPath: path.join(logsDir, `aios-cdp-${resolvedPort}.out.log`),
     stderrPath: path.join(logsDir, `aios-cdp-${resolvedPort}.err.log`),
     userDataDir: path.join(rootDir, '.browser-profiles', resolvedPort === 9222 ? 'default-cdp' : `default-cdp-${resolvedPort}`),
-    playwrightRequirePath: path.join(rootDir, 'mcp-server', 'node_modules', 'playwright'),
   };
 }
 
 function renderCdpLauncherScript(layout) {
-  const nodeCandidates = resolveNodeCandidates();
-  const candidateRows = nodeCandidates.map((candidate) => `  ${JSON.stringify(candidate)}`).join('\n');
-
   return `#!/bin/zsh
 set -euo pipefail
 
-ROOT=${JSON.stringify(layout.rootDir)}
-MCP_DIR=${JSON.stringify(path.join(layout.rootDir, 'mcp-server'))}
 USER_DATA_DIR=${JSON.stringify(layout.userDataDir)}
 PORT=${JSON.stringify(String(layout.port))}
-PLAYWRIGHT_MODULE=${JSON.stringify(layout.playwrightRequirePath)}
+CHROME_OVERRIDE="\${AIOS_CDP_CHROME_BIN:-}"
 
 mkdir -p "$USER_DATA_DIR"
 
-if [[ ! -d "$MCP_DIR" ]]; then
-  echo "[aios-cdp] mcp-server not found: $MCP_DIR" >&2
-  exit 1
-fi
-
-NODE_CANDIDATES=(
-${candidateRows}
+CHROME_CANDIDATES=(
+  "$CHROME_OVERRIDE"
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  "/Applications/Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta"
+  "/Applications/Chromium.app/Contents/MacOS/Chromium"
+  "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
+  "/Applications/Arc.app/Contents/MacOS/Arc"
 )
 
-NODE_BIN=""
-for candidate in "\${NODE_CANDIDATES[@]}"; do
-  if [[ -x "$candidate" ]]; then
-    NODE_BIN="$candidate"
+CHROME_BIN=""
+for candidate in "\${CHROME_CANDIDATES[@]}"; do
+  if [[ -n "$candidate" && -x "$candidate" ]]; then
+    CHROME_BIN="$candidate"
     break
   fi
 done
 
-if [[ -z "$NODE_BIN" ]]; then
-  echo "[aios-cdp] node binary not found. Install Node 22+ and/or set AIOS_NODE_BIN in launch agent env." >&2
-  exit 1
+if [[ -z "$CHROME_BIN" ]]; then
+  for fallback in google-chrome chrome chromium chromium-browser brave; do
+    if command -v "$fallback" >/dev/null 2>&1; then
+      CHROME_BIN="$(command -v "$fallback")"
+      break
+    fi
+  done
 fi
 
-CHROME_BIN="$("$NODE_BIN" -e 'process.stdout.write(require(process.argv[1]).chromium.executablePath())' "$PLAYWRIGHT_MODULE")"
 if [[ -z "$CHROME_BIN" || ! -x "$CHROME_BIN" ]]; then
-  echo "[aios-cdp] chromium executable not found: $CHROME_BIN" >&2
+  echo "[aios-cdp] Chrome/Chromium executable not found." >&2
+  echo "[aios-cdp] Set AIOS_CDP_CHROME_BIN to an explicit executable path." >&2
   exit 1
 fi
 
 exec "$CHROME_BIN" \\
   --remote-debugging-port="$PORT" \\
+  --remote-debugging-address=127.0.0.1 \\
   --user-data-dir="$USER_DATA_DIR" \\
   --no-first-run \\
   --no-default-browser-check \\
-  --headless \\
+  --disable-blink-features=AutomationControlled \\
+  --disable-infobars \\
   about:blank
 `;
 }
@@ -457,8 +639,12 @@ async function autoHealDefaultCdpPort({
 }
 
 export async function doctorBrowserMcp({ rootDir, io = console, fix = false, dryRun = false, runtime = {} } = {}) {
-  const mcpDir = path.join(rootDir, 'mcp-server');
-  const distEntry = path.join(mcpDir, 'dist', 'index.js');
+  const launcherScript = path.join(rootDir, 'scripts', 'run-browser-use-mcp.sh');
+  const bootstrapScript = path.join(rootDir, 'scripts', 'browser-use-bootstrap.py');
+  const browserUseRepo = resolveBrowserUseRepo(rootDir);
+  const browserUseProjectDir = path.join(browserUseRepo, 'mcp-browser-use');
+  const browserUsePyproject = path.join(browserUseProjectDir, 'pyproject.toml');
+  const browserUsePython = path.join(browserUseProjectDir, '.venv', 'bin', 'python');
   const profileConfig = path.join(rootDir, 'config', 'browser-profiles.json');
   const doctorRuntime = resolveBrowserDoctorRuntime(runtime);
 
@@ -483,8 +669,15 @@ export async function doctorBrowserMcp({ rootDir, io = console, fix = false, dry
   io.log(`Repo: ${rootDir}`);
   io.log('');
   io.log('[1/6] Command checks');
-  for (const command of ['node', 'npm', 'npx']) {
+  for (const command of ['node', 'bash']) {
     if (doctorRuntime.commandExists(command)) ok(`command exists: ${command}`); else err(`missing command: ${command}`);
+  }
+  if (doctorRuntime.commandExists('uv')) {
+    ok('command exists: uv');
+  } else if (doctorRuntime.commandExists('python3')) {
+    ok('command exists: python3');
+  } else {
+    err('missing command: uv or python3');
   }
 
   const version = doctorRuntime.captureCommand('node', ['-p', 'process.versions.node']);
@@ -494,18 +687,23 @@ export async function doctorBrowserMcp({ rootDir, io = console, fix = false, dry
   }
 
   io.log('');
-  io.log('[2/6] mcp-server files');
-  if (fs.existsSync(path.join(mcpDir, 'package.json'))) ok('mcp-server/package.json found'); else err('missing mcp-server/package.json');
-  if (fs.existsSync(path.join(mcpDir, 'node_modules'))) ok('mcp-server/node_modules found'); else err('node_modules missing. Run: cd mcp-server; npm install');
-  if (fs.existsSync(distEntry)) ok('build artifact found: mcp-server/dist/index.js'); else err('build artifact missing. Run: cd mcp-server; npm run build');
+  io.log('[2/6] launcher and repo paths');
+  if (fs.existsSync(launcherScript)) ok(`launcher script found: ${launcherScript}`); else err(`missing launcher script: ${launcherScript}`);
+  if (fs.existsSync(bootstrapScript)) ok(`bootstrap script found: ${bootstrapScript}`); else err(`missing bootstrap script: ${bootstrapScript}`);
+  if (fs.existsSync(browserUsePyproject)) {
+    ok(`browser-use project found: ${browserUseProjectDir}`);
+  } else {
+    err(`browser-use project missing: ${browserUseProjectDir} (set AIOS_BROWSER_USE_REPO)`);
+  }
 
   io.log('');
-  io.log('[3/6] Playwright runtime');
-  const playwrightPath = doctorRuntime.captureCommand('node', ['-e', "process.stdout.write(require('playwright').chromium.executablePath())"], { cwd: mcpDir });
-  if (playwrightPath.status === 0 && playwrightPath.stdout.trim() && fs.existsSync(playwrightPath.stdout.trim())) {
-    ok('Playwright chromium executable found');
+  io.log('[3/6] browser-use runtime');
+  if (fs.existsSync(browserUsePython)) {
+    ok(`browser-use venv python found: ${browserUsePython}`);
+  } else if (fs.existsSync(browserUsePyproject)) {
+    warn(`browser-use venv python missing: ${browserUsePython}; run internal browser install`);
   } else {
-    warn('Playwright chromium executable not installed. Run: cd mcp-server; npx playwright install chromium');
+    warn('browser-use runtime check skipped because project path is missing');
   }
 
   io.log('');
@@ -556,13 +754,13 @@ export async function doctorBrowserMcp({ rootDir, io = console, fix = false, dry
         ok(`default CDP port auto-healed: ${port}`);
       } else {
         const detail = healed.reason ? `; ${healed.reason}` : '';
-        warn(`default CDP port is not reachable: ${port} (profile=default will auto-fallback to local launch)${detail}`);
+        warn(`default CDP port is not reachable: ${port} (browser.connect_cdp will fail until CDP is available)${detail}`);
       }
     } else {
-      warn(`default CDP port is not reachable: ${port} (profile=default will auto-fallback to local launch)`);
+      warn(`default CDP port is not reachable: ${port} (browser.connect_cdp will fail until CDP is available)`);
     }
   } else {
-    ok('default profile uses local launch mode (no CDP dependency)');
+    warn('default profile has no cdpUrl/cdpPort; browser-use requires a CDP endpoint');
   }
 
   io.log('');
@@ -577,7 +775,7 @@ export async function doctorBrowserMcp({ rootDir, io = console, fix = false, dry
   }
   io.log('- If ERR exists: run install script first');
   io.log('  node scripts/aios.mjs setup --components browser');
-  io.log('- Then smoke test in client chat: browser_launch -> browser_navigate -> browser_snapshot -> browser_close');
+  io.log('- Then smoke test in client chat: chrome.launch_cdp -> browser.connect_cdp -> page.goto -> page.screenshot -> browser.close');
 
   io.log('');
   if (errors > 0) io.log(`Result: FAILED (${errors} errors, ${warnings} warnings)`);

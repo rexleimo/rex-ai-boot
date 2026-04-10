@@ -102,6 +102,12 @@ test('parseArgs accepts internal browser cdp lifecycle actions', () => {
   assert.equal(restart.mode, 'help');
   assert.equal(restart.options.target, 'browser');
   assert.equal(restart.options.action, 'cdp-restart');
+
+  const migrate = parseArgs(['internal', 'browser', 'mcp-migrate', '--dry-run']);
+  assert.equal(migrate.command, 'internal');
+  assert.equal(migrate.options.target, 'browser');
+  assert.equal(migrate.options.action, 'mcp-migrate');
+  assert.equal(migrate.options.dryRun, true);
 });
 
 test('parseArgs accepts native component, internal native target, and native-only doctor flags', () => {

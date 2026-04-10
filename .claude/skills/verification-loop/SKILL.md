@@ -24,7 +24,7 @@ Use this skill when:
 2. MCP server changes (minimum):
    - `cd mcp-server && npm run typecheck`
    - `cd mcp-server && npm run build`
-   - Manual smoke: `browser_launch` -> `browser_navigate` -> `browser_snapshot` -> `browser_close`
+   - Manual smoke: `chrome.launch_cdp` -> `browser.connect_cdp` -> `page.goto` -> `page.extract_text`/`page.screenshot` -> `browser.close`
 
 3. Install/wrapper changes:
    - Re-run install/update on a clean-ish shell session.
@@ -33,4 +33,3 @@ Use this skill when:
 ## Evidence Capture
 - Record the exact commands run and whether they succeeded.
 - For failures: include the first actionable error line and the remediation you applied.
-

@@ -1,6 +1,7 @@
-# Playwright Browser MCP Server
+# Browser MCP Integration
 
-`mcp-server` currently exposes a Playwright-based `browser_*` toolset (not `stealth_*`).
+Default browser MCP runtime is now browser-use (CDP) via `scripts/run-browser-use-mcp.sh`.
+`mcp-server/` Playwright implementation is retained for legacy/compatibility workflows.
 
 ## Quick Start
 
@@ -18,14 +19,25 @@ powershell -ExecutionPolicy Bypass -File .\\scripts\\install-browser-mcp.ps1
 powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-browser-mcp.ps1
 ```
 
-Configure your client MCP config (use the absolute path printed by installer):
+Migrate/refresh client MCP config:
+
+```bash
+node scripts/aios.mjs internal browser mcp-migrate --dry-run
+node scripts/aios.mjs internal browser mcp-migrate
+```
+
+Expected MCP block:
 
 ```json
 {
   "mcpServers": {
-    "playwright-browser-mcp": {
-      "command": "node",
-      "args": ["/ABS/PATH/rex-cli/mcp-server/dist/index.js"]
+    "puppeteer-stealth": {
+      "type": "stdio",
+      "command": "bash",
+      "args": ["/ABS/PATH/aios/scripts/run-browser-use-mcp.sh"],
+      "env": {
+        "BROWSER_USE_CDP_URL": "http://127.0.0.1:9222"
+      }
     }
   }
 }
@@ -63,41 +75,43 @@ curl -sS -X POST "http://127.0.0.1:43110/mcp" \
 
 Then restart your client and smoke test:
 
-1. `browser_launch` `{"profile":"default","visible":true}`
-2. `browser_navigate` `{"url":"https://example.com"}`
-3. `browser_snapshot` `{"profile":"default"}`
-4. Read `pageSummary`, `regions`, `elements`, `textBlocks`, and `visualHints` first
-5. Only if `visualHints.needsVisualFallback=true`, call `browser_screenshot` with `selector`
-6. `browser_close` `{}`
+1. `chrome.launch_cdp` `{"port":9222,"user_data_dir":"~/.chrome-cdp-profile"}`
+2. `browser.connect_cdp` `{"cdp_url":"http://127.0.0.1:9222"}`
+3. `page.goto` `{"session_id":"<id>","url":"https://example.com"}`
+4. `page.screenshot` `{"session_id":"<id>"}`
+5. `browser.close` `{"session_id":"<id>"}`
 
 ## Installer and Doctor Scripts
 
 - `scripts/install-browser-mcp.sh`
-  - installs npm deps
-  - installs Playwright Chromium runtime
-  - builds `mcp-server`
+  - checks browser-use launcher and runtime
+  - installs browser-use runtime when needed (`uv sync` or `python -m venv + pip`)
   - prints ready-to-copy MCP config snippet
 - `scripts/install-browser-mcp.ps1` (Windows PowerShell variant)
 - `scripts/doctor-browser-mcp.sh`
-  - checks Node/npm/npx
-  - checks `node_modules`, `dist/index.js`, Playwright runtime
+  - checks Node/bash and browser-use runtime
+  - checks launcher/bootstrap scripts and browser-use project path
   - validates `config/browser-profiles.json`
-  - warns if default profile depends on CDP but port is not reachable
+  - warns if default CDP endpoint is not reachable
 - `scripts/doctor-browser-mcp.ps1` (Windows PowerShell variant)
 
-## Available Tools
+## Available Tools (Default browser-use runtime)
 
-- `browser_launch` `{ profile?, url?, visible?, headless? }`
-- `browser_navigate` `{ url, profile?, newTab? }`
-- `browser_click` `{ selector, profile?, double? }`
-- `browser_type` `{ selector, text, profile? }`
-- `browser_set_input_files` `{ selector, files, profile? }`
-- `browser_snapshot` `{ profile?, includeHtml?, htmlMaxChars? }`
-- `browser_auth_check` `{ profile? }`
-- `browser_challenge_check` `{ profile? }`
-- `browser_screenshot` `{ fullPage?, profile?, filePath?, selector? }`
-- `browser_list_tabs` `{ profile? }`
-- `browser_close` `{ profile? }`
+- `chrome.launch_cdp`
+- `browser.connect_cdp`
+- `browser.close`
+- `page.goto`
+- `page.wait`
+- `page.click`
+- `page.type`
+- `page.press`
+- `page.scroll`
+- `page.evaluate`
+- `page.set_input_files`
+- `page.screenshot`
+- `page.extract_text`
+- `page.get_html`
+- `diagnostics.sannysoft`
 
 ## Profile Config
 
@@ -120,30 +134,26 @@ Use `config/browser-profiles.json` (project root):
 ```
 
 Priority for launch mode:
-1. `cdpUrl` / `cdpPort` (connect existing browser/fingerprint browser)
-2. local launch with `executablePath` (profile or `BROWSER_EXECUTABLE_PATH`)
-3. Playwright default browser executable
+1. `cdpUrl` / `cdpPort` from `config/browser-profiles.json`
+2. `chrome.launch_cdp` with explicit `user_data_dir`
 
 ## Crash Troubleshooting (Google Chrome for Testing)
 
-If you see `Google Chrome for Testing 意外退出`:
+If CDP connection fails:
 
 1. Start fingerprint browser with remote debugging on `9222` and keep it running.
-2. Use `browser_launch` with `{ "profile": "default", "visible": true }` (the server will auto-fallback to `local` if CDP is unavailable).
-3. For explicit local Playwright launch, use `{ "profile": "local" }`.
-4. Optionally set `BROWSER_HEADLESS=true` for non-GUI environments.
+2. Verify port status: `node scripts/aios.mjs internal browser cdp-status`
+3. Use `chrome.launch_cdp` then `browser.connect_cdp`.
 
 ## Notes
 
 - The server auto-detects workspace root by locating `config/browser-profiles.json`.
 - For local persistent profiles, if `userDataDir` is locked by another browser process, server retries with an isolated runtime profile directory by default (`isolateOnLock=true`).
-- `browser_snapshot` now returns a layout-first payload: `pageSummary`, `regions`, `elements`, `textBlocks`, and `visualHints`.
-- Recommended reasoning order: `challenge/auth` -> `pageSummary` -> `regions` -> `elements` -> `textBlocks` -> optional `htmlPreview`.
-- For interactive agent work, prefer `browser_launch` with `visible:true`; use `headless:true` only for non-GUI environments or background smoke tests.
-- `browser_screenshot` returns base64 and can also save to disk via `filePath`; prefer `selector` for local visual fallback instead of full-page screenshots.
-- `browser_navigate` / `browser_snapshot` / `browser_auth_check` include `requiresHumanAction`, `auth`, and `challenge` fields.
-- Use `browser_challenge_check` for explicit anti-bot gate checks (Cloudflare / Google risk / captcha).
-- If `requiresHumanAction=true`, complete login/challenge manually and then continue automation.
+- Default toolchain is `chrome.launch_cdp` -> `browser.connect_cdp` -> `page.*` under the `puppeteer-stealth` alias.
+- Recommended reasoning order: `page.extract_text` -> `page.get_html` -> `page.screenshot` (visual fallback only).
+- For interactive agent work, prefer `chrome.launch_cdp {"port":9222,"user_data_dir":"~/.chrome-cdp-profile"}` and then `browser.connect_cdp`.
+- Keep login/challenge/captcha as human-in-the-loop; resume automation only after manual completion.
+- Legacy Playwright `browser_*` behavior (`browser_snapshot`, `browser_auth_check`, etc.) applies only when running `mcp-server/` directly as compatibility mode.
 - Recommended policy: keep third-party account sign-in (Google/Meta/Jimeng auth walls) as human-in-the-loop.
 
 ## Action Pacing (Reliability)

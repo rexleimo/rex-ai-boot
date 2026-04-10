@@ -13,6 +13,6 @@
 
 ## Repository-Level Translation
 - External state: `tasks/*`, `memory/*`, `docs/plans/*`.
-- Deterministic wrappers: MCP `browser_*` tools + selector standards.
-- Observability: `browser_snapshot` evidence + run report documents.
+- Deterministic wrappers: browser-use MCP chain (`chrome.launch_cdp` / `browser.connect_cdp` / `page.*`) + selector standards.
+- Observability: `page.extract_text` / `page.get_html` evidence + run report documents.
 - Human gates: login/captcha/content-policy rewrite approvals.

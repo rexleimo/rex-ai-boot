@@ -57,16 +57,16 @@ test('doctor-security-config scans agent-sources JSON files', async () => {
 
 test('doctorBrowserMcp --fix auto-heals default cdpPort when service start succeeds', async () => {
   const rootDir = await mkdtemp(path.join(os.tmpdir(), 'aios-browser-doctor-fix-root-'));
-  const mcpDir = path.join(rootDir, 'mcp-server');
+  const scriptsDir = path.join(rootDir, 'scripts');
   const configDir = path.join(rootDir, 'config');
-  const fakeChromium = path.join(rootDir, 'chromium', 'chrome');
-  await mkdir(path.join(mcpDir, 'dist'), { recursive: true });
-  await mkdir(path.join(mcpDir, 'node_modules'), { recursive: true });
+  const browserUseDir = path.join(rootDir, 'ai-browser-book', 'mcp-browser-use');
+  await mkdir(scriptsDir, { recursive: true });
+  await mkdir(path.join(browserUseDir, '.venv', 'bin'), { recursive: true });
   await mkdir(configDir, { recursive: true });
-  await mkdir(path.dirname(fakeChromium), { recursive: true });
-  await writeFile(path.join(mcpDir, 'package.json'), '{"name":"mcp-server"}\n', 'utf8');
-  await writeFile(path.join(mcpDir, 'dist', 'index.js'), 'export {};\n', 'utf8');
-  await writeFile(fakeChromium, '', 'utf8');
+  await writeFile(path.join(scriptsDir, 'run-browser-use-mcp.sh'), '#!/usr/bin/env bash\n', 'utf8');
+  await writeFile(path.join(scriptsDir, 'browser-use-bootstrap.py'), 'print("ok")\n', 'utf8');
+  await writeFile(path.join(browserUseDir, 'pyproject.toml'), '[project]\nname="mcp-browser-use"\n', 'utf8');
+  await writeFile(path.join(browserUseDir, '.venv', 'bin', 'python'), '#!/usr/bin/env bash\n', 'utf8');
   await writeFile(path.join(configDir, 'browser-profiles.json'), JSON.stringify({
     profiles: {
       default: { cdpPort: 9333 },
@@ -87,7 +87,7 @@ test('doctorBrowserMcp --fix auto-heals default cdpPort when service start succe
         if (command === 'node' && args?.[0] === '-p') {
           return { status: 0, stdout: '22.11.0\n', stderr: '', error: null };
         }
-        return { status: 0, stdout: fakeChromium, stderr: '', error: null };
+        return { status: 0, stdout: '', stderr: '', error: null };
       },
       testPortOpen: async () => {
         probeCount += 1;
@@ -109,16 +109,16 @@ test('doctorBrowserMcp --fix auto-heals default cdpPort when service start succe
 
 test('doctorBrowserMcp --fix --dry-run reports plan without starting CDP service', async () => {
   const rootDir = await mkdtemp(path.join(os.tmpdir(), 'aios-browser-doctor-dry-run-root-'));
-  const mcpDir = path.join(rootDir, 'mcp-server');
+  const scriptsDir = path.join(rootDir, 'scripts');
   const configDir = path.join(rootDir, 'config');
-  const fakeChromium = path.join(rootDir, 'chromium', 'chrome');
-  await mkdir(path.join(mcpDir, 'dist'), { recursive: true });
-  await mkdir(path.join(mcpDir, 'node_modules'), { recursive: true });
+  const browserUseDir = path.join(rootDir, 'ai-browser-book', 'mcp-browser-use');
+  await mkdir(scriptsDir, { recursive: true });
+  await mkdir(path.join(browserUseDir, '.venv', 'bin'), { recursive: true });
   await mkdir(configDir, { recursive: true });
-  await mkdir(path.dirname(fakeChromium), { recursive: true });
-  await writeFile(path.join(mcpDir, 'package.json'), '{"name":"mcp-server"}\n', 'utf8');
-  await writeFile(path.join(mcpDir, 'dist', 'index.js'), 'export {};\n', 'utf8');
-  await writeFile(fakeChromium, '', 'utf8');
+  await writeFile(path.join(scriptsDir, 'run-browser-use-mcp.sh'), '#!/usr/bin/env bash\n', 'utf8');
+  await writeFile(path.join(scriptsDir, 'browser-use-bootstrap.py'), 'print("ok")\n', 'utf8');
+  await writeFile(path.join(browserUseDir, 'pyproject.toml'), '[project]\nname="mcp-browser-use"\n', 'utf8');
+  await writeFile(path.join(browserUseDir, '.venv', 'bin', 'python'), '#!/usr/bin/env bash\n', 'utf8');
   await writeFile(path.join(configDir, 'browser-profiles.json'), JSON.stringify({
     profiles: {
       default: { cdpPort: 9333 },
@@ -139,7 +139,7 @@ test('doctorBrowserMcp --fix --dry-run reports plan without starting CDP service
         if (command === 'node' && args?.[0] === '-p') {
           return { status: 0, stdout: '22.11.0\n', stderr: '', error: null };
         }
-        return { status: 0, stdout: fakeChromium, stderr: '', error: null };
+        return { status: 0, stdout: '', stderr: '', error: null };
       },
       testPortOpen: async () => false,
       startCdpService: async () => {
