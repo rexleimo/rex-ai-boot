@@ -168,11 +168,14 @@ nav:
   - Core Features:
       - ContextDB: contextdb.md
       - Superpowers: superpowers.md
+      - Agent Team: team-ops.md
+      - HUD Guide: hud-guide.md
       - Architecture: architecture.md
       - CLI Workflows: use-cases.md
   - Resources:
       - CLI Comparison: cli-comparison.md
       - Case Library: case-library.md
+      - Skill Candidates: skill-candidates.md
       - Case - Cross-CLI Handoff: case-cross-cli-handoff.md
       - Case - Browser Auth-Wall Flow: case-auth-wall-browser.md
       - Case - Privacy Guard Config Read: case-privacy-guard.md

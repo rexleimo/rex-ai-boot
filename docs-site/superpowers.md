@@ -70,6 +70,19 @@ Run multiple independent tasks at once.
 
 **Use when**: 2+ tasks that don't share state and can run simultaneously.
 
+### team-ops
+
+Monitor and manage multi-agent collaborations with HUD and Team status tools.
+
+- View real-time session status with HUD
+- Track team-wide dispatch outcomes
+- Discover skill improvement candidates
+- Filter by quality-gate outcomes
+
+**Use when**: Running long tasks, debugging failures, or improving skills.
+
+See [Agent Team & HUD](team-ops.md) for details.
+
 ### security-scan
 
 Check your config for security issues before automation.

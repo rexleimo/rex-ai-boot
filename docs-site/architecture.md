@@ -55,6 +55,17 @@ AIOS adds an operator-facing harness on top of ContextDB:
 - `live` execution uses `subagent-runtime` and runs phase jobs via Codex CLI (`codex`) (currently codex-only).
 - When using `AIOS_SUBAGENT_CLIENT=codex-cli`, AIOS prefers `codex exec` structured outputs (`--output-schema`, `--output-last-message`, stdin) for stable JSON handoffs (falls back for older versions).
 
+### Team Operations (HUD & Team Status)
+
+AIOS provides real-time visibility into agent sessions:
+
+- **HUD** (`aios hud`): Per-session dashboard showing goal, dispatch status, quality-gate outcomes, and skill candidates
+- **Team Status** (`aios team status`): Aggregated view across recent sessions
+- **Team History** (`aios team history`): Historical analysis with quality-gate filtering and hindsight patterns
+- **Skill Candidates** (`aios team skill-candidates`): Automated improvement suggestions from failed sessions
+
+See [Agent Team & HUD](team-ops.md) for usage details.
+
 Live execution is opt-in and gated by:
 
 - `AIOS_EXECUTE_LIVE=1`
