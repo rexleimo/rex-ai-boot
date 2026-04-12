@@ -30,7 +30,7 @@ Use this harness to keep long tasks stable under UI drift, model variability, an
 - Local dispatch reports now include an `Executor Capability Manifest` summary (read/write/network/browser/sideEffect) for preflight visibility before live execution.
 - Live execution now blocks by default when capability manifest surfaces are `unknown` (`network` / `browser` / `sideEffect`) via `guardrail.capability-unknown`.
 - Override unknown-capability blocking only when intended: `--force` or `AIOS_ALLOW_UNKNOWN_CAPABILITIES=1` (or `AIOS_ALLOW_UNKNOWN_LIVE_CAPABILITIES=1`).
-- `team status --watch` / `hud --watch` now surface job-level and tool-level progress so blocked tools are visible without opening artifacts.
+- `team status --watch` / `hud --watch` now surface job-level and tool-level progress so blocked tools are visible without opening artifacts, and mark unchanged progress as `stalled` after `AIOS_WATCH_STALLED_MS` (default `30000`).
 
 Watch examples:
 ```bash

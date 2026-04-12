@@ -202,6 +202,7 @@ Options:
   --status <value>              (team history) Only include sessions with matching meta.status
   --preset <minimal|focused|full> (team status) Rendering preset (default: focused; with --watch defaults to minimal unless --preset provided)
   --interval-ms <n|auto>        (team status) Watch refresh interval (default: 1000; use "auto" for 250-2000ms adaptive cadence; auto-fast enabled when <=500 or auto with watch+minimal)
+  AIOS_WATCH_STALLED_MS=<ms>    (env) Mark watch output as stalled when job/tool progress is unchanged beyond threshold (default: 30000)
   -h, --help
 `;
     case 'hud':
@@ -221,6 +222,7 @@ Options:
   --draft-id <targetId>         Filter skill-candidate rows/export by sourceDraftTargetId
   --export-skill-candidate-patch-template Export apply_patch templates derived from surfaced skill-candidate artifacts
   --interval-ms <n|auto>        Watch refresh interval (default: 1000; use "auto" for 250-2000ms adaptive cadence; auto-fast enabled when <=500 or auto with watch+minimal)
+  AIOS_WATCH_STALLED_MS=<ms>    (env) Mark watch output as stalled when job/tool progress is unchanged beyond threshold (default: 30000)
   --json                        Output structured JSON instead of text
   -h, --help
 `;

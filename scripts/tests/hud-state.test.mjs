@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,7 +10,9 @@ import { readHudDispatchSummary, readHudState, selectHudSessionId } from '../lib
 import { renderHud } from '../lib/hud/render.mjs';
 import { computeAdaptiveNextIntervalMs, createThrottledWatchRender, watchRenderLoop } from '../lib/hud/watch.mjs';
 import { runHud } from '../lib/lifecycle/hud.mjs';
+import { runOrchestrate } from '../lib/lifecycle/orchestrate.mjs';
 import {
+  createStatusWatchStallTracker,
   resolveStatusSkillCandidateOptions,
   runTeamHistory,
   runTeamSkillCandidatesList,
@@ -315,6 +318,62 @@ test('computeAdaptiveNextIntervalMs backs off on idle and resets on change', () 
   }), 250);
 });
 
+test('createStatusWatchStallTracker emits stalled signal when progress remains unchanged', () => {
+  let nowMs = 0;
+  const tracker = createStatusWatchStallTracker({
+    thresholdMs: 1500,
+    nowFn: () => nowMs,
+  });
+  const stableState = {
+    latestDispatch: {
+      ok: false,
+      mode: 'dry-run',
+      jobProgress: {
+        total: 4,
+        done: 1,
+        running: 1,
+        blocked: 2,
+        queued: 0,
+      },
+      toolProgress: [
+        {
+          tool: 'local-phase',
+          total: 4,
+          done: 1,
+          running: 1,
+          blocked: 2,
+          queued: 0,
+        },
+      ],
+    },
+  };
+
+  assert.equal(tracker.observe(stableState), null);
+  nowMs = 1000;
+  assert.equal(tracker.observe(stableState), null);
+  nowMs = 1700;
+  const stalled = tracker.observe(stableState);
+  assert.equal(stalled?.stalled, true);
+  assert.equal(stalled?.stalledThresholdMs, 1500);
+  assert.equal((stalled?.stalledForMs || 0) >= 1500, true);
+  assert.match(String(stalled?.stalledToolSummary || ''), /local-phase/);
+
+  nowMs = 2000;
+  const changedState = {
+    ...stableState,
+    latestDispatch: {
+      ...stableState.latestDispatch,
+      jobProgress: {
+        ...stableState.latestDispatch.jobProgress,
+        done: 2,
+        running: 0,
+        blocked: 2,
+      },
+    },
+  };
+  assert.equal(tracker.observe(changedState), null);
+});
+
 test('resolveStatusSkillCandidateOptions adapts default limit for fast watch', () => {
   assert.deepEqual(
     resolveStatusSkillCandidateOptions({
@@ -476,6 +535,37 @@ test('renderHud minimal shows watch visibility and quality category labels', () 
   assert.match(rendered, /quality=failed\(category:quality-logs\)/);
   assert.match(rendered, /skill=skill-constraints\/ownership-policy#2/);
   assert.match(rendered, /watch: render=250ms data-refresh=1000ms fast=on data-age=20000ms/);
+});
+
+test('renderHud watch line includes stalled summary when provided', () => {
+  const rendered = renderHud({
+    selection: { sessionId: 's-2', provider: 'codex', agent: 'codex-cli' },
+    latestDispatch: {
+      ok: false,
+      blockedJobs: 1,
+      jobProgress: {
+        total: 3,
+        done: 1,
+        running: 1,
+        blocked: 1,
+        queued: 0,
+      },
+    },
+  }, {
+    preset: 'minimal',
+    watchMeta: {
+      renderIntervalMs: 500,
+      dataRefreshMs: 500,
+      fast: false,
+      dataAgeMs: 5000,
+      stalled: true,
+      stalledForMs: 45000,
+      stalledThresholdMs: 30000,
+      stalledToolSummary: 'local-phase:1/3(r=1 b=1 q=0)',
+    },
+  });
+
+  assert.match(rendered, /stalled=on\(45000ms>=30000ms tools=local-phase:1\/3/);
 });
 
 test('readHudState includes latest checkpoint and dispatch evidence', async () => {
@@ -1603,6 +1693,181 @@ test('runTeamStatus supports direct skill-candidate detail mode', async () => {
   assert.match(output, /skill=debug/);
   assert.doesNotMatch(output, /AIOS Team Status/);
   assert.doesNotMatch(output, /Checkpoint:/);
+});
+
+test('runTeamStatus --watch surfaces stalled progress when dispatch counters stop changing', async () => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-team-status-watch-stalled-'));
+  const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');
+  const sessionId = 'status-watch-stalled-session';
+  const sessionDir = path.join(sessionsRoot, sessionId);
+
+  await writeJson(
+    path.join(sessionDir, 'meta.json'),
+    makeSessionMeta({ sessionId, agent: 'codex-cli', updatedAt: '2026-04-06T10:30:00.000Z' })
+  );
+  await writeJson(path.join(sessionDir, 'state.json'), {
+    sessionId,
+    status: 'running',
+    updatedAt: '2026-04-06T10:30:00.000Z',
+  });
+  await writeJson(path.join(sessionDir, 'artifacts', 'dispatch-run-20260406T103000Z.json'), {
+    schemaVersion: 1,
+    kind: 'orchestration.dispatch-run',
+    sessionId,
+    persistedAt: '2026-04-06T10:30:00.000Z',
+    dispatchRun: {
+      ok: false,
+      mode: 'dry-run',
+      executorRegistry: ['local-phase'],
+      jobRuns: [
+        {
+          jobId: 'phase.plan',
+          jobType: 'phase',
+          role: 'planner',
+          status: 'completed',
+          output: { outputType: 'handoff' },
+        },
+        {
+          jobId: 'phase.implement',
+          jobType: 'phase',
+          role: 'implementer',
+          status: 'running',
+          output: { outputType: 'handoff' },
+        },
+        {
+          jobId: 'phase.review',
+          jobType: 'phase',
+          role: 'reviewer',
+          status: 'blocked',
+          output: { outputType: 'handoff', error: 'awaiting clarification' },
+        },
+      ],
+      finalOutputs: [],
+    },
+  });
+
+  let nowMs = 0;
+  const frames = [];
+  await runTeamStatus(
+    {
+      provider: 'codex',
+      sessionId,
+      watch: true,
+      preset: 'minimal',
+      intervalMs: 500,
+    },
+    {
+      rootDir,
+      env: {
+        ...process.env,
+        AIOS_WATCH_STALLED_MS: '1500',
+      },
+      nowFn: () => nowMs,
+      watchLoop: async (render) => {
+        frames.push(await render());
+        nowMs = 900;
+        frames.push(await render());
+        nowMs = 1700;
+        frames.push(await render());
+      },
+    }
+  );
+
+  assert.equal(frames.length, 3);
+  assert.doesNotMatch(frames[0], /stalled=on/);
+  assert.doesNotMatch(frames[1], /stalled=on/);
+  assert.match(frames[2], /stalled=on\(/);
+  assert.match(frames[2], /tools=local-phase/);
+});
+
+test('regression chain recall -> orchestrate -> team status stays connected', async () => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-regression-chain-'));
+  const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');
+  const sessionId = 'regression-chain-session';
+  const sessionDir = path.join(sessionsRoot, sessionId);
+
+  const sessionMeta = makeSessionMeta({ sessionId, agent: 'codex-cli', updatedAt: '2026-04-07T02:00:00.000Z' });
+  await writeJson(
+    path.join(sessionDir, 'meta.json'),
+    {
+      ...sessionMeta,
+      goal: 'login hardening regressions',
+    }
+  );
+  await writeJson(path.join(sessionDir, 'state.json'), {
+    sessionId,
+    status: 'running',
+    updatedAt: '2026-04-07T02:00:00.000Z',
+  });
+  await writeJsonLines(path.join(sessionDir, 'l1-checkpoints.jsonl'), [
+    {
+      seq: 1,
+      ts: '2026-04-07T01:50:00.000Z',
+      status: 'running',
+      summary: 'Investigate login hardening regressions',
+      nextActions: ['Run dry-run orchestrate'],
+      artifacts: [],
+    },
+  ]);
+
+  const orchestrateLogs = [];
+  const orchestrateResult = await runOrchestrate(
+    {
+      sessionId,
+      dispatchMode: 'local',
+      executionMode: 'dry-run',
+      format: 'json',
+    },
+    {
+      rootDir,
+      io: { log: (line) => orchestrateLogs.push(String(line)) },
+    }
+  );
+  assert.equal(orchestrateResult.exitCode, 0);
+  const orchestrateReport = JSON.parse(orchestrateLogs.at(-1));
+  assert.equal(orchestrateReport.dispatchRun.mode, 'dry-run');
+  assert.equal(orchestrateReport.dispatchRun.ok, true);
+  assert.equal((orchestrateReport.dispatchRun.jobRuns || []).length > 0, true);
+
+  const recall = spawnSync(
+    'npx',
+    [
+      'tsx',
+      'mcp-server/src/contextdb/cli.ts',
+      'recall:sessions',
+      '--workspace',
+      rootDir,
+      '--project',
+      'aios',
+      '--query',
+      'login hardening regressions',
+      '--limit',
+      '3',
+      '--highlight-limit',
+      '2',
+      '--explain-score',
+    ],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    }
+  );
+  assert.equal(recall.status, 0, recall.stderr || recall.stdout);
+  const recallPayload = JSON.parse((recall.stdout || '{}').trim());
+  assert.equal(Array.isArray(recallPayload.results), true);
+  assert.equal(recallPayload.results[0]?.sessionId, sessionId);
+  assert.equal(Boolean(recallPayload.results[0]?.scoreExplanation), true);
+
+  const statusLogs = [];
+  const statusResult = await runTeamStatus(
+    { provider: 'codex', sessionId, json: true },
+    { rootDir, io: { log: (line) => statusLogs.push(String(line)) } }
+  );
+  assert.equal(statusResult.exitCode, 0);
+  const statusPayload = JSON.parse(statusLogs.at(-1));
+  assert.equal(statusPayload.selection?.sessionId, sessionId);
+  assert.equal(statusPayload.latestDispatch?.mode, 'dry-run');
+  assert.equal((statusPayload.latestDispatch?.jobProgress?.total || 0) > 0, true);
 });
 
 test('runTeamStatus exports skill-candidate patch template artifact in one command', async () => {

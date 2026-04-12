@@ -17,6 +17,9 @@ const DEFAULT_SKILL_CANDIDATE_LIMIT = 6;
 const FAST_WATCH_MINIMAL_SKILL_CANDIDATE_LIMIT = 3;
 const MAX_SKILL_CANDIDATE_LIMIT = 20;
 const SKILL_CANDIDATE_VIEWS = new Set(['inline', 'detail']);
+const DEFAULT_WATCH_STALLED_MS = 30_000;
+const MIN_WATCH_STALLED_MS = 1000;
+const MAX_WATCH_STALLED_MS = 10 * 60 * 1000;
 
 function normalizeText(value) {
   return String(value ?? '').trim();
@@ -47,6 +50,12 @@ function normalizeConcurrency(value, fallback = 4) {
   return Math.min(16, Math.max(1, Math.floor(parsed)));
 }
 
+function normalizeWatchStalledMs(rawValue, fallback = DEFAULT_WATCH_STALLED_MS) {
+  const parsed = Number.parseInt(String(rawValue ?? '').trim(), 10);
+  const resolved = Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  return Math.min(MAX_WATCH_STALLED_MS, Math.max(MIN_WATCH_STALLED_MS, Math.floor(resolved)));
+}
+
 function normalizeProvider(value) {
   const normalized = normalizeText(value).toLowerCase();
   if (normalized === 'codex' || normalized === 'claude' || normalized === 'gemini') {
@@ -64,6 +73,118 @@ function normalizeQualityOutcome(value) {
 
 function normalizeQualityCategory(value) {
   return normalizeText(value).toLowerCase();
+}
+
+function normalizeProgressCounts(progress = null) {
+  if (!progress || typeof progress !== 'object') return null;
+  const total = Number.isFinite(progress.total) ? Math.max(0, Math.floor(progress.total)) : 0;
+  if (total <= 0) return null;
+  return {
+    total,
+    done: Number.isFinite(progress.done) ? Math.max(0, Math.floor(progress.done)) : 0,
+    running: Number.isFinite(progress.running) ? Math.max(0, Math.floor(progress.running)) : 0,
+    blocked: Number.isFinite(progress.blocked) ? Math.max(0, Math.floor(progress.blocked)) : 0,
+    queued: Number.isFinite(progress.queued) ? Math.max(0, Math.floor(progress.queued)) : 0,
+  };
+}
+
+function normalizeToolProgress(toolProgress = []) {
+  if (!Array.isArray(toolProgress)) return [];
+  return toolProgress
+    .map((entry) => ({
+      tool: normalizeText(entry?.tool),
+      counts: normalizeProgressCounts(entry),
+    }))
+    .filter((entry) => entry.tool && entry.counts)
+    .sort((left, right) =>
+      right.counts.blocked - left.counts.blocked
+      || right.counts.running - left.counts.running
+      || right.counts.total - left.counts.total
+      || left.tool.localeCompare(right.tool)
+    );
+}
+
+function buildProgressSnapshot(state = null) {
+  const dispatch = state?.latestDispatch && typeof state.latestDispatch === 'object'
+    ? state.latestDispatch
+    : null;
+  const jobCounts = normalizeProgressCounts(dispatch?.jobProgress);
+  if (!dispatch || !jobCounts) return null;
+  const tools = normalizeToolProgress(dispatch?.toolProgress);
+  const active = jobCounts.done < jobCounts.total;
+  const signature = JSON.stringify({
+    ok: dispatch.ok === true,
+    mode: normalizeText(dispatch.mode),
+    jobCounts,
+    tools: tools.map((entry) => ({ tool: entry.tool, ...entry.counts })),
+  });
+  return {
+    active,
+    jobCounts,
+    tools,
+    signature,
+  };
+}
+
+function formatStalledToolSummary(tools = [], limit = 2) {
+  const capped = Number.isFinite(limit) ? Math.max(1, Math.floor(limit)) : 2;
+  if (!Array.isArray(tools) || tools.length === 0) return '';
+  const top = tools.slice(0, capped).map((entry) => (
+    `${entry.tool}:${entry.counts.done}/${entry.counts.total}(r=${entry.counts.running} b=${entry.counts.blocked} q=${entry.counts.queued})`
+  ));
+  if (tools.length > capped) {
+    top.push(`+${tools.length - capped}`);
+  }
+  return top.join(' | ');
+}
+
+export function createStatusWatchStallTracker({
+  thresholdMs = DEFAULT_WATCH_STALLED_MS,
+  nowFn = () => Date.now(),
+} = {}) {
+  const normalizedThresholdMs = normalizeWatchStalledMs(thresholdMs, DEFAULT_WATCH_STALLED_MS);
+  let previousSignature = '';
+  let lastChangedAtMs = null;
+
+  return {
+    thresholdMs: normalizedThresholdMs,
+    observe(state = null, { nowMs: injectedNowMs = null } = {}) {
+      const rawNow = Number.isFinite(injectedNowMs)
+        ? Number(injectedNowMs)
+        : Number(nowFn());
+      const nowMs = Number.isFinite(rawNow) ? rawNow : Date.now();
+      const snapshot = buildProgressSnapshot(state);
+      if (!snapshot || !snapshot.active) {
+        previousSignature = snapshot?.signature || '';
+        lastChangedAtMs = nowMs;
+        return null;
+      }
+
+      if (!previousSignature || snapshot.signature !== previousSignature) {
+        previousSignature = snapshot.signature;
+        lastChangedAtMs = nowMs;
+        return null;
+      }
+
+      if (!Number.isFinite(lastChangedAtMs)) {
+        lastChangedAtMs = nowMs;
+        return null;
+      }
+
+      const stalledForMs = Math.max(0, nowMs - lastChangedAtMs);
+      if (stalledForMs < normalizedThresholdMs) {
+        return null;
+      }
+
+      return {
+        stalled: true,
+        stalledForMs,
+        stalledThresholdMs: normalizedThresholdMs,
+        stalledJobCounts: snapshot.jobCounts,
+        stalledToolSummary: formatStalledToolSummary(snapshot.tools),
+      };
+    },
+  };
 }
 
 function normalizeQualityCategoryPrefixes(value) {
@@ -245,7 +366,16 @@ async function persistSkillCandidatePatchTemplateArtifact({
   };
 }
 
-export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, env = process.env } = {}) {
+export async function runTeamStatus(
+  rawOptions = {},
+  {
+    rootDir,
+    io = console,
+    env = process.env,
+    watchLoop = watchRenderLoop,
+    nowFn = () => Date.now(),
+  } = {}
+) {
   const sessionId = normalizeText(rawOptions.sessionId || rawOptions.resumeSessionId);
   const provider = normalizeProvider(rawOptions.provider);
   const preset = normalizeHudPreset(rawOptions.preset || 'focused');
@@ -296,6 +426,10 @@ export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, en
       ? `auto(${dataRefreshMs}-${Math.max(dataRefreshMs, watchCadence.adaptiveInterval.maxIntervalMs)}ms)`
       : watchCadence.renderIntervalLabel
     : `${dataRefreshMs}ms`;
+  const stalledThresholdMs = normalizeWatchStalledMs(env?.AIOS_WATCH_STALLED_MS, DEFAULT_WATCH_STALLED_MS);
+  const stallTracker = watch
+    ? createStatusWatchStallTracker({ thresholdMs: stalledThresholdMs, nowFn })
+    : null;
 
   const renderOnce = async () => {
     const state = await readHudState({
@@ -363,6 +497,8 @@ export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, en
   }
 
   const readAndRender = async () => {
+    const rawNow = Number(nowFn());
+    const nowMs = Number.isFinite(rawNow) ? rawNow : Date.now();
     const state = await readHudState({
       rootDir,
       sessionId,
@@ -371,15 +507,21 @@ export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, en
       skillCandidateLimit,
     });
     const filteredState = filterSkillCandidateState(state, { draftId });
-    const hudText = renderHud(filteredState, {
-      preset,
-      watchMeta: buildWatchMeta(filteredState, {
+    const stalledSignal = stallTracker?.observe(filteredState, { nowMs }) || null;
+    const watchMeta = {
+      ...buildWatchMeta(filteredState, {
         renderIntervalMs: intervalMs,
         renderIntervalLabel: watchCadence.renderIntervalLabel,
         dataRefreshMs,
         dataRefreshLabel,
         fast: fastWatchMinimal,
+        nowMs,
       }),
+      ...(stalledSignal ? stalledSignal : {}),
+    };
+    const hudText = renderHud(filteredState, {
+      preset,
+      watchMeta,
     }).trimEnd();
     const skillCandidateText = showSkillCandidates
       ? formatSkillCandidateDetails(filteredState, {
@@ -399,7 +541,7 @@ export async function runTeamStatus(rawOptions = {}, { rootDir, io = console, en
     })
     : readAndRender;
 
-  await watchRenderLoop(watchRender, {
+  await watchLoop(watchRender, {
     intervalMs,
     adaptiveInterval: watchCadence.adaptiveInterval,
     env,

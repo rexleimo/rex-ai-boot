@@ -82,12 +82,15 @@ jobs:
         run: npm ci
 
       - name: Run orchestrate/learn-eval perf smoke
-        run: npm run perf:orchestrate-learn-eval:smoke -- --json-out test-results/perf-smoke.json
+        run: npm run perf:orchestrate-learn-eval:smoke -- --json-out test-results/perf-orchestrate-learn-eval-smoke.json
+
+      - name: Run team status watch perf smoke
+        run: npm run perf:team-status-watch:smoke -- --json-out test-results/perf-team-status-watch-smoke.json
 
       - name: Upload perf smoke artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: perf-smoke
-          path: test-results/perf-smoke.json
+          path: test-results/perf-*.json
           if-no-files-found: ignore

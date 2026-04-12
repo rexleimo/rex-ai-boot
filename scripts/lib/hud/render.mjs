@@ -371,7 +371,18 @@ function formatWatchMetaLine(watchMeta = null) {
   const dataAgeMs = Number.isFinite(watchMeta.dataAgeMs)
     ? `${Math.max(0, Math.floor(watchMeta.dataAgeMs))}ms`
     : 'n/a';
-  return `watch: render=${resolvedRenderLabel} data-refresh=${resolvedDataRefreshLabel} fast=${fastEnabled} data-age=${dataAgeMs}`;
+  const stalledEnabled = watchMeta.stalled === true;
+  const stalledForMs = Number.isFinite(watchMeta.stalledForMs)
+    ? Math.max(0, Math.floor(watchMeta.stalledForMs))
+    : 0;
+  const stalledThresholdMs = Number.isFinite(watchMeta.stalledThresholdMs)
+    ? Math.max(1, Math.floor(watchMeta.stalledThresholdMs))
+    : 0;
+  const stalledToolSummary = normalizeText(watchMeta.stalledToolSummary);
+  const stalledLabel = stalledEnabled
+    ? ` stalled=on(${stalledForMs}ms>=${stalledThresholdMs}ms${stalledToolSummary ? ` tools=${stalledToolSummary}` : ''})`
+    : '';
+  return `watch: render=${resolvedRenderLabel} data-refresh=${resolvedDataRefreshLabel} fast=${fastEnabled} data-age=${dataAgeMs}${stalledLabel}`;
 }
 
 function formatMinimalQualityLabel(state) {
@@ -448,6 +459,8 @@ export function normalizeHudPreset(raw = 'focused') {
 
 export function renderHud(state, { preset = 'focused', watchMeta = null } = {}) {
   const resolvedPreset = normalizeHudPreset(preset);
+  const resolvedWatchMeta = watchMeta || state?.watchMeta || null;
+  const watchLine = formatWatchMetaLine(resolvedWatchMeta);
 
   if (resolvedPreset === 'minimal') {
     const sessionLine = formatSessionLine(state);
@@ -457,7 +470,6 @@ export function renderHud(state, { preset = 'focused', watchMeta = null } = {}) 
     const qualityLabel = formatMinimalQualityLabel(state);
     const skillCandidateLabel = formatMinimalSkillCandidateLabel(state);
     const statusLine = [dispatchLabel, dispatchProgressLabel, qualityLabel, skillCandidateLabel].filter(Boolean).join(' ');
-    const watchLine = formatWatchMetaLine(watchMeta || state?.watchMeta || null);
     return watchLine
       ? `${sessionLine}\n${statusLine}\n${watchLine}\n`
       : `${sessionLine}\n${statusLine}\n`;
@@ -466,6 +478,7 @@ export function renderHud(state, { preset = 'focused', watchMeta = null } = {}) 
   const lines = [
     `AIOS HUD (${resolvedPreset})`,
     formatSessionLine(state),
+    ...(watchLine ? [watchLine] : []),
     '',
     `Goal: ${clipLine(state?.session?.goal, 200) || '(none)'}`,
     formatCheckpointLine(state),
