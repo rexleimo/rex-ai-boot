@@ -1,12 +1,21 @@
 ---
 title: Blog Hub
-description: Growth and engineering articles for the RexCLI ecosystem.
+description: Engineering and growth articles about AI memory systems, Hermes-style workflows, Agent Team runtimes, and automatic subagent planning.
 ---
 
 # Blog Hub
 
 This is the standalone blog for search and announcements.
 Product documentation lives on `/` and the localized docs roots.
+
+## Quick Answer
+
+This blog tracks practical patterns for:
+
+- AI **memory system** design (`ContextDB`)
+- **Hermes engine** style workflow orchestration
+- **Agent Team** collaboration models
+- **automatic subagent planning** and execution gates
 
 ## Getting Started Posts
 
@@ -23,3 +32,11 @@ Product documentation lives on `/` and the localized docs roots.
 - [Orchestrate Live: Subagent Runtime](orchestrate-live.md)
 - [Xiaohongshu Automation](xiaohongshu-automation.md)
 - [AI CLI Comparison (CN)](ai-cli-comparison.md)
+
+## FAQ
+
+### Where should I start if I care about memory systems?
+Start from [ContextDB Search Upgrade](contextdb-fts-bm25-search.md), then pair with docs at `/contextdb/`.
+
+### Where are Agent Team and subagent orchestration updates?
+Follow [Orchestrate Live](orchestrate-live.md) and release notes on this blog hub.

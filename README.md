@@ -1,11 +1,24 @@
 # RexCLI (AIOS)
 
-This repository provides a local-first agent workflow for `Codex CLI`, `Claude Code`, and `Gemini CLI`.
+This repository provides a local-first agent workflow for `Codex CLI`, `Claude Code`, `Gemini CLI`, and `OpenCode`.
 It does not replace those clients. Instead, it adds three shared capabilities:
 
 1. Unified browser automation via Playwright MCP (`browser_*` tools)
 2. Cross-CLI filesystem Context DB for resumable task memory
 3. Privacy Guard redaction before reading config/secret-like files (`~/.rexcil/privacy-guard.json`)
+
+## Quick Answer (What RexCLI Is)
+
+RexCLI is an AI memory system + orchestration layer for existing coding agents.  
+If you are searching for terms like **memory system**, **Hermes engine workflows**, **Agent Team**, or **automatic subagent planning**, this project maps to those needs through `ContextDB`, `team`, and `orchestrate` runtimes.
+
+Common search intents this repo targets:
+
+- AI memory system for coding agents (`ContextDB`)
+- Shared memory across CLI sessions
+- Hermes engine style orchestration and automation pipelines
+- Agent Team runtime for multi-agent collaboration
+- Automatic subagent planning and execution gates
 
 ## Start Here (Use First, Read Later)
 

@@ -1,6 +1,6 @@
 ---
 title: Overview
-description: Upgrade your existing Codex/Claude/Gemini/OpenCode workflow with OpenClaw-style capabilities.
+description: AI memory system docs for Codex/Claude/Gemini/OpenCode with Hermes workflow guidance, Agent Team runtime, and automatic subagent planning.
 ---
 
 # RexCLI
@@ -13,6 +13,24 @@ description: Upgrade your existing Codex/Claude/Gemini/OpenCode workflow with Op
 [Superpowers](superpowers.md){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="superpowers" }
 
 Project URL: <https://github.com/rexleimo/rex-cli>
+
+## Quick Answer
+
+RexCLI is an **AI memory system + orchestration layer** for coding agents.  
+Use it when you want:
+
+- **Memory system** behavior across CLI sessions (`ContextDB`)
+- **Hermes engine style workflows** for automation and execution control
+- **Agent Team** collaboration for multi-agent delivery
+- **Automatic subagent planning** with preflight and merge gates
+
+## Keyword-to-Feature Map
+
+- `AI memory system` -> [ContextDB](contextdb.md)
+- `memory system` -> [Case - Cross-CLI Handoff](case-cross-cli-handoff.md)
+- `Hermes engine workflows` -> [CLI Workflows](use-cases.md)
+- `Agent Team` -> [Agent Team & HUD](team-ops.md)
+- `automatic subagent planning` -> [Architecture](architecture.md)
 
 ## Latest
 
@@ -60,6 +78,17 @@ Windows PowerShell commands are listed on the [Quick Start](getting-started.md) 
 | Playwright MCP | Browser automation |
 | Superpowers | Smart planning (auto-decompose, parallel dispatch, auto-verify) |
 | Privacy Guard | Redact secrets automatically |
+
+## FAQ
+
+### Is RexCLI a memory system for coding agents?
+Yes. `ContextDB` persists and rehydrates project memory across CLI sessions and across agent clients in the same repository.
+
+### Does RexCLI support Hermes-like orchestration workflows?
+Yes. Use `team` and `orchestrate` flows for staged planning, execution routing, and verification gates.
+
+### Can it auto-plan subagents for multi-step tasks?
+Yes. RexCLI includes route-aware planning (`single/subagent/team`) and execution guardrails.
 
 ## Read More
 

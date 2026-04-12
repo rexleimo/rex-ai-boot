@@ -1,6 +1,6 @@
 site_name: RexCLI Documentation
 site_url: https://cli.rexai.top
-site_description: Local-first multi-CLI agent workflow docs for Codex CLI, Claude Code, Gemini CLI, and OpenCode skills sync.
+site_description: AI memory system docs for Codex/Claude/Gemini/OpenCode with Hermes workflows, Agent Team runtime, and automatic subagent planning.
 site_author: RexAI
 repo_url: https://github.com/rexleimo/rex-cli
 repo_name: rexleimo/rex-cli
@@ -50,13 +50,13 @@ plugins:
           build: true
           link: /
           site_name: RexCLI Documentation
-          site_description: Local-first multi-CLI agent workflow docs for Codex CLI, Claude Code, Gemini CLI, and OpenCode skills sync.
+          site_description: AI memory system docs for Codex/Claude/Gemini/OpenCode with Hermes workflows, Agent Team runtime, and automatic subagent planning.
         - locale: zh
           name: 简体中文
           build: true
           link: /zh/
           site_name: RexCLI 文档
-          site_description: 面向 Codex CLI、Claude Code、Gemini CLI 及 OpenCode skills 同步的本地优先多 CLI 智能体工作流文档。
+          site_description: 面向 Codex/Claude/Gemini/OpenCode 的 AI 记忆系统文档，覆盖 Hermes 工作流、Agent Team 与自动化子代理规划。
           nav_translations:
             Home: 首页
             Blog: 博客
@@ -84,7 +84,7 @@ plugins:
           build: true
           link: /ja/
           site_name: RexCLI ドキュメント
-          site_description: Codex CLI、Claude Code、Gemini CLI と OpenCode skills 同期向けのローカルファーストなマルチ CLI エージェント運用ドキュメント。
+          site_description: Codex/Claude/Gemini/OpenCode 向けの AI 記憶システム文書。Hermes ワークフロー、Agent Team、subagent 自動計画をカバー。
           nav_translations:
             Home: ホーム
             Blog: ブログ
@@ -112,7 +112,7 @@ plugins:
           build: true
           link: /ko/
           site_name: RexCLI 문서
-          site_description: Codex CLI, Claude Code, Gemini CLI와 OpenCode skills 동기화를 위한 로컬 우선 멀티 CLI 에이전트 워크플로 문서.
+          site_description: Codex/Claude/Gemini/OpenCode용 AI 기억 시스템 문서. Hermes 워크플로, Agent Team, 자동 subagent 계획을 다룹니다.
           nav_translations:
             Home: 홈
             Blog: 블로그

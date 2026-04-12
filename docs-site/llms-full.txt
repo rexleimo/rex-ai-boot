@@ -1,5 +1,11 @@
 # RexCLI full index
 
+## Intent Summary
+- AI memory system for coding agents (`ContextDB`)
+- Hermes-style workflow orchestration (`team`, `orchestrate`)
+- Agent Team collaboration and monitoring (`team-ops`, `hud`)
+- Automatic subagent planning with verification gates
+
 ## Overview
 - https://cli.rexai.top/
 - https://cli.rexai.top/architecture/

@@ -1,12 +1,21 @@
 ---
 title: 博客中心
-description: 面向 RexAI CLI 生态的工程与增长文章。
+description: 聚焦 AI 记忆系统、Hermes 引擎工作流、Agent Team 与自动化子代理规划的工程与增长文章。
 ---
 
 # 博客中心
 
 这是独立的博客站点，用于承接搜索流量与内容分发。
 产品文档独立发布在 [cli.rexai.top](https://cli.rexai.top/zh/)。
+
+## 快速答案
+
+这里重点覆盖：
+
+- **记忆系统**（ContextDB）实践
+- **Hermes 引擎** 风格的编排工作流
+- **Agent Team** 多智能体协作
+- **自动化规划子代理** 与执行门禁
 
 ## 初始支柱文章
 
@@ -24,3 +33,11 @@ description: 面向 RexAI CLI 生态的工程与增长文章。
 - [Orchestrate Live：Subagent Runtime 正式可用](orchestrate-live.md)
 - [吐血整理！我用 AI 把小红书运营自动化后，同事以为我请了助理](xiaohongshu-automation.md)
 - [2026 年了，别再纠结用哪个 AI 编程工具了](ai-cli-comparison.md)
+
+## FAQ
+
+### 想看记忆系统相关内容，先读哪篇？
+先看 [ContextDB 检索升级：FTS5/BM25 + 增量索引同步（P1.5）](contextdb-fts-bm25-search.md)，再回到文档站 `/contextdb/`。
+
+### Agent Team 和子代理编排更新看哪里？
+重点看 [Orchestrate Live：Subagent Runtime 正式可用](orchestrate-live.md)。

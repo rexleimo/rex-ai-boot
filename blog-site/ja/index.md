@@ -1,12 +1,21 @@
 ---
 title: ブログハブ
-description: RexAI CLI エコシステム向けの成長・技術記事。
+description: AI 記憶システム、Hermes ワークフロー、Agent Team、subagent 自動計画に関する技術・成長記事。
 ---
 
 # ブログハブ
 
 ここは検索流入向けの独立ブログです。
 製品ドキュメントは [cli.rexai.top](https://cli.rexai.top/ja/) で別運用しています。
+
+## クイックアンサー
+
+このブログで扱う中心テーマ:
+
+- **記憶システム**（ContextDB）
+- **Hermes エンジン** スタイルのワークフロー
+- **Agent Team** 協調実行
+- **subagent 自動計画** と実行ゲート
 
 ## 初期ピラーページ
 
@@ -23,3 +32,11 @@ description: RexAI CLI エコシステム向けの成長・技術記事。
 - [Orchestrate Live: Subagent Runtime](orchestrate-live.md)
 - [もう手動で小红書をやらなくていい！AIで毎日2時間増やす自動化運用術](xiaohongshu-automation.md)
 - [2026年AIプログラミングCLI比較：Claude Code vs Codex vs Gemini](ai-cli-comparison.md)
+
+## FAQ
+
+### 記憶システム関連の記事はどれから読むべき？
+[ContextDB 検索アップグレード](contextdb-fts-bm25-search.md) から始めるのが最短です。
+
+### Agent Team / subagent の更新はどこで追う？
+[Orchestrate Live](orchestrate-live.md) を中心に追うのがおすすめです。

@@ -1,11 +1,24 @@
 # RexCLI (AIOS)
 
-本项目是一个面向 `Codex CLI`、`Claude Code`、`Gemini CLI` 的本地 Agent 工作流仓库。  
+本项目是一个面向 `Codex CLI`、`Claude Code`、`Gemini CLI`、`OpenCode` 的本地 Agent 工作流仓库。  
 目标不是做一个新的聊天客户端，而是给现有 CLI 增加三件事：
 
 1. 统一浏览器自动化能力（Playwright MCP，`browser_*` 工具）
 2. 跨 CLI 共享的文件系统 Context DB（可追溯会话记忆）
 3. 配置/密钥文件读取前的 Privacy Guard 脱敏（`~/.rexcil/privacy-guard.json`）
+
+## 快速理解（RexCLI 到底是什么）
+
+RexCLI 是一层“AI 记忆系统 + 编排层”，叠加在你已有的编码 Agent 之上。  
+如果你正在搜索 **记忆系统**、**Hermes 引擎**、**Agent Team**、**自动化规划子代理** 这些关键词，本项目可分别通过 `ContextDB`、`team`、`orchestrate` 提供对应能力。
+
+本项目重点覆盖的搜索意图：
+
+- 面向 coding agent 的 AI 记忆系统（`ContextDB`）
+- 跨会话共享记忆
+- 类 Hermes 引擎的编排与自动化流程
+- 多智能体协作的 Agent Team 运行时
+- 自动化子代理规划与执行门控
 
 ## 先用起来（不想看原理就看这里）
 

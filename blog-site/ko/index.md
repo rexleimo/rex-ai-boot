@@ -1,12 +1,21 @@
 ---
 title: 블로그 허브
-description: RexAI CLI 생태계를 위한 성장/엔지니어링 아티클.
+description: AI 기억 시스템, Hermes 워크플로, Agent Team, 자동 subagent 계획 중심의 성장/엔지니어링 아티클.
 ---
 
 # 블로그 허브
 
 여기는 검색 유입을 위한 독립 블로그입니다.
 제품 문서는 [cli.rexai.top](https://cli.rexai.top/ko/)에서 별도로 운영합니다.
+
+## 빠른 답변
+
+이 블로그의 핵심 주제:
+
+- **기억 시스템** (ContextDB)
+- **Hermes 엔진** 스타일 워크플로
+- **Agent Team** 협업 실행
+- **자동 subagent 계획** 및 실행 게이트
 
 ## 초기 핵심 글
 
@@ -23,3 +32,11 @@ description: RexAI CLI 생태계를 위한 성장/엔지니어링 아티클.
 - [Orchestrate Live: Subagent Runtime](orchestrate-live.md)
 - [小手작업 그만! AI 자동화로 매일 2시간씩 절약한 방법](xiaohongshu-automation.md)
 - [2026년 AI 프로그래밍 CLI 누가最强? Claude Code vs Codex vs Gemini 심층 비교](ai-cli-comparison.md)
+
+## FAQ
+
+### 기억 시스템 관련 글은 어디서 시작하면 되나요?
+[ContextDB 검색 업그레이드](contextdb-fts-bm25-search.md)부터 읽는 것이 가장 빠릅니다.
+
+### Agent Team / subagent 업데이트는 어디서 확인하나요?
+[Orchestrate Live](orchestrate-live.md)를 중심으로 확인하면 됩니다.

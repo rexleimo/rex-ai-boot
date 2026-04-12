@@ -2,8 +2,7 @@
   "profiles": {
     "default": {
       "name": "default",
-      "cdpPort": 9222,
-      "requireCdp": true
+      "userDataDir": ".browser-profiles/default"
     },
     "local": {
       "name": "local",
