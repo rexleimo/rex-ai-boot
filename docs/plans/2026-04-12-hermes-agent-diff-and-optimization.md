@@ -146,7 +146,7 @@ Week 2:
 - 新命令有测试覆盖；
 - `team status --watch` 可见 job/tool 级进度；
 - 注入安全规则可拦截至少 3 类高风险内容；
-- 文档新增 “Hermes-inspired capability mapping” 页面。
+- 文档新增 “Hermes-inspired capability mapping” 页面（已完成：`docs/hermes-inspired-capability-mapping.md`）。
 
 ## 8. 当前执行状态（本次已落地）
 
@@ -182,6 +182,17 @@ Week 2:
   - `scripts/lib/harness/orchestrator-evidence.mjs`（artifact 持久化 `executorCapabilityManifest`）
 - 测试：
   - `scripts/tests/aios-orchestrator.test.mjs` 新增 capability manifest 构建、渲染、runOrchestrate 与 artifact 断言
+
+5. live subagent `pre-mutation snapshot` 已实现（opt-in 可回滚 checkpoint）
+- 代码：
+  - `scripts/lib/harness/subagent-runtime.mjs`（新增 `AIOS_SUBAGENT_PRE_MUTATION_SNAPSHOT` 开关；editable phase 执行前生成快照）
+  - `scripts/lib/cli/help.mjs`（新增 env 帮助说明）
+- 测试：
+  - `scripts/tests/aios-orchestrator.test.mjs` 新增 pre-mutation snapshot 覆盖用例
+
+6. Hermes-inspired capability mapping 页面已新增
+- 文档：
+  - `docs/hermes-inspired-capability-mapping.md`
 
 验证结果：
 

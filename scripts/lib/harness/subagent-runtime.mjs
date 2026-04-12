@@ -17,6 +17,7 @@ export const SUBAGENT_CONTEXT_LIMIT_ENV = 'AIOS_SUBAGENT_CONTEXT_LIMIT';
 export const SUBAGENT_CONTEXT_TOKEN_BUDGET_ENV = 'AIOS_SUBAGENT_CONTEXT_TOKEN_BUDGET';
 export const SUBAGENT_UPSTREAM_MAX_ATTEMPTS_ENV = 'AIOS_SUBAGENT_UPSTREAM_MAX_ATTEMPTS';
 export const SUBAGENT_UPSTREAM_BACKOFF_MS_ENV = 'AIOS_SUBAGENT_UPSTREAM_BACKOFF_MS';
+export const SUBAGENT_PRE_MUTATION_SNAPSHOT_ENV = 'AIOS_SUBAGENT_PRE_MUTATION_SNAPSHOT';
 
 const SUPPORTED_CLIENTS = new Set(['codex-cli', 'claude-code', 'gemini-cli']);
 const CLIENT_COMMAND = {
@@ -42,6 +43,17 @@ function normalizeOwnedPath(value = '') {
     .replace(/\\/g, '/')
     .replace(/^\.\//, '')
     .replace(/^\/+/, '');
+}
+
+function toPosixPath(filePath = '') {
+  return String(filePath || '').replace(/\\/g, '/');
+}
+
+function normalizeWorkspaceRelativePath(value = '') {
+  const normalized = normalizeOwnedPath(value);
+  if (!normalized || normalized === '.') return '';
+  if (normalized === '..' || normalized.startsWith('../') || normalized.includes('/../')) return '';
+  return normalized;
 }
 
 function normalizeOwnedPathPrefixes(raw = []) {
@@ -129,6 +141,132 @@ function safeFileSlug(value) {
 function parsePositiveInt(raw, fallback) {
   const value = Number.parseInt(String(raw ?? '').trim(), 10);
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function parseBooleanEnv(raw, fallback = false) {
+  const value = String(raw ?? '').trim().toLowerCase();
+  if (!value) return fallback;
+  if (value === '1' || value === 'true' || value === 'yes' || value === 'on') return true;
+  if (value === '0' || value === 'false' || value === 'no' || value === 'off') return false;
+  return fallback;
+}
+
+function formatSnapshotTimestamp(ts = new Date()) {
+  return ts.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
+
+async function readPathState(absPath) {
+  try {
+    const details = await fs.lstat(absPath);
+    if (details.isDirectory()) {
+      return { exists: true, type: 'dir' };
+    }
+    return { exists: true, type: 'file' };
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return { exists: false, type: 'missing' };
+    }
+    throw error;
+  }
+}
+
+async function copySnapshotTarget(sourceAbsPath, backupAbsPath, type) {
+  if (type === 'dir') {
+    await fs.cp(sourceAbsPath, backupAbsPath, { recursive: true, force: true, errorOnExist: false });
+    return;
+  }
+  await fs.mkdir(path.dirname(backupAbsPath), { recursive: true });
+  await fs.copyFile(sourceAbsPath, backupAbsPath);
+}
+
+function buildPreMutationRestoreHint(manifestPath, backupPath) {
+  const manifest = normalizeText(manifestPath);
+  const backup = normalizeText(backupPath);
+  if (!manifest || !backup) return '';
+  return `Restore manually from ${backup} using ${manifest} target metadata.`;
+}
+
+function resolveSnapshotDirectory({ sessionId, stamp, jobId }) {
+  const slug = safeFileSlug(jobId || 'job');
+  const dirName = `pre-mutation-${stamp}-${slug}`;
+  if (sessionId) {
+    return path.join('memory', 'context-db', 'sessions', sessionId, 'artifacts', dirName);
+  }
+  return path.join('.aios', 'subagent-snapshots', dirName);
+}
+
+async function createPreMutationSnapshot({ rootDir, sessionId, job, phase, io }) {
+  const rawTargets = resolveOwnedPathPrefixes(phase, job);
+  const targets = [...new Set(rawTargets
+    .map((item) => normalizeWorkspaceRelativePath(item))
+    .filter(Boolean))];
+  if (targets.length === 0) {
+    return null;
+  }
+
+  const createdAt = new Date();
+  const stamp = formatSnapshotTimestamp(createdAt);
+  const snapshotRelDir = toPosixPath(resolveSnapshotDirectory({
+    sessionId: normalizeText(sessionId),
+    stamp,
+    jobId: normalizeText(job?.jobId),
+  }));
+  const backupRelDir = toPosixPath(path.join(snapshotRelDir, 'backup'));
+  const manifestRelPath = toPosixPath(path.join(snapshotRelDir, 'manifest.json'));
+  const backupAbsDir = path.join(rootDir, backupRelDir);
+  const manifestAbsPath = path.join(rootDir, manifestRelPath);
+
+  await fs.mkdir(backupAbsDir, { recursive: true });
+  const targetStates = [];
+  for (const target of targets) {
+    const sourceAbsPath = path.join(rootDir, target);
+    const state = await readPathState(sourceAbsPath);
+    targetStates.push({
+      path: target,
+      existed: state.exists,
+      type: state.type,
+    });
+    if (state.exists) {
+      const backupTargetPath = path.join(backupAbsDir, target);
+      await copySnapshotTarget(sourceAbsPath, backupTargetPath, state.type);
+    }
+  }
+
+  const manifest = {
+    schemaVersion: 1,
+    kind: 'orchestration.pre-mutation-snapshot',
+    createdAt: createdAt.toISOString(),
+    sessionId: normalizeText(sessionId),
+    jobId: normalizeText(job?.jobId),
+    phaseId: normalizeText(phase?.id),
+    role: normalizeText(job?.role) || normalizeText(phase?.role),
+    targets: targetStates,
+    backupPath: backupRelDir,
+    restoreHint: buildPreMutationRestoreHint(manifestRelPath, backupRelDir),
+  };
+
+  await fs.mkdir(path.dirname(manifestAbsPath), { recursive: true });
+  await fs.writeFile(manifestAbsPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  io?.log?.(`[subagent-runtime] pre-mutation snapshot created job=${normalizeText(job?.jobId)} targets=${targets.length} manifest=${manifestRelPath}`);
+
+  return {
+    enabled: true,
+    createdAt: manifest.createdAt,
+    targetCount: targetStates.length,
+    manifestPath: manifestRelPath,
+    backupPath: backupRelDir,
+    restoreHint: manifest.restoreHint,
+  };
+}
+
+function withPreMutationSnapshot(jobRun, snapshot = null) {
+  if (!snapshot || !jobRun || typeof jobRun !== 'object') {
+    return jobRun;
+  }
+  return {
+    ...jobRun,
+    preMutationSnapshot: snapshot,
+  };
 }
 
 function parseNonNegativeInt(raw, fallback) {
@@ -1125,6 +1263,7 @@ export async function executeSubagentDispatchPlan(
 
   const concurrency = parsePositiveInt(env?.[SUBAGENT_CONCURRENCY_ENV], 2);
   const timeoutMs = parsePositiveInt(env?.[SUBAGENT_TIMEOUT_MS_ENV], 10 * 60 * 1000);
+  const preMutationSnapshotEnabled = parseBooleanEnv(env?.[SUBAGENT_PRE_MUTATION_SNAPSHOT_ENV], false);
 
   const jobs = Array.isArray(dispatchPlan?.jobs) ? dispatchPlan.jobs : [];
   const executorDetails = Array.isArray(dispatchPlan?.executorDetails)
@@ -1177,11 +1316,35 @@ export async function executeSubagentDispatchPlan(
       if (!phase) {
         return buildBlockedJobRun(plan, job, dependencyRuns, { executorLabel, reason: `Unknown orchestration phase for job: ${job.jobId}` });
       }
+
+      let preMutationSnapshot = null;
+      if (preMutationSnapshotEnabled && phase.canEditFiles === true) {
+        try {
+          preMutationSnapshot = await createPreMutationSnapshot({
+            rootDir,
+            sessionId,
+            job,
+            phase,
+            io,
+          });
+        } catch (error) {
+          const reason = `pre-mutation snapshot failed: ${error instanceof Error ? error.message : String(error)}`;
+          io?.log?.(`[subagent-runtime] blocked ${job.jobId} reason=${reason}`);
+          return buildBlockedJobRun(plan, job, dependencyRuns, {
+            executorLabel,
+            reason,
+          });
+        }
+      }
+
       if (shouldAutoCompleteReadOnlyReviewPhase(job, dependencyRuns)) {
         io?.log?.(`[subagent-runtime] auto-completed ${job.jobId} status=completed reason=no-upstream-file-changes`);
-        return buildAutoCompletedReadOnlyReviewRun(plan, job, dependencyRuns, { executorLabel });
+        return withPreMutationSnapshot(
+          buildAutoCompletedReadOnlyReviewRun(plan, job, dependencyRuns, { executorLabel }),
+          preMutationSnapshot
+        );
       }
-      return await executePhaseJob(plan, job, phase, dependencyRuns, {
+      const phaseJobRun = await executePhaseJob(plan, job, phase, dependencyRuns, {
         clientId,
         contextText,
         timeoutMs,
@@ -1193,6 +1356,7 @@ export async function executeSubagentDispatchPlan(
         rootDir,
         codexTempDir,
       });
+      return withPreMutationSnapshot(phaseJobRun, preMutationSnapshot);
     }
 
     if (job.jobType === 'merge-gate') {

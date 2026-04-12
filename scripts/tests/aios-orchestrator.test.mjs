@@ -718,6 +718,90 @@ test('dispatch runtime registry can execute the subagent runtime with a configur
   assert.equal((result.cost?.usd || 0) > 0, true);
 });
 
+test('subagent runtime captures pre-mutation snapshots for editable phases when opted in', async () => {
+  const runtimes = await importDispatchRuntimes();
+  assert.ok(runtimes, 'expected runtime registry module');
+
+  const rootDir = await makeRootDir();
+  await fs.mkdir(path.join(rootDir, 'scripts'), { recursive: true });
+  await fs.writeFile(path.join(rootDir, 'scripts', 'pre-mutation.txt'), 'before\n', 'utf8');
+
+  const fakeBin = await createFakeCodexCommand({
+    status: 'completed',
+    fromRole: 'implementer',
+    toRole: 'next-phase',
+    taskTitle: 'Scoped edit',
+    contextSummary: 'No-op execution with snapshot enabled',
+    findings: [],
+    filesTouched: [],
+    openQuestions: [],
+    recommendations: [],
+  });
+
+  const registry = runtimes.createDispatchRuntimeRegistry({
+    executeDryRunPlan: () => ({ mode: 'dry-run', ok: true, jobRuns: [] }),
+  });
+  const runtime = runtimes.resolveDispatchRuntime({ runtimeId: 'subagent-runtime', executionMode: 'live' }, registry);
+
+  const plan = {
+    blueprint: 'feature',
+    description: 'pre-mutation snapshot path',
+    taskTitle: 'Snapshot test',
+    contextSummary: '',
+    phases: [
+      {
+        step: 1,
+        id: 'implement',
+        role: 'implementer',
+        mode: 'sequential',
+        group: null,
+        label: 'Implementer',
+        responsibility: 'Update scripts',
+        ownership: 'Production code',
+        canEditFiles: true,
+        ownedPathPrefixes: ['scripts/'],
+      },
+    ],
+  };
+  const dispatchPlan = buildLocalDispatchPlan(plan);
+
+  const result = await runtime.execute({
+    plan,
+    dispatchPlan,
+    dispatchPolicy: null,
+    rootDir,
+    env: {
+      ...process.env,
+      AIOS_EXECUTE_LIVE: '1',
+      AIOS_SUBAGENT_CLIENT: 'codex-cli',
+      AIOS_SUBAGENT_PRE_MUTATION_SNAPSHOT: '1',
+      PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
+    },
+    io: { log() {} },
+  });
+
+  assert.equal(result.ok, true);
+  const implementRun = result.jobRuns.find((jobRun) => jobRun.jobId === 'phase.implement');
+  assert.ok(implementRun, 'expected implement job run');
+  assert.equal(implementRun.status, 'completed');
+  assert.equal(Boolean(implementRun.preMutationSnapshot), true);
+  const snapshot = implementRun.preMutationSnapshot;
+  assert.equal(snapshot.enabled, true);
+  assert.equal(Number(snapshot.targetCount) > 0, true);
+  assert.match(String(snapshot.manifestPath || ''), /\.json$/);
+  assert.match(String(snapshot.backupPath || ''), /pre-mutation-/);
+
+  const manifestPath = path.join(rootDir, snapshot.manifestPath);
+  const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+  assert.equal(manifest.kind, 'orchestration.pre-mutation-snapshot');
+  assert.equal(manifest.jobId, 'phase.implement');
+  assert.equal(Array.isArray(manifest.targets), true);
+  assert.equal(manifest.targets.some((item) => String(item.path || '').startsWith('scripts/')), true);
+
+  const backupFilePath = path.join(rootDir, snapshot.backupPath, 'scripts', 'pre-mutation.txt');
+  assert.equal(await fs.readFile(backupFilePath, 'utf8'), 'before\n');
+});
+
 test('dispatch runtime registry retries codex execution when output schema is rejected by backend', async () => {
   const runtimes = await importDispatchRuntimes();
   assert.ok(runtimes, 'expected runtime registry module');

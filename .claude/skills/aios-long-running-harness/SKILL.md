@@ -31,6 +31,7 @@ Use this harness to keep long tasks stable under UI drift, model variability, an
 - Live execution now blocks by default when capability manifest surfaces are `unknown` (`network` / `browser` / `sideEffect`) via `guardrail.capability-unknown`.
 - Override unknown-capability blocking only when intended: `--force` or `AIOS_ALLOW_UNKNOWN_CAPABILITIES=1` (or `AIOS_ALLOW_UNKNOWN_LIVE_CAPABILITIES=1`).
 - `team status --watch` / `hud --watch` now surface job-level and tool-level progress so blocked tools are visible without opening artifacts, and mark unchanged progress as `stalled` after `AIOS_WATCH_STALLED_MS` (default `30000`).
+- Optional rollback safety for live editable phases: set `AIOS_SUBAGENT_PRE_MUTATION_SNAPSHOT=1` to persist pre-mutation snapshot artifacts before each subagent phase run.
 
 Watch examples:
 ```bash

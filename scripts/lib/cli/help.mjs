@@ -145,6 +145,7 @@ Options:
   --execute <none|dry-run|live> Execute dispatch through the selected runtime (defaults to dry-run; live is opt-in via AIOS_EXECUTE_LIVE=1 + AIOS_SUBAGENT_CLIENT=<codex-cli|claude-code|gemini-cli>)
   --force                       Override live safety guards (retry-blocked instability and unknown capability surfaces)
   --preflight <none|auto>       Run supported local gate/runbook actions before final DAG selection
+  AIOS_SUBAGENT_PRE_MUTATION_SNAPSHOT=1 (env) In live mode, capture pre-mutation backups for editable phase owned paths before each subagent run
   --format <text|json>
   -h, --help
 `;
