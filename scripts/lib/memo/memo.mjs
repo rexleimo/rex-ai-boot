@@ -4,6 +4,7 @@ import path from "node:path";
 import { captureCommand } from "../platform/process.mjs";
 import { ensureParentDir, readTextIfExists, writeText } from "../platform/fs.mjs";
 import { runContextDbCli } from "../contextdb-cli.mjs";
+import { assertWorkspaceMemoryContentSafe } from "./safety.mjs";
 import {
   DEFAULT_WORKSPACE_MEMORY_SPACE,
   WORKSPACE_MEMORY_AGENT,
@@ -161,6 +162,13 @@ function parsePositiveLimit(raw) {
   return parsed;
 }
 
+function assertSafeMemoText(text, target = "memo content") {
+  assertWorkspaceMemoryContentSafe(text, {
+    allowEmpty: false,
+    target,
+  });
+}
+
 function splitFlags(argv) {
   const flags = {
     limit: DEFAULT_LIST_LIMIT,
@@ -266,6 +274,7 @@ export async function runMemo(rawOptions = {}, { io = console } = {}) {
 
     const text = rest.join(" ").trim();
     if (!text) throw usageError("pin set/add requires text");
+    assertSafeMemoText(text, "pinned workspace memory");
 
     ensureWorkspaceMemorySession(workspaceRoot, space);
     if (action === "set") {
@@ -284,6 +293,7 @@ export async function runMemo(rawOptions = {}, { io = console } = {}) {
   if (primary === "add") {
     const text = [secondary, ...rest].join(" ").trim();
     if (!text) throw usageError("memo add requires text");
+    assertSafeMemoText(text, "memo entry");
 
     const space = activeSpace;
     const { sessionId } = ensureWorkspaceMemorySession(workspaceRoot, space);

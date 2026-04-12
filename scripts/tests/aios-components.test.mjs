@@ -18,6 +18,7 @@ import {
   uninstallOrchestratorAgents,
 } from '../lib/components/agents.mjs';
 import { migrateBrowserMcpConfig } from '../lib/components/browser.mjs';
+import { syncClaudeSkillPermissions } from '../lib/components/superpowers.mjs';
 import {
   commandExists,
   getCommandSpawnSpec,
@@ -81,6 +82,12 @@ async function writeSkillsCatalog(rootDir, skills) {
     version: 1,
     skills,
   }, null, 2), 'utf8');
+}
+
+async function writeSuperpowersSkill(codexHome, skillName) {
+  const skillDir = path.join(codexHome, 'superpowers', 'skills', skillName);
+  await mkdir(skillDir, { recursive: true });
+  await writeFile(path.join(skillDir, 'SKILL.md'), `# ${skillName}\n`, 'utf8');
 }
 
 async function copyCanonicalAgentSource(rootDir) {
@@ -228,6 +235,67 @@ test('skills install copies repo-managed skills by default and uninstall removes
     missing = true;
   }
   assert.equal(missing, true);
+});
+
+test('syncClaudeSkillPermissions adds missing Skill(...) allowlist entries for project settings', async () => {
+  const rootDir = await makeTemp('aios-superpowers-perms-project-root-');
+  const codexHome = await makeTemp('aios-superpowers-perms-project-codex-home-');
+  const claudeHome = await makeTemp('aios-superpowers-perms-project-claude-home-');
+  const projectSettingsPath = path.join(rootDir, '.claude', 'settings.local.json');
+
+  await writeSuperpowersSkill(codexHome, 'writing-plans');
+  await writeSuperpowersSkill(codexHome, 'systematic-debugging');
+  await mkdir(path.dirname(projectSettingsPath), { recursive: true });
+  await writeFile(projectSettingsPath, `${JSON.stringify({
+    permissions: {
+      allow: ['Bash(git:*)', 'Skill(writing-plans)'],
+    },
+  }, null, 2)}\n`, 'utf8');
+
+  const result = await syncClaudeSkillPermissions({
+    rootDir,
+    includeGlobal: false,
+    includeProject: true,
+    env: {
+      ...process.env,
+      CODEX_HOME: codexHome,
+      CLAUDE_HOME: claudeHome,
+    },
+    io: { log: () => {} },
+  });
+
+  const updated = JSON.parse(await readFile(projectSettingsPath, 'utf8'));
+  assert.equal(result.errors, 0);
+  assert.equal(updated.permissions.allow.includes('Bash(git:*)'), true);
+  assert.equal(updated.permissions.allow.includes('Skill(writing-plans)'), true);
+  assert.equal(updated.permissions.allow.includes('Skill(systematic-debugging)'), true);
+  assert.equal(updated.permissions.allow.includes('Skill(aios-long-running-harness)'), true);
+});
+
+test('syncClaudeSkillPermissions can seed global Claude settings when requested', async () => {
+  const codexHome = await makeTemp('aios-superpowers-perms-global-codex-home-');
+  const claudeHome = await makeTemp('aios-superpowers-perms-global-claude-home-');
+  const globalSettingsPath = path.join(claudeHome, 'settings.local.json');
+
+  await writeSuperpowersSkill(codexHome, 'dispatching-parallel-agents');
+  await writeSuperpowersSkill(codexHome, 'subagent-driven-development');
+
+  const result = await syncClaudeSkillPermissions({
+    includeGlobal: true,
+    includeProject: false,
+    env: {
+      ...process.env,
+      CODEX_HOME: codexHome,
+      CLAUDE_HOME: claudeHome,
+    },
+    io: { log: () => {} },
+  });
+
+  const seeded = JSON.parse(await readFile(globalSettingsPath, 'utf8'));
+  assert.equal(result.errors, 0);
+  assert.equal(Array.isArray(seeded.permissions.allow), true);
+  assert.equal(seeded.permissions.allow.includes('Skill(dispatching-parallel-agents)'), true);
+  assert.equal(seeded.permissions.allow.includes('Skill(subagent-driven-development)'), true);
 });
 
 test('browser mcp-migrate updates local and client mcp json configs', async () => {

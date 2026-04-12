@@ -12,6 +12,7 @@ import {
   selectLocalDispatchExecutor,
 } from '../lib/harness/orchestrator-executors.mjs';
 import {
+  buildExecutorCapabilityManifest,
   buildDecomposedWorkItems,
   buildLocalDispatchPlan,
   buildOrchestrationPlan,
@@ -1247,6 +1248,57 @@ test('buildLocalDispatchPlan serializes grouped phases when policy requires seri
   assert.match(dispatch.notes.join(' '), /serial-only/i);
 });
 
+test('buildExecutorCapabilityManifest declares read/write/network/browser/side-effect surfaces', () => {
+  const orchestration = buildOrchestrationPlan({
+    blueprint: 'feature',
+    taskTitle: 'Ship blueprints',
+    contextSummary: '- implement core behavior\n- add tests',
+  });
+  const dispatch = buildLocalDispatchPlan(orchestration);
+
+  const dryRunManifest = buildExecutorCapabilityManifest({
+    dispatchPlan: dispatch,
+    executionMode: 'dry-run',
+    runtimeId: 'local-dry-run',
+  });
+  assert.equal(dryRunManifest.executionMode, 'dry-run');
+  assert.equal(dryRunManifest.runtimeId, 'local-dry-run');
+  assert.equal(dryRunManifest.summary.read, 'yes');
+  assert.equal(dryRunManifest.summary.write, 'no');
+  assert.equal(dryRunManifest.summary.network, 'no');
+  assert.equal(dryRunManifest.summary.browser, 'no');
+  assert.equal(dryRunManifest.summary.sideEffect, 'no');
+
+  const dryRunPhase = dryRunManifest.executors.find((item) => item.id === 'local-phase');
+  assert.ok(dryRunPhase, 'expected local-phase capability row');
+  assert.equal(dryRunPhase.capabilities.read, 'yes');
+  assert.equal(dryRunPhase.capabilities.write, 'no');
+  assert.equal(dryRunPhase.capabilities.network, 'no');
+  assert.equal(dryRunPhase.capabilities.browser, 'no');
+  assert.equal(dryRunPhase.capabilities.sideEffect, 'no');
+
+  const liveManifest = buildExecutorCapabilityManifest({
+    dispatchPlan: dispatch,
+    executionMode: 'live',
+    runtimeId: 'subagent-runtime',
+  });
+  assert.equal(liveManifest.executionMode, 'live');
+  assert.equal(liveManifest.runtimeId, 'subagent-runtime');
+  assert.equal(liveManifest.summary.read, 'yes');
+  assert.equal(liveManifest.summary.write, 'yes');
+  assert.equal(liveManifest.summary.network, 'unknown');
+  assert.equal(liveManifest.summary.browser, 'unknown');
+  assert.equal(liveManifest.summary.sideEffect, 'yes');
+
+  const livePhase = liveManifest.executors.find((item) => item.id === 'local-phase');
+  assert.ok(livePhase, 'expected local-phase capability row');
+  assert.equal(livePhase.capabilities.read, 'yes');
+  assert.equal(livePhase.capabilities.write, 'yes');
+  assert.equal(livePhase.capabilities.network, 'unknown');
+  assert.equal(livePhase.capabilities.browser, 'unknown');
+  assert.equal(livePhase.capabilities.sideEffect, 'yes');
+});
+
 test('buildLocalDispatchPlan bounds implementer work-item queue parallelism by dependency window', () => {
   const orchestration = buildOrchestrationPlan({
     blueprint: 'feature',
@@ -1757,6 +1809,11 @@ test('runOrchestrate adds a local dispatch skeleton without invoking models', as
   assert.equal(report.dispatchPlan.jobs.filter((job) => job.jobType === 'phase').every((job) => job.launchSpec.executor === 'local-phase'), true);
   assert.equal(report.dispatchPlan.jobs.filter((job) => job.jobType === 'merge-gate').every((job) => job.launchSpec.executor === 'local-merge-gate'), true);
   assert.deepEqual(report.dispatchPlan.executorRegistry, ['local-phase']);
+  assert.equal(report.executorCapabilityManifest.executionMode, 'dry-run');
+  assert.equal(report.executorCapabilityManifest.runtimeId, 'local-dry-run');
+  assert.equal(report.executorCapabilityManifest.summary.read, 'yes');
+  assert.equal(report.executorCapabilityManifest.summary.write, 'no');
+  assert.equal(report.executorCapabilityManifest.summary.sideEffect, 'no');
 });
 
 test('runOrchestrate throws when the selected dispatch runtime returns invalid output', async () => {
@@ -1820,6 +1877,13 @@ test('runOrchestrate blocks live execution by default without persisting evidenc
   assert.equal(report.dispatchRun.runtime?.id, 'subagent-runtime');
   assert.equal(report.dispatchRun.ok, false);
   assert.match(String(report.dispatchRun.error || ''), /AIOS_EXECUTE_LIVE/i);
+  assert.equal(report.executorCapabilityManifest.executionMode, 'live');
+  assert.equal(report.executorCapabilityManifest.runtimeId, 'subagent-runtime');
+  assert.equal(report.executorCapabilityManifest.summary.read, 'yes');
+  assert.equal(report.executorCapabilityManifest.summary.write, 'yes');
+  assert.equal(report.executorCapabilityManifest.summary.network, 'unknown');
+  assert.equal(report.executorCapabilityManifest.summary.browser, 'unknown');
+  assert.equal(report.executorCapabilityManifest.summary.sideEffect, 'yes');
 
   assert.equal(report.effectiveDispatchPolicy.status, 'blocked');
   assert.equal(report.effectiveDispatchPolicy.blockerIds.includes('runbook.dispatch-runtime-unavailable'), true);
@@ -1903,6 +1967,9 @@ test('runOrchestrate persists live dispatch evidence with runtime cost telemetry
   const artifact = JSON.parse(await fs.readFile(artifactPath, 'utf8'));
   assert.equal(artifact.dispatchRun.mode, 'live');
   assert.equal(artifact.dispatchRun.runtime?.id, 'subagent-runtime');
+  assert.equal(artifact.executorCapabilityManifest?.executionMode, 'live');
+  assert.equal(artifact.executorCapabilityManifest?.runtimeId, 'subagent-runtime');
+  assert.equal(artifact.executorCapabilityManifest?.summary?.write, 'yes');
   assert.equal(Array.isArray(artifact.workItems), true);
   assert.equal(artifact.workItems.length >= 1, true);
   assert.equal((artifact.dispatchRun.cost?.totalTokens || 0) > 0, true);
@@ -2068,6 +2135,13 @@ test('runOrchestrate adds a dry-run dispatch run without invoking models', async
   assert.equal(report.dispatchRun.ok, true);
   assert.equal(report.dispatchRun.jobRuns.every((jobRun) => jobRun.status === 'simulated'), true);
   assert.equal(report.dispatchRun.jobRuns.every((jobRun) => typeof jobRun.output.outputType === 'string'), true);
+  assert.equal(report.executorCapabilityManifest.executionMode, 'dry-run');
+  assert.equal(report.executorCapabilityManifest.runtimeId, 'local-dry-run');
+  assert.equal(report.executorCapabilityManifest.summary.read, 'yes');
+  assert.equal(report.executorCapabilityManifest.summary.write, 'no');
+  assert.equal(report.executorCapabilityManifest.summary.network, 'no');
+  assert.equal(report.executorCapabilityManifest.summary.browser, 'no');
+  assert.equal(report.executorCapabilityManifest.summary.sideEffect, 'no');
   assert.deepEqual(report.dispatchRun.executorRegistry, ['local-phase']);
   assert.equal(report.dispatchRun.executorDetails[0]?.requiresModel, false);
   assert.equal(report.dispatchRun.jobRuns.find((jobRun) => jobRun.jobId === 'phase.plan')?.executor, 'local-phase');
@@ -2773,6 +2847,45 @@ test('renderOrchestrationReport includes dispatch policy summary', () => {
   assert.match(report, /status=blocked/);
   assert.match(report, /parallelism=serial-only/);
   assert.match(report, /runbook\.dispatch-merge-triage/);
+});
+
+test('renderOrchestrationReport includes executor capability manifest summary', () => {
+  const report = renderOrchestrationReport({
+    blueprint: 'feature',
+    taskTitle: 'Ship blueprints',
+    executorCapabilityManifest: {
+      schemaVersion: 1,
+      generatedAt: '2026-04-12T14:00:00.000Z',
+      executionMode: 'live',
+      runtimeId: 'subagent-runtime',
+      summary: {
+        read: 'yes',
+        write: 'yes',
+        network: 'unknown',
+        browser: 'unknown',
+        sideEffect: 'yes',
+      },
+      executors: [
+        {
+          id: 'local-phase',
+          label: 'Local Phase Executor',
+          jobCount: 3,
+          capabilities: {
+            read: 'yes',
+            write: 'yes',
+            network: 'unknown',
+            browser: 'unknown',
+            sideEffect: 'yes',
+          },
+          notes: ['Live mode delegates phase execution to subagent-runtime.'],
+        },
+      ],
+    },
+  });
+  assert.match(report, /Executor Capability Manifest:/);
+  assert.match(report, /mode=live runtime=subagent-runtime/);
+  assert.match(report, /summary read=yes write=yes network=unknown browser=unknown sideEffect=yes/);
+  assert.match(report, /local-phase jobs=3 read=yes write=yes/);
 });
 
 test('renderOrchestrationReport includes local dry-run execution summary', () => {

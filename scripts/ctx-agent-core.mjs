@@ -13,6 +13,7 @@ import {
   workspaceMemorySessionId,
   workspaceMemoryStatePath,
 } from './lib/memo/workspace-memory.mjs';
+import { scanWorkspaceMemoryContent } from './lib/memo/safety.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -439,6 +440,16 @@ function formatWorkspaceMemoLine(event) {
   return ts ? `- [${ts}]${refsLabel}: ${text}` : `- ${text}`;
 }
 
+function formatWorkspaceMemorySafetyLine({ target, reason, id }) {
+  const normalizedTarget = String(target || 'entry').trim() || 'entry';
+  const normalizedReason = String(reason || '').trim() || 'blocked by safety policy';
+  const normalizedId = String(id || '').trim();
+  if (normalizedId) {
+    return `- Skipped unsafe ${normalizedTarget}: ${normalizedReason} (${normalizedId})`;
+  }
+  return `- Skipped unsafe ${normalizedTarget}: ${normalizedReason}`;
+}
+
 async function loadRecentMemoEvents(eventsPath, limit) {
   if (limit <= 0) return [];
   const tail = await readTailText(eventsPath, 1_000_000);
@@ -482,9 +493,36 @@ export async function buildWorkspaceMemoryOverlay(workspaceRoot, env = process.e
   }
   pinned = String(pinned || '').trim();
 
-  const memos = await loadRecentMemoEvents(workspaceMemoryEventsPath(workspaceRoot, sessionId), recentLimit);
+  const safetyNotices = [];
+  if (pinned) {
+    const pinnedSafety = scanWorkspaceMemoryContent(pinned, { allowEmpty: true });
+    if (!pinnedSafety.ok) {
+      safetyNotices.push({
+        target: 'pinned memory',
+        reason: pinnedSafety.reason,
+        id: pinnedSafety.id,
+      });
+      pinned = '';
+    }
+  }
 
-  if (!pinned && memos.length === 0) {
+  const memos = await loadRecentMemoEvents(workspaceMemoryEventsPath(workspaceRoot, sessionId), recentLimit);
+  const safeMemos = [];
+  for (const memo of memos) {
+    const memoText = memo?.text ? String(memo.text) : '';
+    const memoSafety = scanWorkspaceMemoryContent(memoText, { allowEmpty: true });
+    if (!memoSafety.ok) {
+      safetyNotices.push({
+        target: 'memo entry',
+        reason: memoSafety.reason,
+        id: memoSafety.id,
+      });
+      continue;
+    }
+    safeMemos.push(memo);
+  }
+
+  if (!pinned && safeMemos.length === 0 && safetyNotices.length === 0) {
     return '';
   }
 
@@ -492,9 +530,16 @@ export async function buildWorkspaceMemoryOverlay(workspaceRoot, env = process.e
   if (pinned) {
     sections.push('### Pinned', pinned);
   }
-  if (memos.length > 0) {
-    const lines = memos.map((event) => formatWorkspaceMemoLine(event));
+  if (safeMemos.length > 0) {
+    const lines = safeMemos.map((event) => formatWorkspaceMemoLine(event));
     sections.push('### Recent memos', lines.join('\n'));
+  }
+  if (safetyNotices.length > 0) {
+    const lines = safetyNotices.slice(0, 6).map((item) => formatWorkspaceMemorySafetyLine(item));
+    if (safetyNotices.length > lines.length) {
+      lines.push(`- Additional unsafe entries skipped: ${safetyNotices.length - lines.length}`);
+    }
+    sections.push('### Safety', lines.join('\n'));
   }
 
   const overlayRaw = `${sections.join('\n\n')}\n`;

@@ -13,6 +13,7 @@ import {
   ensureContextDb,
   findLatestSession,
   getEventById,
+  recallSessions,
   searchCheckpoints,
   searchMemory,
   searchEvents,
@@ -1163,6 +1164,110 @@ test('searchCheckpoints and searchMemory can retrieve checkpoint evidence', asyn
   });
   assert.equal(memoryResults.results.some((item) => item.itemType === 'event'), true);
   assert.equal(memoryResults.results.some((item) => item.itemType === 'checkpoint'), true);
+});
+
+test('recallSessions ranks matched sessions and returns concise highlights', async () => {
+  const workspace = await makeWorkspace();
+  const target = await createSession({
+    workspaceRoot: workspace,
+    agent: 'codex-cli',
+    project: 'rex-cli',
+    goal: 'stabilize retry handling in contextdb',
+  });
+  const distractor = await createSession({
+    workspaceRoot: workspace,
+    agent: 'codex-cli',
+    project: 'rex-cli',
+    goal: 'prepare release notes',
+  });
+
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: target.sessionId,
+    role: 'assistant',
+    kind: 'analysis',
+    text: 'Observed retry spike during context pack generation and sidecar sync',
+    refs: ['contextdb/core.ts'],
+  });
+  await writeCheckpoint({
+    workspaceRoot: workspace,
+    sessionId: target.sessionId,
+    status: 'blocked',
+    summary: 'Retry spike still reproduces in context pack stage',
+    nextActions: ['inspect retry policy'],
+  });
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: distractor.sessionId,
+    role: 'assistant',
+    kind: 'response',
+    text: 'Release notes draft for docs site',
+  });
+
+  const recalled = await recallSessions({
+    workspaceRoot: workspace,
+    query: 'retry spike context pack',
+    project: 'rex-cli',
+    limit: 3,
+    highlightLimit: 3,
+  });
+
+  assert.equal(recalled.results.length >= 1, true);
+  assert.equal(recalled.results[0].sessionId, target.sessionId);
+  assert.match(recalled.results[0].summary, /matched/i);
+  assert.equal(recalled.results[0].highlights.length > 0, true);
+  assert.equal(recalled.results[0].highlights.some((item) => item.itemType === 'checkpoint'), true);
+});
+
+test('contextdb cli supports recall:sessions', async () => {
+  const workspace = await makeWorkspace();
+  const session = await createSession({
+    workspaceRoot: workspace,
+    agent: 'codex-cli',
+    project: 'rex-cli',
+    goal: 'cli recall coverage',
+  });
+
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    role: 'assistant',
+    kind: 'analysis',
+    text: 'Memory recall should surface this retry guidance event',
+    refs: ['core.ts'],
+  });
+
+  const result = spawnSync(
+    'npx',
+    [
+      'tsx',
+      'src/contextdb/cli.ts',
+      'recall:sessions',
+      '--workspace',
+      workspace,
+      '--project',
+      'rex-cli',
+      '--query',
+      'retry guidance',
+      '--limit',
+      '3',
+      '--highlight-limit',
+      '2',
+    ],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    }
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse((result.stdout || '{}').trim()) as {
+    results?: Array<{ sessionId?: string; summary?: string; highlights?: Array<{ itemType?: string }> }>;
+  };
+  assert.equal(Array.isArray(payload.results), true);
+  assert.equal(payload.results?.[0]?.sessionId, session.sessionId);
+  assert.match(String(payload.results?.[0]?.summary || ''), /matched|latest/i);
+  assert.equal((payload.results?.[0]?.highlights?.length || 0) > 0, true);
 });
 
 test('contextdb cli search supports --scope checkpoints and --scope all', async () => {

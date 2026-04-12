@@ -1272,6 +1272,126 @@ export interface SearchMemoryOutput {
   results: SearchMemoryResult[];
 }
 
+export interface SessionRecallHighlight {
+  itemType: 'event' | 'checkpoint';
+  id: string;
+  ts: string;
+  label: string;
+  text: string;
+  refs: string[];
+  score: number;
+}
+
+export interface SessionRecallResult {
+  sessionId: string;
+  agent: string;
+  project: string;
+  goal: string;
+  status: SessionStatus;
+  createdAt: string;
+  updatedAt: string;
+  matchScore: number;
+  summary: string;
+  highlights: SessionRecallHighlight[];
+}
+
+export interface RecallSessionsInput {
+  workspaceRoot: string;
+  query?: string;
+  project?: string;
+  sessionId?: string;
+  excludeSessionId?: string;
+  limit?: number;
+  highlightLimit?: number;
+}
+
+export interface RecallSessionsOutput {
+  results: SessionRecallResult[];
+}
+
+function clipRecallText(text: unknown, maxChars: number = 180): string {
+  const normalized = sanitizeInline(text);
+  if (normalized.length <= maxChars) return normalized;
+  return `${normalized.slice(0, Math.max(24, maxChars)).trimEnd()}…`;
+}
+
+async function listRecallSessionMetas(
+  workspaceRoot: string,
+  {
+    project,
+    sessionId,
+    excludeSessionId,
+  }: {
+    project?: string;
+    sessionId?: string;
+    excludeSessionId?: string;
+  }
+): Promise<SessionMeta[]> {
+  const sessionsRoot = path.join(getDbRoot(workspaceRoot), 'sessions');
+  const entries = await fs.readdir(sessionsRoot, { withFileTypes: true }).catch(() => []);
+
+  const metas: SessionMeta[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const entryName = entry.name;
+    if (sessionId && entryName !== sessionId) continue;
+    if (excludeSessionId && entryName === excludeSessionId) continue;
+
+    const metaPath = path.join(sessionsRoot, entryName, 'meta.json');
+    if (!existsSync(metaPath)) continue;
+
+    let meta: SessionMeta;
+    try {
+      meta = await readJson<SessionMeta>(metaPath);
+    } catch {
+      continue;
+    }
+    if (project && meta.project !== project) continue;
+    metas.push(meta);
+  }
+
+  metas.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return metas;
+}
+
+function buildRecallSummary({
+  query,
+  latestCheckpoint,
+  latestEvent,
+  topCheckpointHighlight,
+  topEventHighlight,
+}: {
+  query: string;
+  latestCheckpoint: Checkpoint | null;
+  latestEvent: ContextEvent | null;
+  topCheckpointHighlight: SessionRecallHighlight | null;
+  topEventHighlight: SessionRecallHighlight | null;
+}): string {
+  if (query) {
+    if (topCheckpointHighlight && topCheckpointHighlight.score > 0) {
+      return `Matched checkpoint: ${topCheckpointHighlight.text}`;
+    }
+    if (topEventHighlight && topEventHighlight.score > 0) {
+      return `Matched event: ${topEventHighlight.text}`;
+    }
+    if (latestCheckpoint) {
+      return `No direct query hit; latest checkpoint (${latestCheckpoint.status}): ${clipRecallText(latestCheckpoint.summary)}`;
+    }
+    if (latestEvent) {
+      return `No direct query hit; latest event (${latestEvent.role}/${latestEvent.kind}): ${clipRecallText(latestEvent.text)}`;
+    }
+    return 'No checkpoints or events recorded yet.';
+  }
+
+  if (latestCheckpoint) {
+    return `Latest checkpoint (${latestCheckpoint.status}): ${clipRecallText(latestCheckpoint.summary)}`;
+  }
+  if (latestEvent) {
+    return `Latest event (${latestEvent.role}/${latestEvent.kind}): ${clipRecallText(latestEvent.text)}`;
+  }
+  return 'No checkpoints or events recorded yet.';
+}
+
 function isRecoverableSidecarError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /sqlite|database|no such table|cannot open/i.test(message);
@@ -1837,6 +1957,198 @@ export async function searchMemory(input: SearchMemoryInput): Promise<SearchMemo
   }
 
   results.sort((a, b) => b.tsEpoch - a.tsEpoch);
+  return { results: results.slice(0, limit) };
+}
+
+export async function recallSessions(input: RecallSessionsInput): Promise<RecallSessionsOutput> {
+  await ensureContextDb(input.workspaceRoot);
+  const query = typeof input.query === 'string' ? input.query.trim() : '';
+  const limit = input.limit && Number.isFinite(input.limit)
+    ? Math.min(20, Math.max(1, Math.floor(input.limit)))
+    : 3;
+  const highlightLimit = input.highlightLimit && Number.isFinite(input.highlightLimit)
+    ? Math.min(8, Math.max(1, Math.floor(input.highlightLimit)))
+    : 3;
+
+  const metas = await listRecallSessionMetas(input.workspaceRoot, {
+    project: input.project,
+    sessionId: input.sessionId,
+    excludeSessionId: input.excludeSessionId,
+  });
+  if (metas.length === 0) {
+    return { results: [] };
+  }
+
+  const queryTokens = query ? tokenizeForRecall(query) : [];
+  const hasQuery = queryTokens.length > 0;
+
+  const eventHitsBySessionId = new Map<string, IndexedEvent[]>();
+  const checkpointHitsBySessionId = new Map<string, IndexedCheckpoint[]>();
+  const sessionScore = new Map<string, number>();
+
+  if (hasQuery) {
+    const candidateLimit = Math.min(500, Math.max(limit * 40, 120));
+    const [eventHits, checkpointHits] = await Promise.all([
+      searchEvents({
+        workspaceRoot: input.workspaceRoot,
+        query,
+        project: input.project,
+        limit: candidateLimit,
+        semantic: false,
+      }),
+      searchCheckpoints({
+        workspaceRoot: input.workspaceRoot,
+        query,
+        project: input.project,
+        limit: candidateLimit,
+        semantic: false,
+      }),
+    ]);
+
+    for (let index = 0; index < eventHits.results.length; index += 1) {
+      const hit = eventHits.results[index];
+      const meta = metas.find((item) => item.sessionId === hit.sessionId);
+      if (!meta) continue;
+
+      const bucket = eventHitsBySessionId.get(hit.sessionId) ?? [];
+      if (bucket.length < highlightLimit * 4) {
+        bucket.push(hit);
+      }
+      eventHitsBySessionId.set(hit.sessionId, bucket);
+
+      const rankWeight = 1 / (index + 1);
+      const lexicalScore = scoreRecallText(queryTokens, `${hit.kind} ${hit.text} ${hit.refs.join(' ')}`);
+      const nextScore = (sessionScore.get(hit.sessionId) ?? 0) + (rankWeight * 0.55) + (lexicalScore * 0.45);
+      sessionScore.set(hit.sessionId, nextScore);
+    }
+
+    for (let index = 0; index < checkpointHits.results.length; index += 1) {
+      const hit = checkpointHits.results[index];
+      const meta = metas.find((item) => item.sessionId === hit.sessionId);
+      if (!meta) continue;
+
+      const bucket = checkpointHitsBySessionId.get(hit.sessionId) ?? [];
+      if (bucket.length < highlightLimit * 4) {
+        bucket.push(hit);
+      }
+      checkpointHitsBySessionId.set(hit.sessionId, bucket);
+
+      const rankWeight = 1 / (index + 1);
+      const lexicalScore = scoreRecallText(
+        queryTokens,
+        `${hit.status} ${hit.summary} ${hit.nextActions.join(' ')} ${hit.artifacts.join(' ')}`
+      );
+      const nextScore = (sessionScore.get(hit.sessionId) ?? 0) + (rankWeight * 0.65) + (lexicalScore * 0.55);
+      sessionScore.set(hit.sessionId, nextScore);
+    }
+  }
+
+  const candidates = hasQuery
+    ? metas.filter((meta) => sessionScore.has(meta.sessionId)).slice(0, Math.max(limit * 6, 30))
+    : metas.slice(0, Math.max(limit, 10));
+
+  const results: SessionRecallResult[] = [];
+  for (const meta of candidates) {
+    const paths = getSessionPaths(input.workspaceRoot, meta.sessionId);
+    const [latestCheckpoint, latestEvent] = await Promise.all([
+      readLastJsonLine<Checkpoint>(paths.checkpoints),
+      readLastJsonLine<ContextEvent>(paths.events),
+    ]);
+
+    const topCheckpointHits = (checkpointHitsBySessionId.get(meta.sessionId) ?? [])
+      .slice(0, highlightLimit)
+      .map((hit, index): SessionRecallHighlight => {
+        const score = Number((1 / (index + 1)).toFixed(4));
+        return {
+          itemType: 'checkpoint',
+          id: hit.checkpointId,
+          ts: hit.ts,
+          label: `checkpoint/${hit.status}`,
+          text: clipRecallText(hit.summary),
+          refs: normalizeRefs(hit.artifacts),
+          score,
+        };
+      });
+
+    const remainingEventHighlights = Math.max(0, highlightLimit - topCheckpointHits.length);
+    const topEventHits = (eventHitsBySessionId.get(meta.sessionId) ?? [])
+      .slice(0, remainingEventHighlights)
+      .map((hit, index): SessionRecallHighlight => {
+        const score = Number((1 / (index + 1)).toFixed(4));
+        return {
+          itemType: 'event',
+          id: hit.eventId,
+          ts: hit.ts,
+          label: `${hit.role}/${hit.kind}`,
+          text: clipRecallText(hit.text),
+          refs: normalizeRefs(hit.refs),
+          score,
+        };
+      });
+
+    const highlights = [...topCheckpointHits, ...topEventHits];
+    if (!hasQuery) {
+      if (latestCheckpoint) {
+        highlights.push({
+          itemType: 'checkpoint',
+          id: latestCheckpoint.seq ? `${meta.sessionId}#C${latestCheckpoint.seq}` : `${meta.sessionId}#C?`,
+          ts: latestCheckpoint.ts,
+          label: `checkpoint/${latestCheckpoint.status}`,
+          text: clipRecallText(latestCheckpoint.summary),
+          refs: normalizeRefs(latestCheckpoint.artifacts),
+          score: 0,
+        });
+      } else if (latestEvent) {
+        highlights.push({
+          itemType: 'event',
+          id: latestEvent.seq ? `${meta.sessionId}#${latestEvent.seq}` : `${meta.sessionId}#?`,
+          ts: latestEvent.ts,
+          label: `${latestEvent.role}/${latestEvent.kind}`,
+          text: clipRecallText(latestEvent.text),
+          refs: normalizeRefs(latestEvent.refs),
+          score: 0,
+        });
+      }
+    }
+
+    const topCheckpointHighlight = highlights.find((item) => item.itemType === 'checkpoint') ?? null;
+    const topEventHighlight = highlights.find((item) => item.itemType === 'event') ?? null;
+    const summary = buildRecallSummary({
+      query,
+      latestCheckpoint,
+      latestEvent,
+      topCheckpointHighlight,
+      topEventHighlight,
+    });
+
+    const status = latestCheckpoint?.status ?? meta.status;
+    const matchScore = hasQuery
+      ? Number(((sessionScore.get(meta.sessionId) ?? 0)).toFixed(4))
+      : 0;
+
+    results.push({
+      sessionId: meta.sessionId,
+      agent: meta.agent,
+      project: meta.project,
+      goal: meta.goal,
+      status,
+      createdAt: meta.createdAt,
+      updatedAt: meta.updatedAt,
+      matchScore,
+      summary,
+      highlights: highlights.slice(0, highlightLimit),
+    });
+  }
+
+  if (hasQuery) {
+    results.sort((a, b) => {
+      if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
+      return b.updatedAt.localeCompare(a.updatedAt);
+    });
+  } else {
+    results.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
   return { results: results.slice(0, limit) };
 }
 

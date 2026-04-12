@@ -99,6 +99,97 @@ function formatDispatchLine(state) {
   ].filter(Boolean).join(' ');
 }
 
+function normalizeProgressCounts(progress = null) {
+  if (!progress || typeof progress !== 'object') return null;
+  const total = Number.isFinite(progress.total) ? Math.max(0, Math.floor(progress.total)) : 0;
+  const queued = Number.isFinite(progress.queued) ? Math.max(0, Math.floor(progress.queued)) : 0;
+  const running = Number.isFinite(progress.running) ? Math.max(0, Math.floor(progress.running)) : 0;
+  const blocked = Number.isFinite(progress.blocked) ? Math.max(0, Math.floor(progress.blocked)) : 0;
+  const done = Number.isFinite(progress.done) ? Math.max(0, Math.floor(progress.done)) : 0;
+  const completionRatio = Number.isFinite(progress.completionRatio)
+    ? Math.max(0, Math.min(1, Number(progress.completionRatio)))
+    : total > 0
+      ? Math.max(0, Math.min(1, done / total))
+      : 0;
+  if (total <= 0) return null;
+  return {
+    total,
+    queued,
+    running,
+    blocked,
+    done,
+    completionRatio,
+  };
+}
+
+function formatCompletionPercent(completionRatio = 0) {
+  const ratio = Number.isFinite(completionRatio) ? Math.max(0, Math.min(1, Number(completionRatio))) : 0;
+  return `${Math.round(ratio * 100)}%`;
+}
+
+function formatMinimalDispatchProgressLabel(state) {
+  const dispatch = state?.latestDispatch || null;
+  const progress = normalizeProgressCounts(dispatch?.jobProgress);
+  if (!dispatch || !progress) return '';
+
+  const parts = [
+    `jobs=${progress.done}/${progress.total}`,
+  ];
+  if (progress.running > 0) parts.push(`run=${progress.running}`);
+  if (progress.blocked > 0) parts.push(`blk=${progress.blocked}`);
+  if (progress.queued > 0) parts.push(`q=${progress.queued}`);
+
+  const tools = Array.isArray(dispatch.toolProgress)
+    ? dispatch.toolProgress.map((item) => ({
+      tool: normalizeText(item?.tool),
+      progress: normalizeProgressCounts(item),
+    }))
+      .filter((item) => item.tool && item.progress)
+    : [];
+  if (tools.length > 0) {
+    const primary = tools[0];
+    parts.push(`tool=${primary.tool}:${primary.progress.done}/${primary.progress.total}`);
+    if (tools.length > 1) parts.push(`+${tools.length - 1}`);
+  }
+
+  return parts.join(' ');
+}
+
+function formatDispatchProgressLine(state) {
+  const progress = normalizeProgressCounts(state?.latestDispatch?.jobProgress);
+  if (!progress) return '';
+  return [
+    'Dispatch Progress:',
+    `jobs total=${progress.total}`,
+    `done=${progress.done}`,
+    `running=${progress.running}`,
+    `blocked=${progress.blocked}`,
+    `queued=${progress.queued}`,
+    `completion=${formatCompletionPercent(progress.completionRatio)}`,
+  ].join(' ');
+}
+
+function formatToolProgressLine(state) {
+  const toolProgress = Array.isArray(state?.latestDispatch?.toolProgress)
+    ? state.latestDispatch.toolProgress
+    : [];
+  const normalized = toolProgress
+    .map((item) => ({
+      tool: normalizeText(item?.tool),
+      progress: normalizeProgressCounts(item),
+    }))
+    .filter((item) => item.tool && item.progress);
+  if (normalized.length === 0) return '';
+
+  const top = normalized.slice(0, 3).map((item) =>
+    `${item.tool} ${item.progress.done}/${item.progress.total} (r=${item.progress.running} b=${item.progress.blocked} q=${item.progress.queued})`
+  );
+  if (normalized.length > 3) {
+    top.push(`+${normalized.length - 3} more`);
+  }
+  return clipLine(`Tool Progress: ${top.join(' | ')}`, 220);
+}
+
 function formatDispatchHindsightLine(state) {
   const hindsight = state?.dispatchHindsight && typeof state.dispatchHindsight === 'object'
     ? state.dispatchHindsight
@@ -362,9 +453,10 @@ export function renderHud(state, { preset = 'focused', watchMeta = null } = {}) 
     const sessionLine = formatSessionLine(state);
     const dispatch = state?.latestDispatch || null;
     const dispatchLabel = dispatch ? (dispatch.ok === true ? 'dispatch=ok' : `dispatch=blocked(${dispatch.blockedJobs || 0})`) : 'dispatch=none';
+    const dispatchProgressLabel = formatMinimalDispatchProgressLabel(state);
     const qualityLabel = formatMinimalQualityLabel(state);
     const skillCandidateLabel = formatMinimalSkillCandidateLabel(state);
-    const statusLine = [dispatchLabel, qualityLabel, skillCandidateLabel].filter(Boolean).join(' ');
+    const statusLine = [dispatchLabel, dispatchProgressLabel, qualityLabel, skillCandidateLabel].filter(Boolean).join(' ');
     const watchLine = formatWatchMetaLine(watchMeta || state?.watchMeta || null);
     return watchLine
       ? `${sessionLine}\n${statusLine}\n${watchLine}\n`
@@ -379,6 +471,15 @@ export function renderHud(state, { preset = 'focused', watchMeta = null } = {}) 
     formatCheckpointLine(state),
     formatDispatchLine(state),
   ];
+
+  const dispatchProgressLine = formatDispatchProgressLine(state);
+  if (dispatchProgressLine) {
+    lines.push(dispatchProgressLine);
+  }
+  const toolProgressLine = formatToolProgressLine(state);
+  if (toolProgressLine) {
+    lines.push(toolProgressLine);
+  }
 
   const qualityGateLine = formatQualityGateLine(state);
   if (qualityGateLine) {

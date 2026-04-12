@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
 import {
+  buildExecutorCapabilityManifest,
   buildDispatchPolicy,
   buildEffectiveDispatchPolicy,
   buildLocalDispatchPlan,
@@ -805,6 +806,13 @@ export async function runOrchestrate(
   const dispatchRuntime = options.executionMode !== 'none'
     ? resolveDispatchRuntime({ executionMode: options.executionMode }, dispatchRuntimeRegistry)
     : null;
+  const executorCapabilityManifest = dispatchPlan
+    ? buildExecutorCapabilityManifest({
+      dispatchPlan,
+      executionMode: options.executionMode,
+      runtimeId: dispatchRuntime?.id || '',
+    })
+    : null;
   const rawDispatchRun = dispatchRuntime
     ? await dispatchRuntime.execute({
       plan: dagPlan,
@@ -914,6 +922,7 @@ export async function runOrchestrate(
     dispatchPolicy,
     dispatchPreflight,
     effectiveDispatchPolicy: clarityAdjustedPolicy,
+    executorCapabilityManifest,
   });
   const dispatchEvidence = dispatchRun
     ? await persistDispatchEvidence({

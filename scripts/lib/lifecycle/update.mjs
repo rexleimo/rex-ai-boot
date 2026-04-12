@@ -110,7 +110,7 @@ export async function runUpdate(rawOptions = {}, { rootDir, projectRoot = rootDi
   }
 
   if (hasComponent(options.components, 'superpowers')) {
-    await superpowersInstaller({ update: true, force: true, io });
+    await superpowersInstaller({ rootDir, update: true, force: true, io });
     if (!options.skipDoctor) {
       const result = await superpowersDoctor({ io });
       if (result.errors > 0) {

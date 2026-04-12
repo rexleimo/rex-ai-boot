@@ -27,6 +27,14 @@ Use this harness to keep long tasks stable under UI drift, model variability, an
 - `aios orchestrate --execute live` currently supports `AIOS_SUBAGENT_CLIENT=codex-cli` only.
 - Codex CLI v0.114+ structured exec outputs (`--output-schema`, `--output-last-message`, stdin) are required for handoff parsing; schema fallback to raw stdout is rejected.
 - Transient `upstream_error`/`server_error` failures are retried with exponential backoff via `AIOS_SUBAGENT_UPSTREAM_MAX_ATTEMPTS` and `AIOS_SUBAGENT_UPSTREAM_BACKOFF_MS`.
+- Local dispatch reports now include an `Executor Capability Manifest` summary (read/write/network/browser/sideEffect) for preflight visibility before live execution.
+- `team status --watch` / `hud --watch` now surface job-level and tool-level progress so blocked tools are visible without opening artifacts.
+
+Watch examples:
+```bash
+node scripts/aios.mjs team status --session <session_id> --watch --preset minimal --interval-ms auto
+node scripts/aios.mjs hud --session <session_id> --watch --preset minimal --interval-ms auto
+```
 
 ## Required Controls
 - Time budget per step and per run.

@@ -3,22 +3,25 @@ import path from 'node:path';
 
 import { ensureManagedLink, isManagedLink } from '../platform/fs.mjs';
 import { commandExists, captureCommand, runCommand } from '../platform/process.mjs';
-import { getAgentsHome, normalizeHomeDir } from '../platform/paths.mjs';
+import { getAgentsHome, getClientHomes } from '../platform/paths.mjs';
 
 const DEFAULT_REPO_URL = 'https://github.com/obra/superpowers.git';
 const CLAUDE_PLUGIN_NAME = 'superpowers@claude-plugins-official';
+const EXTRA_CLAUDE_REQUIRED_SKILLS = Object.freeze([
+  'aios-long-running-harness',
+]);
 
-function getClaudePluginsPath(homeDir) {
-  return path.join(homeDir, '.claude', 'plugins');
+function getClaudePluginsPath(claudeHome) {
+  return path.join(claudeHome, 'plugins');
 }
 
-function getClaudeInstalledPluginsPath(homeDir) {
-  return path.join(getClaudePluginsPath(homeDir), 'installed_plugins.json');
+function getClaudeInstalledPluginsPath(claudeHome) {
+  return path.join(getClaudePluginsPath(claudeHome), 'installed_plugins.json');
 }
 
-async function isClaudePluginInstalled(homeDir) {
+async function isClaudePluginInstalled(claudeHome) {
   const fs = (await import('node:fs')).default;
-  const pluginsPath = getClaudeInstalledPluginsPath(homeDir);
+  const pluginsPath = getClaudeInstalledPluginsPath(claudeHome);
   if (!fs.existsSync(pluginsPath)) {
     return false;
   }
@@ -31,7 +34,260 @@ async function isClaudePluginInstalled(homeDir) {
   }
 }
 
+function listSkillNames(fs, skillsRoot) {
+  if (!skillsRoot || !fs.existsSync(skillsRoot)) {
+    return [];
+  }
+  return fs.readdirSync(skillsRoot).filter((entry) => {
+    const skillPath = path.join(skillsRoot, entry);
+    return fs.statSync(skillPath).isDirectory() && fs.existsSync(path.join(skillPath, 'SKILL.md'));
+  }).sort((left, right) => left.localeCompare(right));
+}
+
+function resolveLatestClaudePluginSkillsPath(fs, claudeHome) {
+  const pluginCacheBase = path.join(getClaudePluginsPath(claudeHome), 'cache', 'claude-plugins-official', 'superpowers');
+  if (!fs.existsSync(pluginCacheBase)) {
+    return { pluginCacheBase, pluginSkillsPath: '' };
+  }
+
+  const versions = fs.readdirSync(pluginCacheBase).sort().reverse();
+  for (const version of versions) {
+    const candidate = path.join(pluginCacheBase, version, 'skills');
+    if (fs.existsSync(candidate)) {
+      return { pluginCacheBase, pluginSkillsPath: candidate };
+    }
+  }
+
+  return { pluginCacheBase, pluginSkillsPath: '' };
+}
+
+function resolveClaudeSkillSource({ fs, claudeHome, repoSkillsSource, pluginInstalled }) {
+  const { pluginCacheBase, pluginSkillsPath } = resolveLatestClaudePluginSkillsPath(fs, claudeHome);
+  if (pluginInstalled && pluginSkillsPath) {
+    return {
+      sourceKind: 'plugin',
+      sourcePath: pluginSkillsPath,
+      pluginCacheBase,
+    };
+  }
+
+  return {
+    sourceKind: 'repo',
+    sourcePath: repoSkillsSource,
+    pluginCacheBase,
+  };
+}
+
+function skillNameToPermission(skillName) {
+  return `Skill(${String(skillName || '').trim()})`;
+}
+
+function sortUniqueStrings(values = []) {
+  const output = [...new Set(values.map((item) => String(item || '').trim()).filter(Boolean))];
+  output.sort((left, right) => left.localeCompare(right));
+  return output;
+}
+
+function buildRequiredClaudeSkillPermissions({ fs, skillsSource, extraSkills = [] } = {}) {
+  const discoveredSkills = listSkillNames(fs, skillsSource);
+  const allSkills = sortUniqueStrings([...discoveredSkills, ...extraSkills]);
+  return sortUniqueStrings(allSkills.map((skillName) => skillNameToPermission(skillName)));
+}
+
+function resolveClaudeSettingsPaths({
+  claudeHome,
+  rootDir = '',
+  includeGlobal = true,
+  includeProject = true,
+} = {}) {
+  const output = [];
+  if (includeGlobal) {
+    output.push(path.resolve(path.join(claudeHome, 'settings.local.json')));
+  }
+  if (includeProject && rootDir) {
+    output.push(path.resolve(path.join(rootDir, '.claude', 'settings.local.json')));
+  }
+  return [...new Set(output)];
+}
+
+function readJsonObject(fs, filePath) {
+  if (!fs.existsSync(filePath)) {
+    return { payload: {}, exists: false };
+  }
+
+  const content = fs.readFileSync(filePath, 'utf8').trim();
+  if (!content) {
+    return { payload: {}, exists: true };
+  }
+
+  const parsed = JSON.parse(content);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('expected top-level JSON object');
+  }
+
+  return { payload: parsed, exists: true };
+}
+
+function syncClaudeSkillPermissionsInFile({
+  fs,
+  settingsPath,
+  requiredPermissions,
+}) {
+  const { payload, exists } = readJsonObject(fs, settingsPath);
+  const nextPayload = { ...payload };
+  const nextPermissions = (
+    payload.permissions
+    && typeof payload.permissions === 'object'
+    && !Array.isArray(payload.permissions)
+  ) ? { ...payload.permissions } : {};
+
+  const allowRaw = Array.isArray(nextPermissions.allow) ? nextPermissions.allow : [];
+  const existingAllow = sortUniqueStrings(allowRaw);
+  const existingSet = new Set(existingAllow);
+  const missing = requiredPermissions.filter((permission) => !existingSet.has(permission));
+
+  if (missing.length === 0 && Array.isArray(nextPermissions.allow) && sortUniqueStrings(nextPermissions.allow).length === nextPermissions.allow.length) {
+    return {
+      status: 'reused',
+      added: 0,
+      total: existingAllow.length,
+      path: settingsPath,
+    };
+  }
+
+  nextPermissions.allow = [...existingAllow, ...missing];
+  nextPayload.permissions = nextPermissions;
+  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+  fs.writeFileSync(settingsPath, `${JSON.stringify(nextPayload, null, 2)}\n`, 'utf8');
+
+  return {
+    status: exists ? 'updated' : 'installed',
+    added: missing.length,
+    total: nextPermissions.allow.length,
+    path: settingsPath,
+  };
+}
+
+export async function syncClaudeSkillPermissions({
+  rootDir = '',
+  env = process.env,
+  io = console,
+  includeGlobal = true,
+  includeProject = true,
+  extraSkills = EXTRA_CLAUDE_REQUIRED_SKILLS,
+} = {}) {
+  const homeDir = os.homedir();
+  const homes = getClientHomes(env, homeDir);
+  const codexHome = homes.codex;
+  const claudeHome = homes.claude;
+  const skillsSource = path.join(codexHome, 'superpowers', 'skills');
+  const fs = (await import('node:fs')).default;
+
+  if (!fs.existsSync(skillsSource)) {
+    io.log(`[warn] superpowers skills source not found for permission sync: ${skillsSource}`);
+    return {
+      installed: 0,
+      updated: 0,
+      reused: 0,
+      skipped: 0,
+      errors: 1,
+      paths: [],
+      requiredPermissions: [],
+    };
+  }
+
+  const requiredPermissions = buildRequiredClaudeSkillPermissions({
+    fs,
+    skillsSource,
+    extraSkills,
+  });
+  const settingsPaths = resolveClaudeSettingsPaths({
+    claudeHome,
+    rootDir,
+    includeGlobal,
+    includeProject,
+  });
+
+  let installed = 0;
+  let updated = 0;
+  let reused = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (const settingsPath of settingsPaths) {
+    try {
+      const result = syncClaudeSkillPermissionsInFile({
+        fs,
+        settingsPath,
+        requiredPermissions,
+      });
+      if (result.status === 'installed') installed += 1;
+      else if (result.status === 'updated') updated += 1;
+      else reused += 1;
+      io.log(`[ok] Claude skill permissions synced: ${settingsPath} (+${result.added}, total=${result.total})`);
+    } catch (error) {
+      errors += 1;
+      io.log(`[warn] Claude skill permissions sync failed: ${settingsPath}`);
+      io.log(`       ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  if (settingsPaths.length === 0) {
+    skipped = 1;
+    io.log('[info] Claude skill permissions sync skipped (no target settings paths resolved).');
+  }
+
+  io.log(`[done] Claude skill permissions sync: installed=${installed} updated=${updated} reused=${reused} skipped=${skipped} errors=${errors}`);
+  return {
+    installed,
+    updated,
+    reused,
+    skipped,
+    errors,
+    paths: settingsPaths,
+    requiredPermissions,
+  };
+}
+
+function linkClaudeSkills({
+  fs,
+  sourcePath,
+  claudeSkillsRoot,
+  force = false,
+  io = console,
+} = {}) {
+  const skillNames = listSkillNames(fs, sourcePath);
+  let linked = 0;
+  let reused = 0;
+  let skipped = 0;
+
+  for (const skillName of skillNames) {
+    const skillSourcePath = path.join(sourcePath, skillName);
+    const skillTargetPath = path.join(claudeSkillsRoot, skillName);
+    const linkStatus = ensureManagedLink(skillTargetPath, skillSourcePath, { force });
+    if (linkStatus === 'reused') {
+      reused += 1;
+      continue;
+    }
+    if (linkStatus === 'skipped') {
+      skipped += 1;
+      io.log(`[warn] Claude Code skill not linked (existing unmanaged path): ${skillTargetPath}`);
+      continue;
+    }
+    linked += 1;
+    io.log(`[link] Claude Code skill: ${skillName}`);
+  }
+
+  return {
+    total: skillNames.length,
+    linked,
+    reused,
+    skipped,
+  };
+}
+
 export async function installSuperpowers({
+  rootDir = '',
   repoUrl = DEFAULT_REPO_URL,
   update = false,
   force = false,
@@ -44,7 +300,9 @@ export async function installSuperpowers({
   }
 
   const homeDir = os.homedir();
-  const codexHome = normalizeHomeDir(env.CODEX_HOME, path.join(homeDir, '.codex'), homeDir);
+  const homes = getClientHomes(env, homeDir);
+  const codexHome = homes.codex;
+  const claudeHome = homes.claude;
   const agentsHome = getAgentsHome(env, homeDir);
   const superpowersDir = path.join(codexHome, 'superpowers');
   const skillsSource = path.join(superpowersDir, 'skills');
@@ -80,58 +338,51 @@ export async function installSuperpowers({
     io.log(`[link] superpowers linked: ${skillsTarget} -> ${skillsSource}`);
   }
 
-  // Claude Code plugin check
-  if (installClaudePlugin) {
-    const pluginInstalled = await isClaudePluginInstalled(homeDir);
-    if (pluginInstalled) {
-      io.log(`[ok] Claude Code plugin already installed: ${CLAUDE_PLUGIN_NAME}`);
+  const fs = (await import('node:fs')).default;
+  const pluginInstalled = installClaudePlugin ? await isClaudePluginInstalled(claudeHome) : false;
+  const source = resolveClaudeSkillSource({
+    fs,
+    claudeHome,
+    repoSkillsSource: skillsSource,
+    pluginInstalled,
+  });
 
-      // Link plugin skills to ~/.claude/skills/ for Skill tool access
-      const claudeSkillsRoot = path.join(homeDir, '.claude', 'skills');
-      const claudeSuperpowersLink = path.join(claudeSkillsRoot, 'superpowers');
-      const pluginSkillsSource = path.join(getClaudePluginsPath(homeDir), 'cache', 'claude-plugins-official', 'superpowers', '5.0.7', 'skills');
+  if (pluginInstalled) {
+    io.log(`[ok] Claude Code plugin installed: ${CLAUDE_PLUGIN_NAME}`);
+  } else if (installClaudePlugin) {
+    io.log(`[note] Claude Code plugin not detected (${CLAUDE_PLUGIN_NAME}); using repo-linked superpowers skills`);
+  }
 
-      // Find the actual plugin version path
-      const fs = (await import('node:fs')).default;
-      let actualPluginSkillsPath = pluginSkillsSource;
-      const pluginCacheBase = path.join(getClaudePluginsPath(homeDir), 'cache', 'claude-plugins-official', 'superpowers');
-      if (fs.existsSync(pluginCacheBase)) {
-        const versions = fs.readdirSync(pluginCacheBase).sort().reverse();
-        if (versions.length > 0) {
-          actualPluginSkillsPath = path.join(pluginCacheBase, versions[0], 'skills');
-        }
-      }
-
-      if (fs.existsSync(actualPluginSkillsPath)) {
-        // Link each skill individually to ~/.claude/skills/<skill-name>
-        // Skill tool expects skills at ~/.claude/skills/<skill-name>/SKILL.md
-        const skillNames = fs.readdirSync(actualPluginSkillsPath).filter((name) => {
-          const skillPath = path.join(actualPluginSkillsPath, name);
-          return fs.statSync(skillPath).isDirectory() && fs.existsSync(path.join(skillPath, 'SKILL.md'));
-        });
-
-        let linked = 0;
-        let reused = 0;
-        for (const skillName of skillNames) {
-          const skillSourcePath = path.join(actualPluginSkillsPath, skillName);
-          const skillTargetPath = path.join(claudeSkillsRoot, skillName);
-          const linkStatus = ensureManagedLink(skillTargetPath, skillSourcePath, { force });
-          if (linkStatus === 'reused') {
-            reused += 1;
-          } else {
-            linked += 1;
-            io.log(`[link] Claude Code skill: ${skillName}`);
-          }
-        }
-        io.log(`[ok] Claude Code skills: ${linked} linked, ${reused} reused`);
-      } else {
-        io.log(`[warn] Plugin skills source not found: ${actualPluginSkillsPath}`);
-        io.log(`       Run /reload-plugins in Claude Code to refresh plugin cache`);
-      }
-    } else {
-      io.log(`[action] Claude Code plugin not installed. Run in Claude Code: /plugin install ${CLAUDE_PLUGIN_NAME}`);
-      io.log(`[note] After installation, run /reload-plugins to activate skills`);
+  if (!fs.existsSync(source.sourcePath)) {
+    io.log(`[warn] Claude Code skill source not found: ${source.sourcePath}`);
+    if (source.sourceKind === 'plugin') {
+      io.log(`       Run /reload-plugins in Claude Code to refresh plugin cache`);
+      io.log(`       Plugin cache base: ${source.pluginCacheBase}`);
     }
+  } else {
+    const claudeSkillsRoot = path.join(claudeHome, 'skills');
+    const linkResult = linkClaudeSkills({
+      fs,
+      sourcePath: source.sourcePath,
+      claudeSkillsRoot,
+      force,
+      io,
+    });
+    io.log(`[ok] Claude Code skills (${source.sourceKind} source): ${linkResult.linked} linked, ${linkResult.reused} reused, ${linkResult.skipped} skipped`);
+    if (linkResult.skipped > 0) {
+      io.log('       Re-run with --force to replace unmanaged existing skill directories.');
+    }
+  }
+
+  const permissionsResult = await syncClaudeSkillPermissions({
+    rootDir,
+    env,
+    io,
+    includeGlobal: true,
+    includeProject: Boolean(rootDir),
+  });
+  if (permissionsResult.errors > 0) {
+    io.log('[warn] Claude skill permission sync completed with warnings.');
   }
 
   io.log('[done] superpowers install complete');
@@ -139,7 +390,9 @@ export async function installSuperpowers({
 
 export async function doctorSuperpowers({ env = process.env, io = console } = {}) {
   const homeDir = os.homedir();
-  const codexHome = normalizeHomeDir(env.CODEX_HOME, path.join(homeDir, '.codex'), homeDir);
+  const homes = getClientHomes(env, homeDir);
+  const codexHome = homes.codex;
+  const claudeHome = homes.claude;
   const agentsHome = getAgentsHome(env, homeDir);
   const superpowersDir = path.join(codexHome, 'superpowers');
   const skillsSource = path.join(superpowersDir, 'skills');
@@ -164,6 +417,7 @@ export async function doctorSuperpowers({ env = process.env, io = console } = {}
   else err('missing command: git');
 
   io.log(`codex_home: ${codexHome}`);
+  io.log(`claude_home: ${claudeHome}`);
   io.log(`agents_home: ${agentsHome}`);
   io.log(`superpowers_dir: ${superpowersDir}`);
 
@@ -184,59 +438,57 @@ export async function doctorSuperpowers({ env = process.env, io = console } = {}
   if (isManagedLink(skillsTarget, skillsSource)) ok(`skills link valid: ${skillsTarget} -> ${skillsSource}`);
   else err(`skills link missing or incorrect: ${skillsTarget}`);
 
-  // Claude Code plugin check
-  const claudeSkillsRoot = path.join(homeDir, '.claude', 'skills');
-  const claudeSuperpowersLink = path.join(claudeSkillsRoot, 'superpowers');
-
-  const claudePluginInstalled = await isClaudePluginInstalled(homeDir);
+  const claudePluginInstalled = await isClaudePluginInstalled(claudeHome);
   if (claudePluginInstalled) {
     ok(`Claude Code plugin installed: ${CLAUDE_PLUGIN_NAME}`);
-
-    // Find the actual plugin version path
-    const pluginCacheBase = path.join(getClaudePluginsPath(homeDir), 'cache', 'claude-plugins-official', 'superpowers');
-    let actualPluginSkillsPath = '';
-    if (fs.existsSync(pluginCacheBase)) {
-      const versions = fs.readdirSync(pluginCacheBase).sort().reverse();
-      if (versions.length > 0) {
-        actualPluginSkillsPath = path.join(pluginCacheBase, versions[0], 'skills');
-      }
-    }
-
-    if (actualPluginSkillsPath && fs.existsSync(actualPluginSkillsPath)) {
-      // Check each skill link
-      const skillNames = fs.readdirSync(actualPluginSkillsPath).filter((name) => {
-        const skillPath = path.join(actualPluginSkillsPath, name);
-        return fs.statSync(skillPath).isDirectory() && fs.existsSync(path.join(skillPath, 'SKILL.md'));
-      });
-
-      let okSkills = 0;
-      let missingSkills = 0;
-      for (const skillName of skillNames) {
-        const skillTargetPath = path.join(claudeSkillsRoot, skillName);
-        const skillSourcePath = path.join(actualPluginSkillsPath, skillName);
-        if (isManagedLink(skillTargetPath, skillSourcePath)) {
-          okSkills += 1;
-        } else if (fs.existsSync(skillTargetPath)) {
-          warn(`Claude Code skill ${skillName} exists but not linked correctly`);
-          missingSkills += 1;
-        } else {
-          warn(`Claude Code skill ${skillName} not linked`);
-          missingSkills += 1;
-        }
-      }
-      if (missingSkills === 0) {
-        ok(`Claude Code skills: ${okSkills}/${skillNames.length} linked correctly`);
-      } else {
-        io.log(`       Run: node scripts/aios.mjs setup --components superpowers --force`);
-      }
-    } else {
-      warn(`Plugin skills cache not found: ${pluginCacheBase}`);
-      io.log('       Run /reload-plugins in Claude Code to refresh plugin cache');
-    }
   } else {
-    warn(`Claude Code plugin not installed: ${CLAUDE_PLUGIN_NAME}`);
-    io.log('       Run in Claude Code: /plugin install superpowers@claude-plugins-official');
-    io.log('       Then run: /reload-plugins');
+    io.log(`INFO Claude Code plugin not installed: ${CLAUDE_PLUGIN_NAME} (optional)`);
+  }
+
+  const source = resolveClaudeSkillSource({
+    fs,
+    claudeHome,
+    repoSkillsSource: skillsSource,
+    pluginInstalled: claudePluginInstalled,
+  });
+  const expectedSkillNames = listSkillNames(fs, skillsSource);
+  if (expectedSkillNames.length === 0) {
+    warn(`no superpowers skills found in source: ${skillsSource}`);
+  } else {
+    const claudeSkillsRoot = path.join(claudeHome, 'skills');
+    let availableSkills = 0;
+    let managedLinks = 0;
+    for (const skillName of expectedSkillNames) {
+      const targetPath = path.join(claudeSkillsRoot, skillName);
+      const targetSkillFile = path.join(targetPath, 'SKILL.md');
+      if (!fs.existsSync(targetSkillFile)) {
+        warn(`Claude Code skill missing: ${targetPath}`);
+        continue;
+      }
+      availableSkills += 1;
+
+      const repoSkillSource = path.join(skillsSource, skillName);
+      const expectedSource = source.sourcePath ? path.join(source.sourcePath, skillName) : '';
+      if ((expectedSource && isManagedLink(targetPath, expectedSource)) || isManagedLink(targetPath, repoSkillSource)) {
+        managedLinks += 1;
+      }
+    }
+
+    if (availableSkills === expectedSkillNames.length) {
+      ok(`Claude Code skills available: ${availableSkills}/${expectedSkillNames.length}`);
+    } else {
+      io.log('       Run: node scripts/aios.mjs setup --components superpowers --force');
+      if (source.sourceKind === 'plugin') {
+        io.log('       If plugin cache is stale, run /reload-plugins in Claude Code.');
+      }
+    }
+
+    if (managedLinks === expectedSkillNames.length) {
+      ok(`Claude Code managed links healthy: ${managedLinks}/${expectedSkillNames.length}`);
+    } else {
+      warn(`Claude Code managed links drifted: ${managedLinks}/${expectedSkillNames.length}`);
+      io.log('       Re-run with: node scripts/aios.mjs setup --components superpowers --force');
+    }
   }
 
   if (errors > 0) {

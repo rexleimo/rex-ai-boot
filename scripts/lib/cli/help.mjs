@@ -325,6 +325,12 @@ export function getInternalHelpText(target, action) {
 `;
   }
 
+  if (target === 'superpowers' && action === 'sync-claude-permissions') {
+    return `Usage:
+  node scripts/aios.mjs internal superpowers sync-claude-permissions
+`;
+  }
+
   if (target === 'browser' && action === 'install') {
     return `Usage:
   node scripts/aios.mjs internal browser install [--dry-run] [--skip-playwright-install]

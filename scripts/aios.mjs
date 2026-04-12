@@ -95,9 +95,16 @@ async function runInternal(options) {
 
   if (target === 'superpowers') {
     const module = await import('./lib/components/superpowers.mjs');
-    if (action === 'install') return module.installSuperpowers({ repoUrl: options.repoUrl, update: Boolean(options.update), force: Boolean(options.force) });
-    if (action === 'update') return module.installSuperpowers({ repoUrl: options.repoUrl, update: true, force: true });
+    if (action === 'install') return module.installSuperpowers({ rootDir, repoUrl: options.repoUrl, update: Boolean(options.update), force: Boolean(options.force) });
+    if (action === 'update') return module.installSuperpowers({ rootDir, repoUrl: options.repoUrl, update: true, force: true });
     if (action === 'doctor') return module.doctorSuperpowers();
+    if (action === 'sync-claude-permissions') {
+      return module.syncClaudeSkillPermissions({
+        rootDir,
+        includeGlobal: true,
+        includeProject: true,
+      });
+    }
   }
 
   if (target === 'browser') {

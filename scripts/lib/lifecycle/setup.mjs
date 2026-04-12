@@ -109,7 +109,7 @@ export async function runSetup(rawOptions = {}, { rootDir, projectRoot = rootDir
   }
 
   if (hasComponent(options.components, 'superpowers')) {
-    await superpowersInstaller({ io });
+    await superpowersInstaller({ rootDir, io });
     if (!options.skipDoctor) {
       const result = await superpowersDoctor({ io });
       if (result.errors > 0) {

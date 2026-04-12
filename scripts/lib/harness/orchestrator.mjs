@@ -14,6 +14,8 @@ export const ORCHESTRATOR_BLUEPRINT_NAMES = ['feature', 'bugfix', 'refactor', 's
 export const ORCHESTRATOR_FORMATS = ['text', 'json'];
 export const RL_ORCHESTRATOR_DECISION_TYPES = ['dispatch', 'retry', 'stop', 'handoff', 'preflight'];
 const DEFAULT_WORK_ITEM_LIMIT = 4;
+const EXECUTOR_CAPABILITY_LEVELS = new Set(['yes', 'no', 'unknown']);
+const EXECUTOR_CAPABILITY_KEYS = ['read', 'write', 'network', 'browser', 'sideEffect'];
 const WORK_ITEM_TYPE_PATTERNS = Object.freeze([
   { type: 'auth', pattern: /\b(auth|authentication|authorize|authorization|login|oauth|token|credential|secret)\b/i },
   { type: 'payment', pattern: /\b(payment|billing|invoice|charge|refund|payout|stripe|paypal|card)\b/i },
@@ -35,6 +37,76 @@ export const MERGE_GATE_CONFLICT_RULE = normalizeText(blueprintSpec?.mergeGate?.
 
 function normalizeText(value) {
   return String(value ?? '').trim();
+}
+
+function normalizeExecutorCapabilityLevel(value, fallback = 'unknown') {
+  const normalized = normalizeText(value).toLowerCase();
+  return EXECUTOR_CAPABILITY_LEVELS.has(normalized) ? normalized : fallback;
+}
+
+function normalizeExecutorCapabilities(raw = null) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  return {
+    read: normalizeExecutorCapabilityLevel(source.read, 'unknown'),
+    write: normalizeExecutorCapabilityLevel(source.write, 'unknown'),
+    network: normalizeExecutorCapabilityLevel(source.network, 'unknown'),
+    browser: normalizeExecutorCapabilityLevel(source.browser, 'unknown'),
+    sideEffect: normalizeExecutorCapabilityLevel(source.sideEffect, 'unknown'),
+  };
+}
+
+function aggregateExecutorCapabilityLevels(levels = []) {
+  const normalizedLevels = Array.isArray(levels)
+    ? levels.map((level) => normalizeExecutorCapabilityLevel(level, 'unknown'))
+    : [];
+  if (normalizedLevels.some((level) => level === 'yes')) return 'yes';
+  if (normalizedLevels.some((level) => level === 'unknown')) return 'unknown';
+  return 'no';
+}
+
+function normalizeExecutorCapabilityManifest(rawManifest = null) {
+  if (!rawManifest || typeof rawManifest !== 'object') {
+    return null;
+  }
+
+  const executors = Array.isArray(rawManifest.executors)
+    ? rawManifest.executors
+      .map((entry) => {
+        const id = normalizeText(entry?.id);
+        if (!id) return null;
+        const notes = Array.isArray(entry?.notes)
+          ? entry.notes.map((item) => normalizeText(item)).filter(Boolean)
+          : [];
+        return {
+          id,
+          label: normalizeText(entry?.label) || id,
+          jobCount: Number.isFinite(entry?.jobCount) ? Math.max(0, Math.floor(entry.jobCount)) : 0,
+          capabilities: normalizeExecutorCapabilities(entry?.capabilities),
+          notes,
+        };
+      })
+      .filter(Boolean)
+    : [];
+
+  const fallbackSummary = normalizeExecutorCapabilities(rawManifest.summary);
+  const summary = executors.length > 0
+    ? {
+      read: aggregateExecutorCapabilityLevels(executors.map((entry) => entry.capabilities.read)),
+      write: aggregateExecutorCapabilityLevels(executors.map((entry) => entry.capabilities.write)),
+      network: aggregateExecutorCapabilityLevels(executors.map((entry) => entry.capabilities.network)),
+      browser: aggregateExecutorCapabilityLevels(executors.map((entry) => entry.capabilities.browser)),
+      sideEffect: aggregateExecutorCapabilityLevels(executors.map((entry) => entry.capabilities.sideEffect)),
+    }
+    : fallbackSummary;
+
+  return {
+    schemaVersion: Number.isFinite(rawManifest.schemaVersion) ? Math.max(1, Math.floor(rawManifest.schemaVersion)) : 1,
+    generatedAt: normalizeText(rawManifest.generatedAt),
+    executionMode: normalizeText(rawManifest.executionMode) || 'none',
+    runtimeId: normalizeText(rawManifest.runtimeId),
+    summary,
+    executors,
+  };
 }
 
 function normalizeOwnedPathPrefixes(raw = null) {
@@ -650,6 +722,142 @@ function collectExecutorDetails(jobs = []) {
   return listLocalDispatchExecutors().filter((executor) => usedExecutorIds.has(executor.id));
 }
 
+function deriveExecutorCapabilities({
+  executorId = '',
+  executionMode = 'none',
+  jobCount = 0,
+  hasEditableJobs = false,
+} = {}) {
+  const id = normalizeText(executorId);
+  const mode = normalizeText(executionMode).toLowerCase() || 'none';
+  const hasJobs = Number.isFinite(jobCount) ? Math.max(0, Math.floor(jobCount)) > 0 : false;
+
+  if (!hasJobs) {
+    return normalizeExecutorCapabilities({
+      read: 'no',
+      write: 'no',
+      network: 'no',
+      browser: 'no',
+      sideEffect: 'no',
+    });
+  }
+
+  if (id === LOCAL_MERGE_GATE_EXECUTOR) {
+    return normalizeExecutorCapabilities({
+      read: 'yes',
+      write: 'no',
+      network: 'no',
+      browser: 'no',
+      sideEffect: 'no',
+    });
+  }
+
+  if (id === LOCAL_PHASE_EXECUTOR) {
+    if (mode === 'live') {
+      const writeLevel = hasEditableJobs ? 'yes' : 'no';
+      return normalizeExecutorCapabilities({
+        read: 'yes',
+        write: writeLevel,
+        network: 'unknown',
+        browser: 'unknown',
+        sideEffect: writeLevel === 'yes' ? 'yes' : 'unknown',
+      });
+    }
+
+    return normalizeExecutorCapabilities({
+      read: 'yes',
+      write: 'no',
+      network: 'no',
+      browser: 'no',
+      sideEffect: 'no',
+    });
+  }
+
+  return normalizeExecutorCapabilities({
+    read: mode === 'none' ? 'no' : 'unknown',
+    write: mode === 'none' ? 'no' : 'unknown',
+    network: mode === 'none' ? 'no' : 'unknown',
+    browser: mode === 'none' ? 'no' : 'unknown',
+    sideEffect: mode === 'none' ? 'no' : 'unknown',
+  });
+}
+
+export function buildExecutorCapabilityManifest({
+  dispatchPlan = null,
+  executionMode = 'none',
+  runtimeId = '',
+} = {}) {
+  const normalizedPlan = normalizeDispatchPlan(dispatchPlan);
+  if (!normalizedPlan) return null;
+
+  const jobs = Array.isArray(normalizedPlan.jobs) ? normalizedPlan.jobs : [];
+  const executorRows = [];
+  const executorDetails = Array.isArray(normalizedPlan.executorDetails) && normalizedPlan.executorDetails.length > 0
+    ? normalizedPlan.executorDetails
+    : (Array.isArray(normalizedPlan.executorRegistry)
+      ? normalizedPlan.executorRegistry.map((id) => ({ id, label: id }))
+      : []);
+
+  const jobsByExecutor = new Map();
+  for (const job of jobs) {
+    const executorId = normalizeText(job?.launchSpec?.executor);
+    if (!executorId) continue;
+    const bucket = jobsByExecutor.get(executorId) || [];
+    bucket.push(job);
+    jobsByExecutor.set(executorId, bucket);
+  }
+
+  for (const entry of executorDetails) {
+    const id = normalizeText(entry?.id);
+    if (!id) continue;
+    const matchedJobs = jobsByExecutor.get(id) || [];
+    const jobCount = matchedJobs.length;
+    const hasEditableJobs = matchedJobs.some((job) => job?.launchSpec?.canEditFiles === true);
+    const capabilities = deriveExecutorCapabilities({
+      executorId: id,
+      executionMode,
+      jobCount,
+      hasEditableJobs,
+    });
+    const notes = [];
+    const declaredModes = Array.isArray(entry?.executionModes) ? entry.executionModes.map((item) => normalizeText(item)).filter(Boolean) : [];
+    if (executionMode === 'live' && id === LOCAL_PHASE_EXECUTOR) {
+      notes.push('Live mode delegates phase execution to subagent-runtime; network/browser access depends on client tooling and prompt constraints.');
+    }
+    if (declaredModes.length > 0 && executionMode !== 'none' && !declaredModes.includes(executionMode)) {
+      notes.push(`Declared executionModes=${declaredModes.join(',')} differ from requested mode=${executionMode}.`);
+    }
+    if (executionMode === 'dry-run') {
+      notes.push('Dry-run mode is simulation-only and does not mutate workspace files.');
+    }
+
+    executorRows.push({
+      id,
+      label: normalizeText(entry?.label) || id,
+      jobCount,
+      capabilities,
+      notes,
+    });
+  }
+
+  const summary = normalizeExecutorCapabilities({
+    read: aggregateExecutorCapabilityLevels(executorRows.map((entry) => entry.capabilities.read)),
+    write: aggregateExecutorCapabilityLevels(executorRows.map((entry) => entry.capabilities.write)),
+    network: aggregateExecutorCapabilityLevels(executorRows.map((entry) => entry.capabilities.network)),
+    browser: aggregateExecutorCapabilityLevels(executorRows.map((entry) => entry.capabilities.browser)),
+    sideEffect: aggregateExecutorCapabilityLevels(executorRows.map((entry) => entry.capabilities.sideEffect)),
+  });
+
+  return normalizeExecutorCapabilityManifest({
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    executionMode: normalizeText(executionMode) || 'none',
+    runtimeId: normalizeText(runtimeId),
+    summary,
+    executors: executorRows,
+  });
+}
+
 export function buildOrchestrationPlan({
   blueprint = 'feature',
   taskTitle = '',
@@ -662,6 +870,7 @@ export function buildOrchestrationPlan({
   dispatchPolicy = null,
   dispatchPreflight = null,
   effectiveDispatchPolicy = null,
+  executorCapabilityManifest = null,
 } = {}) {
   const resolved = getOrchestratorBlueprint(blueprint);
   const resolvedTaskTitle = String(taskTitle || '').trim() || 'Untitled task';
@@ -687,6 +896,7 @@ export function buildOrchestrationPlan({
     dispatchPolicy: normalizeDispatchPolicy(dispatchPolicy),
     dispatchPreflight: normalizeDispatchPreflight(dispatchPreflight),
     effectiveDispatchPolicy: normalizeDispatchPolicy(effectiveDispatchPolicy),
+    executorCapabilityManifest: normalizeExecutorCapabilityManifest(executorCapabilityManifest),
     phases: resolved.phases.map((phase, index) => ({
       step: index + 1,
       id: phase.id,
@@ -1593,6 +1803,40 @@ function formatDispatchPlan(dispatchPlan) {
   return lines;
 }
 
+function formatExecutorCapabilityManifest(manifest) {
+  const normalized = normalizeExecutorCapabilityManifest(manifest);
+  if (!normalized) {
+    return [];
+  }
+
+  const summaryBits = EXECUTOR_CAPABILITY_KEYS
+    .map((key) => `${key}=${normalized.summary[key]}`)
+    .join(' ');
+  const runtimeLabel = normalized.runtimeId || '(none)';
+  const lines = [
+    'Executor Capability Manifest:',
+    `- mode=${normalized.executionMode} runtime=${runtimeLabel}`,
+    `- summary ${summaryBits}`,
+  ];
+
+  if (normalized.executors.length > 0) {
+    for (const entry of normalized.executors) {
+      const capabilityBits = EXECUTOR_CAPABILITY_KEYS
+        .map((key) => `${key}=${entry.capabilities[key]}`)
+        .join(' ');
+      lines.push(`- ${entry.id} jobs=${entry.jobCount} ${capabilityBits}`);
+      if (Array.isArray(entry.notes) && entry.notes.length > 0) {
+        lines.push(...entry.notes.map((note) => `  - note=${note}`));
+      }
+    }
+  } else {
+    lines.push('- (no executors)');
+  }
+
+  lines.push('');
+  return lines;
+}
+
 function formatDispatchRun(dispatchRun) {
   if (!dispatchRun) {
     return [];
@@ -1774,6 +2018,7 @@ export function renderOrchestrationReport(input = {}) {
     ...formatDispatchPolicy(plan.dispatchPolicy),
     ...formatDispatchPreflight(plan.dispatchPreflight),
     ...formatEffectiveDispatchPolicy(plan.effectiveDispatchPolicy),
+    ...formatExecutorCapabilityManifest(plan.executorCapabilityManifest),
     ...formatDispatchPlan(plan.dispatchPlan),
     ...formatDispatchRun(plan.dispatchRun),
     ...formatDispatchEvidence(plan.dispatchEvidence),

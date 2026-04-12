@@ -267,6 +267,7 @@ export async function persistDispatchEvidence({ rootDir, sessionId, report, elap
     contextSummary: report.contextSummary,
     workItems: Array.isArray(report.workItems) ? report.workItems.map((item) => ({ ...item })) : [],
     learnEvalOverlay: report.learnEvalOverlay || null,
+    executorCapabilityManifest: report.executorCapabilityManifest || null,
     dispatchPlan: report.dispatchPlan || null,
     dispatchRun: dispatchRunForArtifact,
     workItemTelemetry: withWorkItemArtifactRef(report.workItemTelemetry || null, artifactPath),

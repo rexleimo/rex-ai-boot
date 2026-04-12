@@ -428,7 +428,29 @@ test('resolveStatusSkillCandidateOptions adapts default limit for fast watch', (
 test('renderHud minimal shows watch visibility and quality category labels', () => {
   const rendered = renderHud({
     selection: { sessionId: 's-1', provider: 'codex', agent: 'codex-cli' },
-    latestDispatch: { ok: false, blockedJobs: 2 },
+    latestDispatch: {
+      ok: false,
+      blockedJobs: 2,
+      jobProgress: {
+        total: 4,
+        done: 1,
+        running: 1,
+        blocked: 2,
+        queued: 0,
+        completionRatio: 0.25,
+      },
+      toolProgress: [
+        {
+          tool: 'local-phase',
+          total: 4,
+          done: 1,
+          running: 1,
+          blocked: 2,
+          queued: 0,
+          completionRatio: 0.25,
+        },
+      ],
+    },
     latestSkillCandidate: {
       skillId: 'skill-constraints',
       failureClass: 'ownership-policy',
@@ -450,6 +472,7 @@ test('renderHud minimal shows watch visibility and quality category labels', () 
 
   assert.match(rendered, /session=s-1/);
   assert.match(rendered, /dispatch=blocked\(2\)/);
+  assert.match(rendered, /jobs=1\/4 run=1 blk=2 tool=local-phase:1\/4/);
   assert.match(rendered, /quality=failed\(category:quality-logs\)/);
   assert.match(rendered, /skill=skill-constraints\/ownership-policy#2/);
   assert.match(rendered, /watch: render=250ms data-refresh=1000ms fast=on data-age=20000ms/);
@@ -509,6 +532,7 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
           jobId: 'phase.implement.wi.1',
           jobType: 'phase',
           role: 'implementer',
+          executor: 'local-phase',
           status: 'blocked',
           turnId: '20260405T005900Z:phase.implement.wi.1:a1',
           workItemRefs: ['wi.1'],
@@ -519,6 +543,7 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
           jobId: 'phase.plan',
           jobType: 'phase',
           role: 'planner',
+          executor: 'local-phase',
           status: 'simulated',
           output: { payload: { status: 'completed' } },
         },
@@ -540,6 +565,7 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
           jobId: 'phase.implement.wi.1',
           jobType: 'phase',
           role: 'implementer',
+          executor: 'local-phase',
           status: 'blocked',
           turnId: '20260405T010000Z:phase.implement.wi.1:a2',
           workItemRefs: ['wi.1'],
@@ -550,6 +576,7 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
           jobId: 'phase.plan',
           jobType: 'phase',
           role: 'planner',
+          executor: 'local-phase',
           status: 'simulated',
           output: { payload: { status: 'completed' } },
         },
@@ -632,6 +659,16 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
   assert.equal(state.latestCheckpoint?.telemetry?.verification?.result, 'passed');
   assert.equal(state.latestDispatch?.ok, false);
   assert.equal(state.latestDispatch?.blockedJobs, 1);
+  assert.equal(state.latestDispatch?.jobProgress?.total, 2);
+  assert.equal(state.latestDispatch?.jobProgress?.done, 1);
+  assert.equal(state.latestDispatch?.jobProgress?.blocked, 1);
+  assert.equal(state.latestDispatch?.jobProgress?.running, 0);
+  assert.equal(state.latestDispatch?.jobProgress?.queued, 0);
+  assert.equal(state.latestDispatch?.jobProgress?.completionRatio, 0.5);
+  assert.equal(state.latestDispatch?.toolProgress?.[0]?.tool, 'local-phase');
+  assert.equal(state.latestDispatch?.toolProgress?.[0]?.total, 2);
+  assert.equal(state.latestDispatch?.toolProgress?.[0]?.done, 1);
+  assert.equal(state.latestDispatch?.toolProgress?.[0]?.blocked, 1);
   assert.equal(state.latestDispatch?.blocked?.[0]?.turnId, '20260405T010000Z:phase.implement.wi.1:a2');
   assert.deepEqual(state.latestDispatch?.blocked?.[0]?.workItemRefs, ['wi.1']);
   assert.equal(state.latestDispatch?.blocked?.[0]?.attempts, 2);
@@ -661,6 +698,8 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
   assert.ok(state.suggestedCommands.some((cmd) => cmd.includes('--apply-draft draft.skill.repeat-blocked.ownership-policy')));
 
   const rendered = renderHud(state, { preset: 'focused' });
+  assert.match(rendered, /Dispatch Progress: jobs total=2 done=1 running=0 blocked=1 queued=0 completion=50%/);
+  assert.match(rendered, /Tool Progress: local-phase 1\/2 \(r=0 b=1 q=0\)/);
   assert.match(rendered, /Quality: failed \(quality-logs\)/);
   assert.match(rendered, /Dispatch Hindsight: pairs=1/);
   assert.match(rendered, /FixHint: \[runbook\.dispatch-merge-triage\]/);
@@ -1016,6 +1055,7 @@ test('readHudDispatchSummary includes latest dispatch, hindsight, and fix hint',
       jobId: 'phase.implement.wi.1',
       jobType: 'phase',
       role: 'implementer',
+      executor: 'local-phase',
       status: 'blocked',
       attempts,
       output: { error: 'File policy violation' },
@@ -1024,6 +1064,7 @@ test('readHudDispatchSummary includes latest dispatch, hindsight, and fix hint',
       jobId: 'phase.plan',
       jobType: 'phase',
       role: 'planner',
+      executor: 'local-phase',
       status: 'simulated',
       output: { outputType: 'handoff' },
     },
@@ -1104,6 +1145,13 @@ test('readHudDispatchSummary includes latest dispatch, hindsight, and fix hint',
   assert.equal(summary.latestDispatch?.ok, false);
   assert.equal(summary.latestDispatch?.jobCount, 2);
   assert.equal(summary.latestDispatch?.blockedJobs, 1);
+  assert.equal(summary.latestDispatch?.jobProgress?.total, 2);
+  assert.equal(summary.latestDispatch?.jobProgress?.done, 1);
+  assert.equal(summary.latestDispatch?.jobProgress?.blocked, 1);
+  assert.equal(summary.latestDispatch?.jobProgress?.completionRatio, 0.5);
+  assert.equal(summary.latestDispatch?.toolProgress?.[0]?.tool, 'local-phase');
+  assert.equal(summary.latestDispatch?.toolProgress?.[0]?.done, 1);
+  assert.equal(summary.latestDispatch?.toolProgress?.[0]?.blocked, 1);
   assert.ok(String(summary.latestDispatch?.artifactPath || '').includes('dispatch-run-20260405T030000Z.json'));
   assert.equal(summary.latestSkillCandidate?.skillId, 'skill-constraints');
   assert.equal(summary.latestSkillCandidate?.scope, 'ownership-policy');
