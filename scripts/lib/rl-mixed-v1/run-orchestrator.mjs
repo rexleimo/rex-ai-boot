@@ -1,4 +1,4 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { applyPointerTransition } from '../rl-core/checkpoint-registry.mjs';
@@ -19,6 +19,13 @@ function computeHash(value) {
     hash = Math.imul(hash, 16777619);
   }
   return hash >>> 0;
+}
+
+function clone(value) {
+  if (value == null) {
+    return value;
+  }
+  return JSON.parse(JSON.stringify(value));
 }
 
 function clamp(value, min, max) {
@@ -46,6 +53,9 @@ const ORCHESTRATOR_BANDIT_REWARD_WEIGHTS = Object.freeze({
   missedHandoff: -0.4,
   verificationBlocked: -0.2,
 });
+
+const POLICY_CHECKPOINT_SCHEMA_VERSION = 1;
+const POLICY_CHECKPOINT_FILE = 'orchestrator-bandit-policy.latest.json';
 
 function buildControlSnapshot(initialCheckpointId) {
   return {
@@ -173,11 +183,22 @@ export function computeMixedEpochOutcome({
   return { epoch_outcome: 'continue_monitoring' };
 }
 
-function createDefaultAdapters(overrides = {}) {
+function createDefaultAdapters({
+  overrides = {},
+  rootDir = process.cwd(),
+  orchestratorHarnessMode = 'fixture',
+  orchestratorHarnessOptions = {},
+} = {}) {
   return {
     shell: overrides.shell || createShellMixedAdapter(),
     browser: overrides.browser || createBrowserAdapter(),
-    orchestrator: overrides.orchestrator || createOrchestratorAdapter(),
+    orchestrator: overrides.orchestrator || createOrchestratorAdapter({
+      harnessMode: orchestratorHarnessMode,
+      harnessOptions: {
+        rootDir: orchestratorHarnessOptions.rootDir || rootDir,
+        ...orchestratorHarnessOptions,
+      },
+    }),
   };
 }
 
@@ -300,10 +321,115 @@ async function ensureNamespaceRoot(rootDir, namespace) {
   return baseDir;
 }
 
+function buildPolicyCheckpointPath(baseDir) {
+  return path.join(baseDir, 'checkpoints', POLICY_CHECKPOINT_FILE);
+}
+
+function normalizeCheckpointPolicy(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return clone(value);
+}
+
+function buildPolicyCheckpointMetadata({
+  checkpointPath,
+  loadStatus = 'cold_start',
+  loadError = null,
+  loadedUpdateCount = 0,
+  loadedBatchIndex = 0,
+  loadedSavedAt = null,
+  saveStatus = 'not_written',
+  savedUpdateCount = 0,
+  savedBatchIndex = 0,
+  savedAt = null,
+} = {}) {
+  return {
+    path: checkpointPath,
+    schema_version: POLICY_CHECKPOINT_SCHEMA_VERSION,
+    load_status: loadStatus,
+    load_error: loadError,
+    loaded_update_count: Number(loadedUpdateCount || 0),
+    loaded_batch_index: Number(loadedBatchIndex || 0),
+    loaded_saved_at: loadedSavedAt,
+    save_status: saveStatus,
+    saved_update_count: Number(savedUpdateCount || 0),
+    saved_batch_index: Number(savedBatchIndex || 0),
+    saved_at: savedAt,
+  };
+}
+
+async function loadPolicyCheckpoint(checkpointPath) {
+  try {
+    const payload = JSON.parse(await readFile(checkpointPath, 'utf8'));
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new Error('policy checkpoint payload must be an object');
+    }
+    return {
+      status: 'loaded',
+      metadata: buildPolicyCheckpointMetadata({
+        checkpointPath,
+        loadStatus: 'loaded',
+        loadedUpdateCount: Number(payload.update_count || payload.active_policy?.contextualBandit?.updateCount || 0),
+        loadedBatchIndex: Number(payload.batch_index || 0),
+        loadedSavedAt: typeof payload.saved_at === 'string' ? payload.saved_at : null,
+      }),
+      activePolicy: normalizeCheckpointPolicy(payload.active_policy),
+      referencePolicy: normalizeCheckpointPolicy(payload.reference_policy),
+    };
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return {
+        status: 'missing',
+        metadata: buildPolicyCheckpointMetadata({
+          checkpointPath,
+          loadStatus: 'missing',
+        }),
+        activePolicy: null,
+        referencePolicy: null,
+      };
+    }
+    return {
+      status: 'corrupt',
+      metadata: buildPolicyCheckpointMetadata({
+        checkpointPath,
+        loadStatus: 'corrupt',
+        loadError: error?.message || String(error),
+      }),
+      activePolicy: null,
+      referencePolicy: null,
+    };
+  }
+}
+
+async function persistPolicyCheckpoint({
+  checkpointPath,
+  activePolicy,
+  referencePolicy,
+  updateCount = 0,
+  batchIndex = 0,
+  activeCheckpointId = null,
+}) {
+  const payload = {
+    schema_version: POLICY_CHECKPOINT_SCHEMA_VERSION,
+    saved_at: new Date().toISOString(),
+    update_count: Number(updateCount || 0),
+    batch_index: Number(batchIndex || 0),
+    active_checkpoint_id: activeCheckpointId ? String(activeCheckpointId) : null,
+    active_policy: normalizeCheckpointPolicy(activePolicy),
+    reference_policy: normalizeCheckpointPolicy(referencePolicy),
+  };
+  await mkdir(path.dirname(checkpointPath), { recursive: true });
+  await writeFile(checkpointPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  return payload;
+}
+
 export async function runMixedCampaign({
   rootDir = process.cwd(),
   activeEnvironments = ['shell', 'browser', 'orchestrator'],
   adapters: adapterOverrides = {},
+  orchestratorHarnessMode = 'fixture',
+  orchestratorHarnessOptions = {},
   initialCheckpointId = 'ckpt-mixed-a',
   onlineBatchSize = 4,
   batchTargetCount = 3,
@@ -311,9 +437,15 @@ export async function runMixedCampaign({
   mode = 'mixed',
   resume = false,
 } = {}) {
-  const adapters = createDefaultAdapters(adapterOverrides);
+  const adapters = createDefaultAdapters({
+    overrides: adapterOverrides,
+    rootDir,
+    orchestratorHarnessMode,
+    orchestratorHarnessOptions,
+  });
   const resolvedEnvironments = [...activeEnvironments];
   const baseDir = await ensureNamespaceRoot(rootDir, namespace);
+  const policyCheckpointPath = buildPolicyCheckpointPath(baseDir);
   const controlStore = await createControlStateStore({ rootDir, namespace });
   const attempts = Object.fromEntries(resolvedEnvironments.map((environment) => [environment, 0]));
   const environmentCounts = normalizeEnvironmentCounts(resolvedEnvironments);
@@ -324,6 +456,10 @@ export async function runMixedCampaign({
   let duplicateEventApplications = 0;
   let activePolicy = null;
   let referencePolicy = null;
+  let policyCheckpoint = buildPolicyCheckpointMetadata({
+    checkpointPath: policyCheckpointPath,
+    loadStatus: resume ? 'pending' : 'cold_start',
+  });
 
   const applyTrackedEvent = async (event) => {
     const result = await applyControlEvent(controlStore, event);
@@ -339,6 +475,15 @@ export async function runMixedCampaign({
 
   if (!controlState.active_checkpoint_id) {
     controlState = await writeControlSnapshot(controlStore, buildControlSnapshot(initialCheckpointId));
+  }
+
+  if (resume) {
+    const restoredPolicy = await loadPolicyCheckpoint(policyCheckpointPath);
+    policyCheckpoint = restoredPolicy.metadata;
+    if (restoredPolicy.status === 'loaded') {
+      activePolicy = restoredPolicy.activePolicy;
+      referencePolicy = restoredPolicy.referencePolicy;
+    }
   }
 
   if (mode === 'drill-resume') {
@@ -358,6 +503,8 @@ export async function runMixedCampaign({
           rollback: null,
         },
         holdout_validation,
+        policy_checkpoint: policyCheckpoint,
+        active_environments: resolvedEnvironments,
       },
       controlState,
     };
@@ -407,6 +554,8 @@ export async function runMixedCampaign({
               batch_combinations: [...new Set(batchCombinations)],
               drills: { rollback: null, resume: null },
               holdout_validation,
+              policy_checkpoint: policyCheckpoint,
+              active_environments: resolvedEnvironments,
             },
             controlState,
           };
@@ -598,6 +747,27 @@ export async function runMixedCampaign({
         },
       });
     }
+
+    const persistedPolicy = await persistPolicyCheckpoint({
+      checkpointPath: policyCheckpointPath,
+      activePolicy,
+      referencePolicy,
+      updateCount: Number(activePolicy?.contextualBandit?.updateCount || 0),
+      batchIndex,
+      activeCheckpointId: controlState.active_checkpoint_id,
+    });
+    policyCheckpoint = buildPolicyCheckpointMetadata({
+      checkpointPath: policyCheckpointPath,
+      loadStatus: policyCheckpoint.load_status,
+      loadError: policyCheckpoint.load_error,
+      loadedUpdateCount: policyCheckpoint.loaded_update_count,
+      loadedBatchIndex: policyCheckpoint.loaded_batch_index,
+      loadedSavedAt: policyCheckpoint.loaded_saved_at,
+      saveStatus: 'written',
+      savedUpdateCount: persistedPolicy.update_count,
+      savedBatchIndex: persistedPolicy.batch_index,
+      savedAt: persistedPolicy.saved_at,
+    });
   }
 
   const summary = {
@@ -620,6 +790,7 @@ export async function runMixedCampaign({
       update_count: Number(activePolicy?.contextualBandit?.updateCount || 0),
       context_count: Object.keys(activePolicy?.contextualBandit?.contexts || {}).length,
     },
+    policy_checkpoint: policyCheckpoint,
     drills: {
       rollback: mode === 'drill-rollback'
         ? {

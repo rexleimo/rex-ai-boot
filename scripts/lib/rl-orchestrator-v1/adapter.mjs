@@ -1,7 +1,7 @@
 import { validateMixedEpisode, validateReplayCandidate } from '../rl-core/schema.mjs';
 import { classifyReplayRoute } from '../rl-core/replay-pool.mjs';
 import { selectContextualBanditAction } from '../rl-core/trainer.mjs';
-import { createCiFixtureOrchestratorHarness } from './decision-runner.mjs';
+import { createCiFixtureOrchestratorHarness, createRealOrchestratorHarness } from './decision-runner.mjs';
 import {
   DECISION_TYPES,
   validateOrchestratorBanditTrace,
@@ -14,6 +14,22 @@ function assertHarness(harness) {
   if (!harness || typeof harness.executeDecision !== 'function') {
     throw new Error('orchestrator infrastructure harness is required');
   }
+}
+
+function normalizeHarnessMode(mode = 'fixture') {
+  const normalized = String(mode || 'fixture').trim().toLowerCase();
+  if (normalized !== 'fixture' && normalized !== 'real') {
+    throw new Error('orchestrator harness mode must be fixture or real');
+  }
+  return normalized;
+}
+
+export function createOrchestratorHarness({ mode = 'fixture', options = {} } = {}) {
+  const normalizedMode = normalizeHarnessMode(mode);
+  if (normalizedMode === 'real') {
+    return createRealOrchestratorHarness(options);
+  }
+  return createCiFixtureOrchestratorHarness(options?.fixtureOverrides || {});
 }
 
 export function classifyTeacherTrigger({ terminalOutcome, boundaryEpisode }) {
@@ -231,7 +247,16 @@ export function summarizeOrchestratorEnvironmentEvidence({ episode, comparison }
   };
 }
 
-export function createOrchestratorAdapter({ tasks = loadRealOrchestratorTasks(), harness = createCiFixtureOrchestratorHarness() } = {}) {
+export function createOrchestratorAdapter({
+  tasks = loadRealOrchestratorTasks(),
+  harness = null,
+  harnessMode = 'fixture',
+  harnessOptions = {},
+} = {}) {
+  const resolvedHarness = harness || createOrchestratorHarness({
+    mode: harnessMode,
+    options: harnessOptions,
+  });
   return {
     environment: 'orchestrator',
     loadTasks: () => loadRealOrchestratorTasks({ tasks }),
@@ -242,7 +267,7 @@ export function createOrchestratorAdapter({ tasks = loadRealOrchestratorTasks(),
       return runOrchestratorEpisode({
         task,
         checkpointId,
-        harness,
+        harness: resolvedHarness,
         policy,
         trainerConfig,
       });
@@ -252,7 +277,7 @@ export function createOrchestratorAdapter({ tasks = loadRealOrchestratorTasks(),
         task,
         activeCheckpointId,
         preUpdateRefCheckpointId,
-        harness,
+        harness: resolvedHarness,
       });
     },
     buildReplayCandidate: buildOrchestratorReplayCandidate,

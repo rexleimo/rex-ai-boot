@@ -45,6 +45,11 @@
   - `rl-mixed-v1/run-orchestrator.mjs` 为 orchestrator episode 生成 bandit trajectory，并启用混合 updater 路由。
   - `rl-mixed-v1/run-orchestrator.mjs` 将 orchestrator bandit reward 升级为多信号融合（成功率/回滚率/人工接管率 + terminal/missed-handoff/blocked 惩奖）。
   - 测试新增断言：bandit update、生效 trace、mixed summary 中的 bandit policy state。
+  - `rl-mixed-v1/run-orchestrator.mjs` 增加 policy checkpoint 持久化/恢复（`active_policy + reference_policy`），`resume=true` 自动恢复，损坏文件降级冷启动且不中断训练。
+  - `rl-orchestrator-v1/decision-runner.mjs` 增加 real harness（调用 `runOrchestrate` dry-run）并将 dispatch evidence 映射到 RL evidence，支持 infra error 自动回退 fixture。
+  - `rl-orchestrator-v1/adapter.mjs` 增加 `harnessMode/harnessOptions`，默认 fixture，不破坏原路径；mixed campaign 可切换 `orchestratorHarnessMode=real` 采样真实轨迹。
+  - `rl-mixed-v1` summary 新增 `policy_checkpoint` 元信息（路径、加载状态、保存状态、update/batch 计数）。
+  - 测试新增断言：policy checkpoint 落盘与 resume 续训、损坏 checkpoint 回退、real harness 采样与 fallback 行为。
 
 - 验证证据（全部通过）：
   - `node --test scripts/tests/rl-core-trainer.test.mjs`（`11/11` pass）
@@ -52,3 +57,7 @@
   - `node --test scripts/tests/rl-mixed-v1-run-orchestrator.test.mjs`（`3/3` pass）
   - `node --test scripts/tests/rl-shell-v1-trainer.test.mjs`（`9/9` pass）
   - `node --test scripts/tests/rl-orchestrator-v1-eval-harness.test.mjs`（`1/1` pass）
+  - `node --test scripts/tests/rl-orchestrator-v1-adapter.test.mjs scripts/tests/rl-mixed-v1-run-orchestrator.test.mjs`（`11/11` pass）
+  - `node --test scripts/tests/rl-core-trainer.test.mjs scripts/tests/rl-orchestrator-v1-schema.test.mjs scripts/tests/rl-orchestrator-v1-eval-harness.test.mjs scripts/tests/rl-shell-v1-trainer.test.mjs`（`22/22` pass）
+  - `npm run test:scripts`（`290/290` pass）
+  - `cd mcp-server && npm run typecheck && npm run test && npm run build`（`typecheck/test/build` pass）

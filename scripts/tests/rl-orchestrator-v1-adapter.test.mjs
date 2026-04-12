@@ -110,3 +110,59 @@ test('orchestrator adapter throws only on harness infrastructure faults', async 
     /infrastructure/i
   );
 });
+
+test('orchestrator adapter supports real harness mode with dry-run trajectories', async () => {
+  const mod = await import('../lib/rl-orchestrator-v1/adapter.mjs');
+  const adapter = mod.createOrchestratorAdapter({
+    tasks: [makeTask({ task_id: 'orch-real-001' })],
+    harnessMode: 'real',
+    harnessOptions: {
+      rootDir: process.cwd(),
+      executionMode: 'dry-run',
+      dispatchMode: 'local',
+    },
+  });
+  const policy = { seed: 7 };
+  const task = adapter.sampleTask({ seed: 0, attempt: 0 });
+
+  const episode = await adapter.runEpisode({
+    task,
+    checkpointId: 'ckpt-real-1',
+    policy,
+  });
+
+  assert.equal(episode.environment, 'orchestrator');
+  assert.equal(['success', 'partial', 'failed'].includes(episode.terminal_outcome), true);
+  assert.equal(episode.decision_payload.harness_mode, 'real');
+  assert.equal(Array.isArray(episode.bandit_trace?.action_space), true);
+});
+
+test('real orchestrator harness falls back to fixture evidence on orchestration faults', async () => {
+  const mod = await import('../lib/rl-orchestrator-v1/adapter.mjs');
+  const runnerMod = await import('../lib/rl-orchestrator-v1/decision-runner.mjs');
+  const adapter = mod.createOrchestratorAdapter({
+    tasks: [makeTask({ task_id: 'orch-real-fallback-001' })],
+    harnessMode: 'real',
+    harnessOptions: {
+      rootDir: process.cwd(),
+      executionMode: 'dry-run',
+      dispatchMode: 'local',
+      executeOrchestrate: async () => {
+        throw new Error('dispatch runtime offline');
+      },
+      fallbackHarness: runnerMod.createCiFixtureOrchestratorHarness(),
+      fallbackOnError: true,
+    },
+  });
+  const task = adapter.sampleTask({ seed: 0, attempt: 0 });
+
+  const episode = await adapter.runEpisode({
+    task,
+    checkpointId: 'ckpt-real-fallback',
+    policy: { seed: 11 },
+  });
+
+  assert.equal(episode.environment, 'orchestrator');
+  assert.equal(episode.decision_payload.harness_mode, 'real');
+  assert.equal(episode.decision_payload.fallback_used, true);
+});

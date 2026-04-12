@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -116,4 +116,84 @@ test('mixed campaign exposes rollback and resume drills', async () => {
   });
   assert.equal(resume.summary.drills.resume.duplicateEventApplications, 0);
   assert.equal(typeof resume.summary.drills.resume.active_checkpoint_id, 'string');
+});
+
+test('mixed campaign persists and reloads contextual bandit policy checkpoints', async () => {
+  const mod = await import('../lib/rl-mixed-v1/run-orchestrator.mjs');
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), 'aios-rl-mixed-'));
+
+  const first = await mod.runMixedCampaign({
+    rootDir,
+    activeEnvironments: ['orchestrator'],
+    batchTargetCount: 2,
+    onlineBatchSize: 2,
+  });
+  assert.equal(first.status, 'ok');
+  assert.equal(first.summary.policy_checkpoint.save_status, 'written');
+  assert.equal(first.summary.policy_checkpoint.path.endsWith('.json'), true);
+
+  const checkpointPath = first.summary.policy_checkpoint.path;
+  const payload = JSON.parse(await readFile(checkpointPath, 'utf8'));
+  assert.equal(typeof payload.active_policy, 'object');
+  assert.equal(Number(payload.update_count) > 0, true);
+
+  const resumed = await mod.runMixedCampaign({
+    rootDir,
+    activeEnvironments: ['orchestrator'],
+    batchTargetCount: 2,
+    onlineBatchSize: 2,
+    resume: true,
+  });
+  assert.equal(resumed.summary.policy_checkpoint.load_status, 'loaded');
+  assert.equal(
+    resumed.summary.bandit_policy_state.update_count > first.summary.bandit_policy_state.update_count,
+    true
+  );
+});
+
+test('mixed campaign safely cold-starts when policy checkpoint is corrupted', async () => {
+  const mod = await import('../lib/rl-mixed-v1/run-orchestrator.mjs');
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), 'aios-rl-mixed-'));
+
+  const first = await mod.runMixedCampaign({
+    rootDir,
+    activeEnvironments: ['orchestrator'],
+    batchTargetCount: 2,
+    onlineBatchSize: 2,
+  });
+  const checkpointPath = first.summary.policy_checkpoint.path;
+  await writeFile(checkpointPath, '{broken-json', 'utf8');
+
+  const resumed = await mod.runMixedCampaign({
+    rootDir,
+    activeEnvironments: ['orchestrator'],
+    batchTargetCount: 2,
+    onlineBatchSize: 2,
+    resume: true,
+  });
+  assert.equal(resumed.status, 'ok');
+  assert.equal(resumed.summary.policy_checkpoint.load_status, 'corrupt');
+  assert.equal(resumed.summary.bandit_policy_state.update_count > 0, true);
+});
+
+test('mixed campaign accepts real orchestrator harness mode for trajectory collection', async () => {
+  const mod = await import('../lib/rl-mixed-v1/run-orchestrator.mjs');
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), 'aios-rl-mixed-'));
+
+  const result = await mod.runMixedCampaign({
+    rootDir,
+    activeEnvironments: ['orchestrator'],
+    batchTargetCount: 2,
+    onlineBatchSize: 1,
+    orchestratorHarnessMode: 'real',
+    orchestratorHarnessOptions: {
+      rootDir,
+      executionMode: 'dry-run',
+      dispatchMode: 'local',
+    },
+  });
+
+  assert.equal(result.status, 'ok');
+  assert.equal(result.summary.environment_counts.orchestrator > 0, true);
+  assert.equal(result.summary.bandit_policy_state.update_count > 0, true);
 });
