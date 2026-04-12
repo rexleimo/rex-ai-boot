@@ -1591,6 +1591,7 @@ test('runOrchestrate --retry-blocked replays blocked jobs with seeded dependenci
       env: {
         ...process.env,
         AIOS_EXECUTE_LIVE: '1',
+        AIOS_ALLOW_UNKNOWN_CAPABILITIES: '1',
         AIOS_SUBAGENT_CLIENT: 'codex-cli',
         PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
       },
@@ -1843,6 +1844,64 @@ test('runOrchestrate throws when the selected dispatch runtime returns invalid o
   );
 });
 
+test('runOrchestrate blocks live execution when capability surfaces are unknown', async () => {
+  const rootDir = await makeRootDir();
+  await writeSession(
+    rootDir,
+    'live-capability-guard',
+    { updatedAt: '2026-03-09T02:30:00.000Z', goal: 'Validate capability guard behavior' },
+    [
+      {
+        seq: 1,
+        ts: '2026-03-09T02:00:00.000Z',
+        status: 'done',
+        summary: 'Checkpoint 1',
+        nextActions: [],
+        artifacts: [],
+        telemetry: {
+          verification: { result: 'passed', evidence: 'quality-gate pre-pr' },
+          retryCount: 0,
+          elapsedMs: 1200,
+        },
+      },
+    ]
+  );
+
+  const logs = [];
+  const result = await runOrchestrate(
+    { sessionId: 'live-capability-guard', dispatchMode: 'local', executionMode: 'live', format: 'json' },
+    {
+      rootDir,
+      io: { log: (line) => logs.push(line) },
+      env: {
+        ...process.env,
+        AIOS_EXECUTE_LIVE: '1',
+        AIOS_SUBAGENT_SIMULATE: '1',
+      },
+    }
+  );
+  assert.equal(result.exitCode, 1);
+
+  const report = JSON.parse(logs.at(-1));
+  assert.equal(report.kind, 'guardrail.capability-unknown');
+  assert.equal(report.executionMode, 'live');
+  assert.equal(report.runtimeId, 'subagent-runtime');
+  assert.equal(Array.isArray(report.unknownCapabilities), true);
+  assert.equal(report.unknownCapabilities.includes('network'), true);
+  assert.equal(report.unknownCapabilities.includes('browser'), true);
+  assert.equal(report.unknownCapabilities.includes('sideEffect'), false);
+  assert.equal(Array.isArray(report.unknownExecutors), true);
+  assert.equal(report.unknownExecutors.some((item) => item.id === 'local-phase'), true);
+  assert.equal(Array.isArray(report.suggestedCommands), true);
+  assert.equal(report.suggestedCommands.some((cmd) => cmd.includes('--execute dry-run')), true);
+  assert.equal(report.suggestedCommands.some((cmd) => cmd.includes('--execute live') && cmd.includes('--force')), true);
+
+  await assert.rejects(
+    () => fs.access(path.join(rootDir, 'memory', 'context-db', 'sessions', 'live-capability-guard', 'artifacts')),
+    /ENOENT/
+  );
+});
+
 test('runOrchestrate blocks live execution by default without persisting evidence', async () => {
   const rootDir = await makeRootDir();
   await writeSession(
@@ -1869,7 +1928,13 @@ test('runOrchestrate blocks live execution by default without persisting evidenc
   const logs = [];
   await runOrchestrate(
     { sessionId: 'live-session', dispatchMode: 'local', executionMode: 'live', format: 'json' },
-    { rootDir, env: {}, io: { log: (line) => logs.push(line) } }
+    {
+      rootDir,
+      env: {
+        AIOS_ALLOW_UNKNOWN_CAPABILITIES: '1',
+      },
+      io: { log: (line) => logs.push(line) },
+    }
   );
   const report = JSON.parse(logs.join('\n'));
 
@@ -1935,6 +2000,7 @@ test('runOrchestrate persists live dispatch evidence with runtime cost telemetry
       env: {
         ...process.env,
         AIOS_EXECUTE_LIVE: '1',
+        AIOS_ALLOW_UNKNOWN_CAPABILITIES: '1',
         AIOS_SUBAGENT_CLIENT: 'codex-cli',
         AIOS_SUBAGENT_CONCURRENCY: '2',
         PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
@@ -2044,6 +2110,7 @@ test('runOrchestrate enables clarity human-gate and blocks entropy auto when sig
       env: {
         ...process.env,
         AIOS_EXECUTE_LIVE: '1',
+        AIOS_ALLOW_UNKNOWN_CAPABILITIES: '1',
         AIOS_SUBAGENT_SIMULATE: '1',
       },
     }

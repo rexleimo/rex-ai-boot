@@ -66,12 +66,14 @@ Use these for index-first retrieval before full packet expansion:
 cd mcp-server
 npm run contextdb -- search --query "auth race" --project rex-cli --kinds response --refs auth.ts
 npm run contextdb -- recall:sessions --query "auth race" --project rex-cli --exclude-session <session_id> --limit 3 --highlight-limit 3
+npm run contextdb -- recall:sessions --query "auth race" --project rex-cli --exclude-session <session_id> --limit 3 --highlight-limit 3 --explain-score
 npm run contextdb -- timeline --session <session_id> --limit 30
 npm run contextdb -- event:get --id <session_id>#<seq>
 npm run contextdb -- index:rebuild
 ```
 
 - Prefer `recall:sessions` first for cross-session memory recall, then drill down with `timeline`/`event:get`.
+- Add `--explain-score` when you need score breakdown (lexical/project/recency) for ranking diagnostics.
 
 Optional semantic rerank:
 

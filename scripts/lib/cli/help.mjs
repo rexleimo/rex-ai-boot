@@ -143,6 +143,7 @@ Options:
   --recommendation <targetId>   Pin a specific learn-eval recommendation to the overlay
   --dispatch <none|local>       Build a local dispatch skeleton (defaults to local when omitted)
   --execute <none|dry-run|live> Execute dispatch through the selected runtime (defaults to dry-run; live is opt-in via AIOS_EXECUTE_LIVE=1 + AIOS_SUBAGENT_CLIENT=<codex-cli|claude-code|gemini-cli>)
+  --force                       Override live safety guards (retry-blocked instability and unknown capability surfaces)
   --preflight <none|auto>       Run supported local gate/runbook actions before final DAG selection
   --format <text|json>
   -h, --help
@@ -177,7 +178,7 @@ Options:
   --recommendation <targetId>
   --preflight <none|auto>
   --retry-blocked               Replay only blocked jobs from latest dispatch artifact in the session
-  --force                       Allow live --retry-blocked even when dispatch hindsight is unstable
+  --force                       Override live safety guards (retry-blocked instability and unknown capability surfaces)
   --format <text|json>
   --dry-run                     Local dispatch dry-run (no model calls)
   --live                        Force live execution (default)

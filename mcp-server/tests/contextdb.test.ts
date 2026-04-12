@@ -1210,6 +1210,7 @@ test('recallSessions ranks matched sessions and returns concise highlights', asy
     project: 'rex-cli',
     limit: 3,
     highlightLimit: 3,
+    explainScore: true,
   });
 
   assert.equal(recalled.results.length >= 1, true);
@@ -1217,6 +1218,11 @@ test('recallSessions ranks matched sessions and returns concise highlights', asy
   assert.match(recalled.results[0].summary, /matched/i);
   assert.equal(recalled.results[0].highlights.length > 0, true);
   assert.equal(recalled.results[0].highlights.some((item) => item.itemType === 'checkpoint'), true);
+  assert.equal(Boolean(recalled.results[0].scoreExplanation), true);
+  assert.match(String(recalled.results[0].scoreExplanation?.formula || ''), /lexical/i);
+  assert.equal((recalled.results[0].scoreExplanation?.matchedCheckpoints || 0) > 0, true);
+  assert.equal((recalled.results[0].scoreExplanation?.projectWeight || 0) >= 1, true);
+  assert.equal((recalled.results[0].scoreExplanation?.recencyDecay || 0) > 0, true);
 });
 
 test('contextdb cli supports recall:sessions', async () => {
@@ -1253,6 +1259,7 @@ test('contextdb cli supports recall:sessions', async () => {
       '3',
       '--highlight-limit',
       '2',
+      '--explain-score',
     ],
     {
       cwd: process.cwd(),
@@ -1262,12 +1269,18 @@ test('contextdb cli supports recall:sessions', async () => {
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse((result.stdout || '{}').trim()) as {
-    results?: Array<{ sessionId?: string; summary?: string; highlights?: Array<{ itemType?: string }> }>;
+    results?: Array<{
+      sessionId?: string;
+      summary?: string;
+      highlights?: Array<{ itemType?: string }>;
+      scoreExplanation?: unknown;
+    }>;
   };
   assert.equal(Array.isArray(payload.results), true);
   assert.equal(payload.results?.[0]?.sessionId, session.sessionId);
   assert.match(String(payload.results?.[0]?.summary || ''), /matched|latest/i);
   assert.equal((payload.results?.[0]?.highlights?.length || 0) > 0, true);
+  assert.equal(Boolean(payload.results?.[0]?.scoreExplanation), true);
 });
 
 test('contextdb cli search supports --scope checkpoints and --scope all', async () => {

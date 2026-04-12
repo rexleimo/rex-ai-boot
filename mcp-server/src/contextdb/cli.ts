@@ -34,7 +34,7 @@ function usage(): string {
     '  contextdb checkpoint --session <id> --summary <text> [--status running|blocked|done] [--next a|b] [--artifacts a|b] [--verify-result unknown|passed|failed|partial] [--retry-count n] [--failure-category <label>] [--elapsed-ms n] [--cost-usd n]',
     '  contextdb context:pack --session <id> [--limit 30] [--token-budget 1200] [--recall smart|tail] [--kinds prompt,response,error] [--refs a,b] [--no-dedupe] [--out memory/context-db/exports/<id>.md] [--stdout]',
     '  contextdb search [--query <text>] [--project <name>] [--session <id>] [--scope events|checkpoints|all] [--role <role>] [--kinds a,b] [--refs a,b] [--statuses running,blocked,done] [--limit 20] [--semantic]',
-    '  contextdb recall:sessions [--query <text>] [--project <name>] [--session <id>] [--exclude-session <id>] [--limit 3] [--highlight-limit 3]',
+    '  contextdb recall:sessions [--query <text>] [--project <name>] [--session <id>] [--exclude-session <id>] [--limit 3] [--highlight-limit 3] [--explain-score]',
     '  contextdb timeline [--project <name> | --session <id>] [--limit 50]',
     '  contextdb event:get --id <sessionId>#<seq>',
     '  contextdb index:sync [--workspace <path>] [--force] [--stats] [--jsonl-out <path>]',
@@ -298,6 +298,7 @@ async function main(): Promise<void> {
         excludeSessionId: typeof options['exclude-session'] === 'string' ? options['exclude-session'] : undefined,
         limit: Number.isFinite(limit) ? limit : 3,
         highlightLimit: Number.isFinite(highlightLimit as number) ? (highlightLimit as number) : undefined,
+        explainScore: options['explain-score'] === true,
       });
       console.log(JSON.stringify(result, null, 2));
       return;

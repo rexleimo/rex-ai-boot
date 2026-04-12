@@ -1282,6 +1282,22 @@ export interface SessionRecallHighlight {
   score: number;
 }
 
+export interface SessionRecallScoreExplanation {
+  formula: string;
+  lexical: number;
+  lexicalEventRank: number;
+  lexicalEventText: number;
+  lexicalCheckpointRank: number;
+  lexicalCheckpointText: number;
+  goalMatch: number;
+  projectMatch: number;
+  projectWeight: number;
+  recencyDecay: number;
+  recencyAgeHours: number;
+  matchedEvents: number;
+  matchedCheckpoints: number;
+}
+
 export interface SessionRecallResult {
   sessionId: string;
   agent: string;
@@ -1293,6 +1309,7 @@ export interface SessionRecallResult {
   matchScore: number;
   summary: string;
   highlights: SessionRecallHighlight[];
+  scoreExplanation?: SessionRecallScoreExplanation;
 }
 
 export interface RecallSessionsInput {
@@ -1303,6 +1320,7 @@ export interface RecallSessionsInput {
   excludeSessionId?: string;
   limit?: number;
   highlightLimit?: number;
+  explainScore?: boolean;
 }
 
 export interface RecallSessionsOutput {
@@ -1313,6 +1331,57 @@ function clipRecallText(text: unknown, maxChars: number = 180): string {
   const normalized = sanitizeInline(text);
   if (normalized.length <= maxChars) return normalized;
   return `${normalized.slice(0, Math.max(24, maxChars)).trimEnd()}…`;
+}
+
+interface RecallScoreAccumulator {
+  eventHits: number;
+  checkpointHits: number;
+  eventRank: number;
+  eventLexical: number;
+  checkpointRank: number;
+  checkpointLexical: number;
+}
+
+function roundRecallScore(value: number, digits: number = 4): number {
+  if (!Number.isFinite(value)) return 0;
+  return Number(value.toFixed(digits));
+}
+
+function getRecallScoreAccumulator(
+  bySessionId: Map<string, RecallScoreAccumulator>,
+  sessionId: string
+): RecallScoreAccumulator {
+  const existing = bySessionId.get(sessionId);
+  if (existing) return existing;
+
+  const created: RecallScoreAccumulator = {
+    eventHits: 0,
+    checkpointHits: 0,
+    eventRank: 0,
+    eventLexical: 0,
+    checkpointRank: 0,
+    checkpointLexical: 0,
+  };
+  bySessionId.set(sessionId, created);
+  return created;
+}
+
+function computeRecallRecencyDecay(
+  updatedAt: string,
+  nowEpoch: number
+): { score: number; ageHours: number } {
+  const updatedEpoch = Date.parse(updatedAt);
+  if (!Number.isFinite(updatedEpoch) || updatedEpoch <= 0 || !Number.isFinite(nowEpoch) || nowEpoch <= 0) {
+    return { score: 0, ageHours: 0 };
+  }
+
+  const ageHours = Math.max(0, (nowEpoch - updatedEpoch) / (1000 * 60 * 60));
+  // 72h half-life keeps recent sessions preferred while preserving older high-signal sessions.
+  const score = Math.exp(-ageHours / 72);
+  return {
+    score: roundRecallScore(score),
+    ageHours: roundRecallScore(ageHours, 2),
+  };
 }
 
 async function listRecallSessionMetas(
@@ -1963,6 +2032,7 @@ export async function searchMemory(input: SearchMemoryInput): Promise<SearchMemo
 export async function recallSessions(input: RecallSessionsInput): Promise<RecallSessionsOutput> {
   await ensureContextDb(input.workspaceRoot);
   const query = typeof input.query === 'string' ? input.query.trim() : '';
+  const explainScore = input.explainScore === true;
   const limit = input.limit && Number.isFinite(input.limit)
     ? Math.min(20, Math.max(1, Math.floor(input.limit)))
     : 3;
@@ -1979,12 +2049,14 @@ export async function recallSessions(input: RecallSessionsInput): Promise<Recall
     return { results: [] };
   }
 
+  const metaBySessionId = new Map(metas.map((item) => [item.sessionId, item]));
+  const nowEpoch = Date.now();
   const queryTokens = query ? tokenizeForRecall(query) : [];
   const hasQuery = queryTokens.length > 0;
 
   const eventHitsBySessionId = new Map<string, IndexedEvent[]>();
   const checkpointHitsBySessionId = new Map<string, IndexedCheckpoint[]>();
-  const sessionScore = new Map<string, number>();
+  const scoreAccumulatorBySessionId = new Map<string, RecallScoreAccumulator>();
 
   if (hasQuery) {
     const candidateLimit = Math.min(500, Math.max(limit * 40, 120));
@@ -2007,7 +2079,7 @@ export async function recallSessions(input: RecallSessionsInput): Promise<Recall
 
     for (let index = 0; index < eventHits.results.length; index += 1) {
       const hit = eventHits.results[index];
-      const meta = metas.find((item) => item.sessionId === hit.sessionId);
+      const meta = metaBySessionId.get(hit.sessionId);
       if (!meta) continue;
 
       const bucket = eventHitsBySessionId.get(hit.sessionId) ?? [];
@@ -2018,13 +2090,15 @@ export async function recallSessions(input: RecallSessionsInput): Promise<Recall
 
       const rankWeight = 1 / (index + 1);
       const lexicalScore = scoreRecallText(queryTokens, `${hit.kind} ${hit.text} ${hit.refs.join(' ')}`);
-      const nextScore = (sessionScore.get(hit.sessionId) ?? 0) + (rankWeight * 0.55) + (lexicalScore * 0.45);
-      sessionScore.set(hit.sessionId, nextScore);
+      const accumulator = getRecallScoreAccumulator(scoreAccumulatorBySessionId, hit.sessionId);
+      accumulator.eventHits += 1;
+      accumulator.eventRank += (rankWeight * 0.55);
+      accumulator.eventLexical += (lexicalScore * 0.45);
     }
 
     for (let index = 0; index < checkpointHits.results.length; index += 1) {
       const hit = checkpointHits.results[index];
-      const meta = metas.find((item) => item.sessionId === hit.sessionId);
+      const meta = metaBySessionId.get(hit.sessionId);
       if (!meta) continue;
 
       const bucket = checkpointHitsBySessionId.get(hit.sessionId) ?? [];
@@ -2038,13 +2112,20 @@ export async function recallSessions(input: RecallSessionsInput): Promise<Recall
         queryTokens,
         `${hit.status} ${hit.summary} ${hit.nextActions.join(' ')} ${hit.artifacts.join(' ')}`
       );
-      const nextScore = (sessionScore.get(hit.sessionId) ?? 0) + (rankWeight * 0.65) + (lexicalScore * 0.55);
-      sessionScore.set(hit.sessionId, nextScore);
+      const accumulator = getRecallScoreAccumulator(scoreAccumulatorBySessionId, hit.sessionId);
+      accumulator.checkpointHits += 1;
+      accumulator.checkpointRank += (rankWeight * 0.65);
+      accumulator.checkpointLexical += (lexicalScore * 0.55);
     }
   }
 
   const candidates = hasQuery
-    ? metas.filter((meta) => sessionScore.has(meta.sessionId)).slice(0, Math.max(limit * 6, 30))
+    ? metas
+      .filter((meta) => {
+        const accumulator = scoreAccumulatorBySessionId.get(meta.sessionId);
+        return Boolean(accumulator && (accumulator.eventHits > 0 || accumulator.checkpointHits > 0));
+      })
+      .slice(0, Math.max(limit * 6, 30))
     : metas.slice(0, Math.max(limit, 10));
 
   const results: SessionRecallResult[] = [];
@@ -2121,10 +2202,38 @@ export async function recallSessions(input: RecallSessionsInput): Promise<Recall
       topEventHighlight,
     });
 
-    const status = latestCheckpoint?.status ?? meta.status;
-    const matchScore = hasQuery
-      ? Number(((sessionScore.get(meta.sessionId) ?? 0)).toFixed(4))
+    const scoreAccumulator = scoreAccumulatorBySessionId.get(meta.sessionId) ?? null;
+    const lexicalEventRank = scoreAccumulator?.eventRank ?? 0;
+    const lexicalEventText = scoreAccumulator?.eventLexical ?? 0;
+    const lexicalCheckpointRank = scoreAccumulator?.checkpointRank ?? 0;
+    const lexicalCheckpointText = scoreAccumulator?.checkpointLexical ?? 0;
+    const lexical = lexicalEventRank + lexicalEventText + lexicalCheckpointRank + lexicalCheckpointText;
+    const goalMatch = hasQuery ? scoreRecallText(queryTokens, `${meta.goal}`) : 0;
+    const projectMatch = hasQuery ? scoreRecallText(queryTokens, `${meta.project}`) : 0;
+    const recency = hasQuery ? computeRecallRecencyDecay(meta.updatedAt, nowEpoch) : { score: 0, ageHours: 0 };
+    const projectWeight = hasQuery ? (1 + (projectMatch * 0.35)) : 1;
+    const combinedScore = hasQuery
+      ? (lexical + (goalMatch * 0.35) + (recency.score * 0.25)) * projectWeight
       : 0;
+    const status = latestCheckpoint?.status ?? meta.status;
+    const matchScore = hasQuery ? roundRecallScore(combinedScore) : 0;
+    const scoreExplanation = hasQuery && explainScore
+      ? {
+        formula: 'total=(lexical + goalMatch*0.35 + recencyDecay*0.25) * (1 + projectMatch*0.35)',
+        lexical: roundRecallScore(lexical),
+        lexicalEventRank: roundRecallScore(lexicalEventRank),
+        lexicalEventText: roundRecallScore(lexicalEventText),
+        lexicalCheckpointRank: roundRecallScore(lexicalCheckpointRank),
+        lexicalCheckpointText: roundRecallScore(lexicalCheckpointText),
+        goalMatch: roundRecallScore(goalMatch),
+        projectMatch: roundRecallScore(projectMatch),
+        projectWeight: roundRecallScore(projectWeight),
+        recencyDecay: roundRecallScore(recency.score),
+        recencyAgeHours: roundRecallScore(recency.ageHours, 2),
+        matchedEvents: scoreAccumulator?.eventHits ?? 0,
+        matchedCheckpoints: scoreAccumulator?.checkpointHits ?? 0,
+      }
+      : undefined;
 
     results.push({
       sessionId: meta.sessionId,
@@ -2137,6 +2246,7 @@ export async function recallSessions(input: RecallSessionsInput): Promise<Recall
       matchScore,
       summary,
       highlights: highlights.slice(0, highlightLimit),
+      ...(scoreExplanation ? { scoreExplanation } : {}),
     });
   }
 

@@ -28,6 +28,8 @@ Use this harness to keep long tasks stable under UI drift, model variability, an
 - Codex CLI v0.114+ structured exec outputs (`--output-schema`, `--output-last-message`, stdin) are required for handoff parsing; schema fallback to raw stdout is rejected.
 - Transient `upstream_error`/`server_error` failures are retried with exponential backoff via `AIOS_SUBAGENT_UPSTREAM_MAX_ATTEMPTS` and `AIOS_SUBAGENT_UPSTREAM_BACKOFF_MS`.
 - Local dispatch reports now include an `Executor Capability Manifest` summary (read/write/network/browser/sideEffect) for preflight visibility before live execution.
+- Live execution now blocks by default when capability manifest surfaces are `unknown` (`network` / `browser` / `sideEffect`) via `guardrail.capability-unknown`.
+- Override unknown-capability blocking only when intended: `--force` or `AIOS_ALLOW_UNKNOWN_CAPABILITIES=1` (or `AIOS_ALLOW_UNKNOWN_LIVE_CAPABILITIES=1`).
 - `team status --watch` / `hud --watch` now surface job-level and tool-level progress so blocked tools are visible without opening artifacts.
 
 Watch examples:

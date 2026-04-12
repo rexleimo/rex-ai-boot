@@ -49,6 +49,86 @@ function parseBooleanEnv(rawValue, fallback = false) {
   return fallback;
 }
 
+const LIVE_CAPABILITY_GUARD_KEYS = ['network', 'browser', 'sideEffect'];
+
+function normalizeCapabilityLevel(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'yes' || normalized === 'no' || normalized === 'unknown') return normalized;
+  return 'unknown';
+}
+
+function collectUnknownLiveCapabilities(manifest = null) {
+  if (!manifest || typeof manifest !== 'object') {
+    return {
+      blocked: false,
+      summaryKeys: [],
+      executors: [],
+    };
+  }
+
+  const summary = manifest.summary && typeof manifest.summary === 'object'
+    ? manifest.summary
+    : {};
+  const summaryKeys = LIVE_CAPABILITY_GUARD_KEYS
+    .filter((key) => normalizeCapabilityLevel(summary[key]) === 'unknown');
+  const executors = (Array.isArray(manifest.executors) ? manifest.executors : [])
+    .map((entry) => {
+      const id = String(entry?.id || '').trim();
+      const jobCount = Number.isFinite(entry?.jobCount) ? Math.max(0, Math.floor(entry.jobCount)) : 0;
+      const capabilities = entry?.capabilities && typeof entry.capabilities === 'object'
+        ? entry.capabilities
+        : {};
+      const unknown = LIVE_CAPABILITY_GUARD_KEYS
+        .filter((key) => normalizeCapabilityLevel(capabilities[key]) === 'unknown');
+      if (!id || unknown.length === 0) return null;
+      return { id, jobCount, unknown };
+    })
+    .filter(Boolean);
+
+  return {
+    blocked: summaryKeys.length > 0,
+    summaryKeys,
+    executors,
+  };
+}
+
+function canOverrideUnknownLiveCapabilities(options = {}, env = process.env) {
+  if (options?.force === true) return true;
+  if (parseBooleanEnv(env?.AIOS_ALLOW_UNKNOWN_CAPABILITIES, false)) return true;
+  if (parseBooleanEnv(env?.AIOS_ALLOW_UNKNOWN_LIVE_CAPABILITIES, false)) return true;
+  return false;
+}
+
+function buildUnknownCapabilityGuardSuggestedCommands(options = {}) {
+  const normalized = {
+    blueprint: options.blueprint,
+    taskTitle: options.taskTitle,
+    contextSummary: options.contextSummary,
+    sessionId: options.sessionId,
+    resumeSessionId: options.resumeSessionId,
+    retryBlocked: options.retryBlocked,
+    limit: options.limit,
+    recommendationId: options.recommendationId,
+    dispatchMode: options.dispatchMode,
+    preflightMode: options.preflightMode,
+  };
+
+  const dryRunPreview = planOrchestrate({
+    ...normalized,
+    executionMode: 'dry-run',
+    force: false,
+    format: 'json',
+  }).preview;
+  const forceLivePreview = planOrchestrate({
+    ...normalized,
+    executionMode: 'live',
+    force: true,
+    format: 'json',
+  }).preview;
+
+  return [...new Set([dryRunPreview, forceLivePreview])];
+}
+
 function normalizeCounter(value) {
   return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }
@@ -813,6 +893,58 @@ export async function runOrchestrate(
       runtimeId: dispatchRuntime?.id || '',
     })
     : null;
+  const unknownCapabilityGuard = options.executionMode === 'live'
+    ? collectUnknownLiveCapabilities(executorCapabilityManifest)
+    : { blocked: false, summaryKeys: [], executors: [] };
+  const allowUnknownCapabilities = options.executionMode === 'live'
+    ? canOverrideUnknownLiveCapabilities(options, env)
+    : true;
+
+  if (options.executionMode === 'live' && unknownCapabilityGuard.blocked && !allowUnknownCapabilities) {
+    const summaryLabel = unknownCapabilityGuard.summaryKeys.join(', ');
+    const executorLabel = unknownCapabilityGuard.executors.length > 0
+      ? unknownCapabilityGuard.executors
+        .map((item) => `${item.id}(jobs=${item.jobCount} unknown=${item.unknown.join('/')})`)
+        .join('; ')
+      : '(none)';
+    const suggestedCommands = buildUnknownCapabilityGuardSuggestedCommands(options);
+    const message = `[guard] refusing live execution: capability manifest has unknown surfaces (${summaryLabel}).`;
+    const suggestion = `Run dry-run first, then override with --force (or AIOS_ALLOW_UNKNOWN_CAPABILITIES=1) when you accept the risk.`;
+
+    if (options.format === 'json') {
+      const report = {
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
+        kind: 'guardrail.capability-unknown',
+        sessionId: options.sessionId || null,
+        executionMode: 'live',
+        runtimeId: dispatchRuntime?.id || null,
+        summary: executorCapabilityManifest?.summary || null,
+        unknownCapabilities: unknownCapabilityGuard.summaryKeys,
+        unknownExecutors: unknownCapabilityGuard.executors,
+        message: `${message} ${suggestion}`,
+        suggestedCommands,
+      };
+      io.log(JSON.stringify(report, null, 2));
+      return { exitCode: 1, report };
+    }
+
+    writeWarning(
+      io,
+      `${message}\nExecutors: ${executorLabel}\n${suggestion}\nSuggested:\n- ${suggestedCommands.join('\n- ')}`
+    );
+    return { exitCode: 1 };
+  }
+
+  if (options.executionMode === 'live' && unknownCapabilityGuard.blocked && allowUnknownCapabilities) {
+    const summaryLabel = unknownCapabilityGuard.summaryKeys.join(', ');
+    const override = options.force === true ? '--force' : 'AIOS_ALLOW_UNKNOWN_CAPABILITIES=1';
+    writeWarning(
+      io,
+      `[warn] live capability guard override (${override}): unknown surfaces=${summaryLabel}`
+    );
+  }
+
   const rawDispatchRun = dispatchRuntime
     ? await dispatchRuntime.execute({
       plan: dagPlan,
