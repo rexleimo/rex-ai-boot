@@ -282,6 +282,64 @@ test('real orchestrator harness binds routed policy executor into orchestrate di
   assert.equal(evidence.executor_selected, 'local-control');
 });
 
+test('real orchestrator harness treats policy executor fallback as baseline route for release state', async () => {
+  const runnerMod = await import('../lib/rl-orchestrator-v1/decision-runner.mjs');
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), 'aios-rl-release-fallback-'));
+  const statePath = path.join(rootDir, 'orchestrator-policy-release.state.json');
+  const harness = runnerMod.createRealOrchestratorHarness({
+    rootDir,
+    executionMode: 'dry-run',
+    dispatchMode: 'local',
+    fallbackOnMissingDispatchRun: false,
+    policyRelease: {
+      mode: 'full',
+      autoDowngrade: true,
+      downgradeConsecutiveFailures: 1,
+      downgradeMinSamples: 1,
+      statePath,
+    },
+    executeOrchestrate: async () => ({
+      exitCode: 0,
+      report: {
+        dispatchPlan: {
+          phaseExecutor: {
+            requested_executor: 'local-control',
+            applied_executor: 'local-phase',
+            reason: 'unsupported_phase_executor:local-control',
+            fallback_applied: true,
+          },
+        },
+        dispatchRun: {
+          mode: 'dry-run',
+          ok: false,
+          runtime: { id: 'runtime-dry-run' },
+          executorRegistry: ['local-phase'],
+          jobRuns: [{ status: 'blocked' }],
+        },
+        dispatchPreflight: { results: [] },
+      },
+    }),
+  });
+
+  const evidence = await harness.executeDecision({
+    task: makeTask({ task_id: 'orch-release-fallback-001' }),
+    checkpointId: 'ckpt-release-fallback',
+    selectedExecutor: 'local-control',
+  });
+
+  assert.equal(evidence.decision_payload.policy_release_applied, true);
+  assert.equal(evidence.decision_payload.policy_release_effective_applied, false);
+  assert.equal(evidence.decision_payload.policy_release_executor_fallback, true);
+  assert.equal(evidence.decision_payload.dispatch_phase_executor_applied, 'local-phase');
+
+  const persistedState = JSON.parse(await readFile(statePath, 'utf8'));
+  assert.equal(Number(persistedState.counters.policy_applied || 0), 0);
+  assert.equal(Number(persistedState.counters.baseline_routed || 0), 1);
+  assert.equal(Number(persistedState.counters.policy_fallback || 0), 1);
+  assert.equal(Number(persistedState.counters.downgrades || 0), 0);
+  assert.equal(persistedState.effective_mode, 'full');
+});
+
 test('real orchestrator harness policy release auto-downgrades after policy-routed failures', async () => {
   const mod = await import('../lib/rl-orchestrator-v1/adapter.mjs');
   const rootDir = await mkdtemp(path.join(os.tmpdir(), 'aios-rl-release-gate-'));

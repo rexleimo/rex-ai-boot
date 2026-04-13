@@ -156,3 +156,26 @@
   - `node --test scripts/tests/aios-orchestrator-agents.test.mjs scripts/tests/rl-orchestrator-v1-adapter.test.mjs scripts/tests/aios-orchestrator.test.mjs`（`105/105` pass）
   - `npm run test:scripts`（`294/294` pass）
   - `cd mcp-server && npm run typecheck && npm run test && npm run build`（`typecheck/test/build` pass）
+
+## 执行结果（2026-04-13，补齐“2：executor 兼容性与发布统计一致性”）
+
+- 已完成：
+  - `scripts/lib/rl-orchestrator-v1/decision-runner.mjs`
+    - 新增 `policy_release_effective_applied` 与 `policy_release_executor_fallback` 证据字段；
+    - 当 release gate 选中的 executor 与 dispatch 实际 applied executor 不一致时，显式标记为 fallback；
+    - real harness call record 同步记录 effective/fallback 状态。
+  - `scripts/lib/rl-orchestrator-v1/policy-release-gate.mjs`
+    - 发布状态计数引入 `policy_fallback`；
+    - `updatePolicyReleaseState` 改为按“策略 executor 是否被实际应用”计入 `policy_applied`；
+    - 若发生 executor fallback，则计入 `baseline_routed + policy_fallback`，避免把“未真正应用策略”的失败误记为策略失败并触发误降级。
+  - `scripts/tests/rl-orchestrator-v1-adapter.test.mjs`
+    - 新增用例验证 executor fallback 场景下：
+      - evidence 的 effective/fallback 字段正确；
+      - release state 计数正确（`policy_applied=0`、`baseline_routed=1`、`policy_fallback=1`）；
+      - 不会被误触发自动降级。
+
+- 本轮验证证据（全部通过）：
+  - `node --test scripts/tests/rl-orchestrator-v1-adapter.test.mjs`（`11/11` pass）
+  - `node --test scripts/tests/rl-mixed-v1-run-orchestrator.test.mjs scripts/tests/rl-mixed-v1-contextdb-summary.test.mjs scripts/tests/aios-orchestrator.test.mjs`（`97/97` pass）
+  - `npm run test:scripts`（`294/294` pass）
+  - `cd mcp-server && npm run typecheck && npm run test && npm run build`（`typecheck/test/build` pass）

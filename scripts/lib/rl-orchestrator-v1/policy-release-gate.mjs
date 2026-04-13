@@ -106,6 +106,7 @@ function createDefaultState(config) {
       total: 0,
       policy_applied: 0,
       baseline_routed: 0,
+      policy_fallback: 0,
       policy_success: 0,
       policy_failure: 0,
       consecutive_policy_failures: 0,
@@ -131,6 +132,8 @@ function normalizeState(raw, config) {
         return {
           timestamp: typeof entry.timestamp === 'string' ? entry.timestamp : new Date().toISOString(),
           policy_applied: entry.policy_applied === true,
+          policy_requested: entry.policy_requested === true,
+          policy_fallback: entry.policy_fallback === true,
           success: entry.success === true,
           failed: entry.failed === true,
         };
@@ -148,6 +151,7 @@ function normalizeState(raw, config) {
       total: Number(counters.total || 0),
       policy_applied: Number(counters.policy_applied || 0),
       baseline_routed: Number(counters.baseline_routed || 0),
+      policy_fallback: Number(counters.policy_fallback || 0),
       policy_success: Number(counters.policy_success || 0),
       policy_failure: Number(counters.policy_failure || 0),
       consecutive_policy_failures: Number(counters.consecutive_policy_failures || 0),
@@ -322,6 +326,28 @@ function calculatePolicyFailureRate(recent = []) {
   return failureCount / policyRows.length;
 }
 
+function resolvePolicyExecutorEffectiveness({ decision, evidence } = {}) {
+  if (decision?.apply_policy_executor !== true) {
+    return false;
+  }
+
+  const routedExecutor = typeof decision.applied_executor === 'string' && decision.applied_executor.trim().length > 0
+    ? decision.applied_executor.trim()
+    : '';
+  if (!routedExecutor) {
+    return true;
+  }
+
+  const appliedExecutor = typeof evidence?.decision_payload?.dispatch_phase_executor_applied === 'string'
+    ? evidence.decision_payload.dispatch_phase_executor_applied.trim()
+    : '';
+  if (!appliedExecutor) {
+    return true;
+  }
+
+  return appliedExecutor === routedExecutor;
+}
+
 function downgradeState(state, config, reason) {
   const next = {
     ...state,
@@ -366,11 +392,13 @@ export function updatePolicyReleaseState({
   const failed = evidence?.terminal_outcome === 'failed'
     || evidence?.verification_result === 'failed'
     || evidence?.verification_result === 'blocked';
+  const policyRequested = decision.apply_policy_executor === true;
+  const policyAppliedEffective = resolvePolicyExecutorEffectiveness({ decision, evidence });
 
   next.updated_at = new Date().toISOString();
   next.counters.total += 1;
 
-  if (decision.apply_policy_executor) {
+  if (policyAppliedEffective) {
     next.counters.policy_applied += 1;
     if (success) {
       next.counters.policy_success += 1;
@@ -384,11 +412,16 @@ export function updatePolicyReleaseState({
     }
   } else {
     next.counters.baseline_routed += 1;
+    if (policyRequested) {
+      next.counters.policy_fallback += 1;
+    }
   }
 
   next.recent.push({
     timestamp: next.updated_at,
-    policy_applied: decision.apply_policy_executor,
+    policy_applied: policyAppliedEffective,
+    policy_requested: policyRequested,
+    policy_fallback: policyRequested && !policyAppliedEffective,
     success,
     failed,
   });

@@ -234,6 +234,15 @@ function buildRealEvidence({
     : false;
   const requestedExecutor = resolveRequestedExecutor({ task, selectedExecutor });
   const dispatchPhaseSelection = resolveDispatchPhaseExecutorSelection(report);
+  const policyAppliedExecutor = normalizeText(policyRelease.applied_executor) || null;
+  const policyReleaseEffectiveApplied = policyRelease.apply_policy_executor === true
+    && (
+      !policyAppliedExecutor
+      || !dispatchPhaseSelection.applied_executor
+      || dispatchPhaseSelection.applied_executor === policyAppliedExecutor
+    );
+  const policyReleaseExecutorFallback = policyRelease.apply_policy_executor === true
+    && !policyReleaseEffectiveApplied;
   const executorSelected = resolveExecutorSelected({
     task,
     selectedExecutor,
@@ -259,6 +268,8 @@ function buildRealEvidence({
       policy_applied_executor: policyRelease.applied_executor || null,
       policy_release_reason: policyRelease.reason || null,
       policy_release_rollout_rate: Number(policyRelease.rollout_rate || 0),
+      policy_release_effective_applied: policyReleaseEffectiveApplied,
+      policy_release_executor_fallback: policyReleaseExecutorFallback,
       dispatch_phase_executor_requested: dispatchPhaseSelection.requested_executor,
       dispatch_phase_executor_applied: dispatchPhaseSelection.applied_executor,
       dispatch_phase_executor_reason: dispatchPhaseSelection.reason,
@@ -291,6 +302,8 @@ function buildRealEvidence({
       policy_release_reason: policyRelease.reason || null,
       policy_release_rollout_rate: Number(policyRelease.rollout_rate || 0),
       policy_release_canary_bucket: Number(policyRelease.canary_bucket || 0),
+      policy_release_effective_applied: policyReleaseEffectiveApplied,
+      policy_release_executor_fallback: policyReleaseExecutorFallback,
       policy_release_downgraded: policyRelease.downgraded === true,
       policy_release_downgrade_reason: policyRelease.downgrade_reason || null,
       policy_release_state_path: policyRelease.state_path || null,
@@ -534,6 +547,8 @@ export function createRealOrchestratorHarness({
         callRecord.dispatch_ok = normalizedEvidence.decision_payload?.dispatch_ok === true;
         callRecord.runtime_id = String(normalizedEvidence.decision_payload?.runtime_id || '');
         callRecord.dispatch_phase_executor = normalizedEvidence.decision_payload?.dispatch_phase_executor_applied || null;
+        callRecord.policy_release_effective_applied = normalizedEvidence.decision_payload?.policy_release_effective_applied === true;
+        callRecord.policy_release_executor_fallback = normalizedEvidence.decision_payload?.policy_release_executor_fallback === true;
         return normalizedEvidence;
       } catch (error) {
         callRecord.error = error?.message || String(error);
@@ -561,6 +576,8 @@ export function createRealOrchestratorHarness({
             policy_applied_executor: releaseDecision.applied_executor || null,
             policy_release_reason: releaseDecision.reason || null,
             policy_release_rollout_rate: Number(releaseDecision.rollout_rate || 0),
+            policy_release_effective_applied: releaseDecision.apply_policy_executor === true,
+            policy_release_executor_fallback: false,
           },
           decision_payload: {
             ...normalizedFallback.decision_payload,
@@ -577,6 +594,8 @@ export function createRealOrchestratorHarness({
             policy_applied_executor: releaseDecision.applied_executor || null,
             policy_release_reason: releaseDecision.reason || null,
             policy_release_rollout_rate: Number(releaseDecision.rollout_rate || 0),
+            policy_release_effective_applied: releaseDecision.apply_policy_executor === true,
+            policy_release_executor_fallback: false,
             policy_release_state_path: releaseConfig.enabled ? releaseConfig.state_path : null,
           },
         }));
