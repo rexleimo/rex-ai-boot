@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { planDoctor } from '../lib/lifecycle/doctor.mjs';
 import { planEntropyGc } from '../lib/lifecycle/entropy-gc.mjs';
+import { planReleaseStatus } from '../lib/lifecycle/release-status.mjs';
 import { planSetup, runSetup } from '../lib/lifecycle/setup.mjs';
 import { planUninstall } from '../lib/lifecycle/uninstall.mjs';
 import { runUpdate } from '../lib/lifecycle/update.mjs';
@@ -58,6 +59,32 @@ test('planEntropyGc preserves explicit options', () => {
   assert.equal(plan.options.format, 'json');
   assert.match(plan.preview, /entropy-gc dry-run/);
   assert.match(plan.preview, /--retain 9/);
+});
+
+test('planReleaseStatus preserves strict health-gate options', () => {
+  const plan = planReleaseStatus({
+    statePath: 'experiments/rl-mixed-v1/release/custom.state.json',
+    recent: 12,
+    strict: true,
+    minSamples: 10,
+    maxFailureRate: 0.25,
+    maxFallbackRate: 0.15,
+    outputPath: 'tmp/release-status.json',
+    format: 'json',
+  }, { rootDir: '/tmp/aios-test' });
+  assert.equal(plan.command, 'release-status');
+  assert.equal(plan.options.recent, 12);
+  assert.equal(plan.options.strict, true);
+  assert.equal(plan.options.minSamples, 10);
+  assert.equal(plan.options.maxFailureRate, 0.25);
+  assert.equal(plan.options.maxFallbackRate, 0.15);
+  assert.equal(plan.options.format, 'json');
+  assert.match(plan.preview, /release-status/);
+  assert.match(plan.preview, /--strict/);
+  assert.match(plan.preview, /--min-samples 10/);
+  assert.match(plan.preview, /--max-failure-rate 0.25/);
+  assert.match(plan.preview, /--max-fallback-rate 0.15/);
+  assert.match(plan.preview, /--output tmp\/release-status.json/);
 });
 
 test('runSetup browser flow enables doctor auto-heal by default', async () => {

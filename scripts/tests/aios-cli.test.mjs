@@ -6,6 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { parseArgs } from '../lib/cli/parse-args.mjs';
+import { runReleaseStatus } from '../lib/lifecycle/release-status.mjs';
 import { runSnapshotRollback } from '../lib/lifecycle/snapshot-rollback.mjs';
 
 test('parseArgs returns interactive mode when no args are provided', () => {
@@ -521,6 +522,24 @@ test('parseArgs rejects invalid watch interval token', () => {
   assert.throws(() => parseArgs(['hud', '--watch', '--interval-ms', 'fast']), /--interval-ms must be a positive integer or \"auto\"/);
 });
 
+test('parseArgs rejects invalid release-status recent value', () => {
+  assert.throws(
+    () => parseArgs(['release-status', '--recent', '0']),
+    /--recent must be a positive integer/
+  );
+});
+
+test('parseArgs rejects invalid release-status threshold rates', () => {
+  assert.throws(
+    () => parseArgs(['release-status', '--max-failure-rate', '1.2']),
+    /--max-failure-rate must be a number between 0 and 1/
+  );
+  assert.throws(
+    () => parseArgs(['release-status', '--max-fallback-rate', '1.1']),
+    /--max-fallback-rate must be a number between 0 and 1/
+  );
+});
+
 test('parseArgs rejects invalid skill-candidate-limit', () => {
   assert.throws(
     () => parseArgs(['hud', '--skill-candidate-limit', '0']),
@@ -626,6 +645,37 @@ test('parseArgs accepts snapshot-rollback options', () => {
   assert.equal(alias.options.manifestPath, 'tmp/manifest.json');
 });
 
+test('parseArgs accepts release-status options', () => {
+  const result = parseArgs([
+    'release-status',
+    '--state-path',
+    'experiments/rl-mixed-v1/release/custom.state.json',
+    '--recent',
+    '12',
+    '--strict',
+    '--min-samples',
+    '10',
+    '--max-failure-rate',
+    '0.25',
+    '--max-fallback-rate',
+    '0.15',
+    '--output',
+    'tmp/release-status.txt',
+    '--format',
+    'json',
+  ]);
+  assert.equal(result.command, 'release-status');
+  assert.equal(result.mode, 'command');
+  assert.equal(result.options.statePath, 'experiments/rl-mixed-v1/release/custom.state.json');
+  assert.equal(result.options.recent, 12);
+  assert.equal(result.options.strict, true);
+  assert.equal(result.options.minSamples, 10);
+  assert.equal(result.options.maxFailureRate, 0.25);
+  assert.equal(result.options.maxFallbackRate, 0.15);
+  assert.equal(result.options.outputPath, 'tmp/release-status.txt');
+  assert.equal(result.options.format, 'json');
+});
+
 test('parseArgs treats memo help as help mode', () => {
   const result = parseArgs(['memo', '--help']);
   assert.equal(result.command, 'memo');
@@ -646,6 +696,7 @@ test('aios CLI prints help', () => {
   assert.match(result.stdout, /team/);
   assert.match(result.stdout, /native/);
   assert.match(result.stdout, /snapshot-rollback/);
+  assert.match(result.stdout, /release-status/);
 });
 
 test('aios memo prints help', () => {
@@ -837,6 +888,152 @@ test('runSnapshotRollback supports session+job discovery in dry-run mode', async
     assert.equal(payload.ok, true);
     assert.equal(payload.dryRun, true);
     assert.equal(payload.jobId, 'phase.implement');
+  } finally {
+    await fs.rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('runReleaseStatus renders text report when state file exists', async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-release-status-ok-'));
+  const statePath = path.join(
+    workspaceRoot,
+    'experiments',
+    'rl-mixed-v1',
+    'release',
+    'orchestrator-policy-release.state.json'
+  );
+  try {
+    await fs.mkdir(path.dirname(statePath), { recursive: true });
+    await fs.writeFile(statePath, `${JSON.stringify({
+      schema_version: 1,
+      updated_at: '2026-04-13T15:00:00.000Z',
+      effective_mode: 'canary',
+      effective_rollout_rate: 0.35,
+      counters: {
+        total: 42,
+        policy_applied: 18,
+        baseline_routed: 24,
+        policy_fallback: 2,
+        policy_success: 16,
+        policy_failure: 2,
+        consecutive_policy_failures: 0,
+        consecutive_policy_success: 3,
+        downgrades: 1,
+        promotions: 2,
+      },
+      recent: [
+        { timestamp: '2026-04-13T14:56:00.000Z', policy_applied: true, policy_requested: true, policy_fallback: false, success: true, failed: false },
+        { timestamp: '2026-04-13T14:57:00.000Z', policy_applied: false, policy_requested: true, policy_fallback: false, success: true, failed: false },
+        { timestamp: '2026-04-13T14:58:00.000Z', policy_applied: true, policy_requested: true, policy_fallback: true, success: false, failed: true },
+      ],
+      last_downgrade_reason: 'failure_rate=0.67 threshold=0.60',
+      last_promotion_reason: 'success_rate=0.90 threshold=0.85',
+    }, null, 2)}\n`, 'utf8');
+
+    const logs = [];
+    const result = await runReleaseStatus(
+      { recent: 3, format: 'text' },
+      { rootDir: workspaceRoot, io: { log: (line) => logs.push(String(line)) } }
+    );
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.ok, true);
+    assert.equal(result.effectiveMode, 'canary');
+    assert.equal(result.recentWindow.limit, 3);
+    assert.equal(result.recentWindow.total, 3);
+    assert.equal(result.recentWindow.policyApplied, 2);
+    assert.equal(result.recentWindow.policyFallback, 1);
+    assert.equal(result.recentWindow.success, 2);
+    assert.equal(result.recentWindow.failed, 1);
+    assert.equal(logs.length > 0, true);
+    assert.match(logs.at(-1), /Release gate status/);
+    assert.match(logs.at(-1), /trend:/);
+  } finally {
+    await fs.rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('runReleaseStatus emits json error when state file is missing', async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-release-status-missing-'));
+  try {
+    const logs = [];
+    const result = await runReleaseStatus(
+      { format: 'json' },
+      { rootDir: workspaceRoot, io: { log: (line) => logs.push(String(line)) } }
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.ok, false);
+    assert.equal(logs.length > 0, true);
+    const payload = JSON.parse(logs.at(-1));
+    assert.equal(payload.ok, false);
+    assert.match(payload.error, /state file not found/i);
+  } finally {
+    await fs.rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('runReleaseStatus strict gate fails when health thresholds are not met', async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-release-status-strict-'));
+  const statePath = path.join(
+    workspaceRoot,
+    'experiments',
+    'rl-mixed-v1',
+    'release',
+    'orchestrator-policy-release.state.json'
+  );
+  try {
+    await fs.mkdir(path.dirname(statePath), { recursive: true });
+    await fs.writeFile(statePath, `${JSON.stringify({
+      schema_version: 1,
+      updated_at: '2026-04-13T16:00:00.000Z',
+      effective_mode: 'canary',
+      effective_rollout_rate: 0.5,
+      counters: {
+        total: 20,
+        policy_applied: 10,
+        baseline_routed: 10,
+        policy_fallback: 6,
+        policy_success: 4,
+        policy_failure: 6,
+        consecutive_policy_failures: 2,
+        consecutive_policy_success: 0,
+        downgrades: 2,
+        promotions: 0,
+      },
+      recent: [
+        { timestamp: '2026-04-13T15:54:00.000Z', policy_applied: true, policy_requested: true, policy_fallback: false, success: false, failed: true },
+        { timestamp: '2026-04-13T15:55:00.000Z', policy_applied: true, policy_requested: true, policy_fallback: false, success: true, failed: false },
+        { timestamp: '2026-04-13T15:56:00.000Z', policy_applied: false, policy_requested: true, policy_fallback: true, success: false, failed: true },
+        { timestamp: '2026-04-13T15:57:00.000Z', policy_applied: false, policy_requested: true, policy_fallback: true, success: false, failed: true },
+      ],
+      last_downgrade_reason: 'failure_rate=0.75 threshold=0.60',
+      last_promotion_reason: null,
+    }, null, 2)}\n`, 'utf8');
+
+    const logs = [];
+    const outputPath = path.join(workspaceRoot, 'tmp', 'release-status.txt');
+    const result = await runReleaseStatus(
+      {
+        format: 'text',
+        strict: true,
+        recent: 4,
+        minSamples: 4,
+        maxFailureRate: 0.2,
+        maxFallbackRate: 0.1,
+        outputPath,
+      },
+      { rootDir: workspaceRoot, io: { log: (line) => logs.push(String(line)) } }
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.ok, true);
+    assert.equal(result.strictFailed, true);
+    assert.equal(result.health.gatePassed, false);
+    assert.equal(Array.isArray(result.health.reasons), true);
+    assert.equal(result.health.reasons.length > 0, true);
+    assert.equal(logs.length > 0, true);
+
+    const outputRaw = await fs.readFile(outputPath, 'utf8');
+    assert.match(outputRaw, /health:/);
+    assert.match(outputRaw, /strict=on/);
   } finally {
     await fs.rm(workspaceRoot, { recursive: true, force: true });
   }

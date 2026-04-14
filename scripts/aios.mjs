@@ -331,6 +331,15 @@ async function main() {
     return;
   }
 
+  if (parsed.command === 'release-status') {
+    const { runReleaseStatus } = await import('./lib/lifecycle/release-status.mjs');
+    const result = await runReleaseStatus(parsed.options, { rootDir });
+    if (result.exitCode !== 0) {
+      process.exitCode = result.exitCode;
+    }
+    return;
+  }
+
   if (parsed.command === 'memo') {
     const { runMemo } = await import('./lib/memo/memo.mjs');
     await runMemo(parsed.options, { rootDir });

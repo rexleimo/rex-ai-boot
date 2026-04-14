@@ -18,6 +18,7 @@ Commands:
   learn-eval    Turn checkpoint telemetry into operator recommendations
   entropy-gc    Auto-archive stale ContextDB artifacts with rollback manifests
   snapshot-rollback Restore pre-mutation snapshot artifacts (manifest-driven)
+  release-status Show RL policy release gate state and recent trend
 
 Examples:
   node scripts/aios.mjs setup --components all --mode opt-in --client all
@@ -40,6 +41,7 @@ Examples:
   node scripts/aios.mjs learn-eval --limit 5
   node scripts/aios.mjs entropy-gc auto --session codex-cli-20260303T080437-065e16c0
   node scripts/aios.mjs snapshot-rollback --session codex-cli-20260303T080437-065e16c0 --job phase.implement --dry-run
+  node scripts/aios.mjs release-status --recent 12
   node scripts/aios.mjs internal browser doctor --fix
   node scripts/aios.mjs internal browser mcp-migrate
   node scripts/aios.mjs internal browser cdp-start
@@ -262,6 +264,21 @@ Options:
   --session <id>                 Auto-select latest snapshot manifest under session artifacts
   --job <jobId>                  Optional job filter when auto-selecting snapshot manifest
   --dry-run                      Preview restore actions without mutating files
+  --format <text|json>
+  -h, --help
+`;
+    case 'release-status':
+      return `Usage:
+  node scripts/aios.mjs release-status [options]
+
+Options:
+  --state-path <path>            Override release gate state file path
+  --recent <n>                   Limit recent trend window (default: 10)
+  --strict                       Enforce health gate and return non-zero when not passed
+  --min-samples <n>              Strict gate minimum recent samples (default: 8)
+  --max-failure-rate <0-1>       Strict gate max recent failure rate (default: 0.2)
+  --max-fallback-rate <0-1>      Strict gate max recent fallback rate (default: 0.1)
+  --output <path>                Write rendered report to file
   --format <text|json>
   -h, --help
 `;

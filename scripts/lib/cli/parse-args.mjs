@@ -4,6 +4,7 @@ import {
   createDefaultLearnEvalOptions,
   createDefaultOrchestrateOptions,
   createDefaultQualityGateOptions,
+  createDefaultReleaseStatusOptions,
   createDefaultSnapshotRollbackOptions,
   createDefaultSetupOptions,
   createDefaultUninstallOptions,
@@ -18,6 +19,7 @@ import {
   normalizeOrchestrateExecutionMode,
   normalizeOrchestratePreflightMode,
   normalizeQualityGateMode,
+  normalizeReleaseStatusFormat,
   normalizeSnapshotRollbackFormat,
   normalizeSkillInstallMode,
   normalizeSkillNames,
@@ -49,6 +51,14 @@ function parsePositiveInteger(raw, flag) {
   const value = Number.parseInt(String(raw || '').trim(), 10);
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`${flag} must be a positive integer`);
+  }
+  return value;
+}
+
+function parseUnitInterval(raw, flag) {
+  const value = Number.parseFloat(String(raw ?? '').trim());
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error(`${flag} must be a number between 0 and 1`);
   }
   return value;
 }
@@ -874,6 +884,7 @@ function getCommandDefaults(command) {
   if (command === 'orchestrate') return createDefaultOrchestrateOptions();
   if (command === 'entropy-gc') return createDefaultEntropyGcOptions();
   if (command === 'snapshot-rollback') return createDefaultSnapshotRollbackOptions();
+  if (command === 'release-status') return createDefaultReleaseStatusOptions();
   return createDefaultLearnEvalOptions();
 }
 
@@ -950,7 +961,38 @@ function parseTopLevelArgs(command, argv) {
         options.skipDoctor = true;
         break;
       case '--strict':
-        options.strict = true;
+        if (command === 'doctor' || command === 'release-status') {
+          options.strict = true;
+          break;
+        }
+        throw new Error(`Unknown option: ${arg}`);
+      case '--min-samples':
+        if (command !== 'release-status') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.minSamples = parsePositiveInteger(takeValue(rest, index, '--min-samples'), '--min-samples');
+        index += 1;
+        break;
+      case '--max-failure-rate':
+        if (command !== 'release-status') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.maxFailureRate = parseUnitInterval(takeValue(rest, index, '--max-failure-rate'), '--max-failure-rate');
+        index += 1;
+        break;
+      case '--max-fallback-rate':
+        if (command !== 'release-status') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.maxFallbackRate = parseUnitInterval(takeValue(rest, index, '--max-fallback-rate'), '--max-fallback-rate');
+        index += 1;
+        break;
+      case '--output':
+        if (command !== 'release-status') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.outputPath = takeValue(rest, index, '--output');
+        index += 1;
         break;
       case '--global-security':
         options.globalSecurity = true;
@@ -1016,11 +1058,25 @@ function parseTopLevelArgs(command, argv) {
         options.jobId = takeValue(rest, index, '--job');
         index += 1;
         break;
+      case '--state-path':
+        if (command !== 'release-status') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.statePath = takeValue(rest, index, '--state-path');
+        index += 1;
+        break;
       case '--limit':
         if (command !== 'learn-eval' && command !== 'orchestrate') {
           throw new Error(`Unknown option: ${arg}`);
         }
         options.limit = parsePositiveInteger(takeValue(rest, index, '--limit'), '--limit');
+        index += 1;
+        break;
+      case '--recent':
+        if (command !== 'release-status') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.recent = parsePositiveInteger(takeValue(rest, index, '--recent'), '--recent');
         index += 1;
         break;
       case '--apply-draft':
@@ -1080,6 +1136,8 @@ function parseTopLevelArgs(command, argv) {
           options.format = normalizeEntropyGcFormat(value);
         } else if (command === 'snapshot-rollback') {
           options.format = normalizeSnapshotRollbackFormat(value);
+        } else if (command === 'release-status') {
+          options.format = normalizeReleaseStatusFormat(value);
         } else {
           throw new Error(`Unknown option: ${arg}`);
         }
@@ -1159,7 +1217,7 @@ export function parseArgs(argv = []) {
         ? 'snapshot-rollback'
       : first;
 
-  if (!['setup', 'update', 'uninstall', 'doctor', 'quality-gate', 'orchestrate', 'team', 'hud', 'learn-eval', 'entropy-gc', 'snapshot-rollback'].includes(command)) {
+  if (!['setup', 'update', 'uninstall', 'doctor', 'quality-gate', 'orchestrate', 'team', 'hud', 'learn-eval', 'entropy-gc', 'snapshot-rollback', 'release-status'].includes(command)) {
     throw new Error(`Unknown command: ${argv[0]}`);
   }
 
