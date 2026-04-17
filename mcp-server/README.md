@@ -178,12 +178,15 @@ npm run contextdb -- session:new --agent claude-code --project rex-cli --goal "s
 npm run contextdb -- event:add --session <session_id> --role user --text "Need retry and checkpoint strategy"
 npm run contextdb -- checkpoint --session <session_id> --summary "Auth wall found; waiting human login" --status blocked --next "wait-login|resume-run"
 npm run contextdb -- context:pack --session <session_id> --out memory/context-db/exports/<session_id>-context.md
+npm run contextdb -- context:pack --session <session_id> --limit 60 --token-budget 1200 --token-strategy balanced --out memory/context-db/exports/<session_id>-context.md
 npm run contextdb -- search --query "auth race" --project rex-cli
 npm run contextdb -- timeline --session <session_id> --limit 30
 npm run contextdb -- event:get --id <session_id>#<seq>
 npm run contextdb -- index:sync --force --stats --jsonl-out memory/context-db/exports/index-sync-stats.jsonl
 npm run contextdb -- index:rebuild
 ```
+
+`context:pack --token-strategy` supports `legacy|balanced|aggressive` (`balanced` is the default when `--token-budget` is set).
 
 `index:sync` is an incremental sidecar refresh command (fast path).  
 Use `--stats` for detailed counters (`scanned/upserted` sessions/events/checkpoints), and `--jsonl-out` to append each run to a JSONL history file for trend analysis.

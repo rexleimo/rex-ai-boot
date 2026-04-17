@@ -15,6 +15,7 @@ export const SUBAGENT_CONCURRENCY_ENV = 'AIOS_SUBAGENT_CONCURRENCY';
 export const SUBAGENT_TIMEOUT_MS_ENV = 'AIOS_SUBAGENT_TIMEOUT_MS';
 export const SUBAGENT_CONTEXT_LIMIT_ENV = 'AIOS_SUBAGENT_CONTEXT_LIMIT';
 export const SUBAGENT_CONTEXT_TOKEN_BUDGET_ENV = 'AIOS_SUBAGENT_CONTEXT_TOKEN_BUDGET';
+export const SUBAGENT_CONTEXT_TOKEN_STRATEGY_ENV = 'AIOS_SUBAGENT_CONTEXT_TOKEN_STRATEGY';
 export const SUBAGENT_UPSTREAM_MAX_ATTEMPTS_ENV = 'AIOS_SUBAGENT_UPSTREAM_MAX_ATTEMPTS';
 export const SUBAGENT_UPSTREAM_BACKOFF_MS_ENV = 'AIOS_SUBAGENT_UPSTREAM_BACKOFF_MS';
 export const SUBAGENT_PRE_MUTATION_SNAPSHOT_ENV = 'AIOS_SUBAGENT_PRE_MUTATION_SNAPSHOT';
@@ -414,6 +415,10 @@ async function loadContextPacket({ rootDir, sessionId, env, io }) {
   const limit = parsePositiveInt(env?.[SUBAGENT_CONTEXT_LIMIT_ENV], 30);
   const tokenBudgetRaw = String(env?.[SUBAGENT_CONTEXT_TOKEN_BUDGET_ENV] ?? '').trim();
   const tokenBudget = tokenBudgetRaw ? parseNonNegativeInt(tokenBudgetRaw, 0) : null;
+  const tokenStrategyRaw = String(env?.[SUBAGENT_CONTEXT_TOKEN_STRATEGY_ENV] ?? '').trim().toLowerCase();
+  const tokenStrategy = tokenStrategyRaw === 'legacy' || tokenStrategyRaw === 'balanced' || tokenStrategyRaw === 'aggressive'
+    ? tokenStrategyRaw
+    : '';
   const outRel = path.join('memory', 'context-db', 'exports', `${sessionId}-context.md`);
 
   try {
@@ -430,6 +435,9 @@ async function loadContextPacket({ rootDir, sessionId, env, io }) {
     ];
     if (tokenBudget && tokenBudget > 0) {
       args.push('--token-budget', String(tokenBudget));
+    }
+    if (tokenStrategy) {
+      args.push('--token-strategy', tokenStrategy);
     }
     runContextDbCli(args, { cwd: rootDir });
     const absPath = path.join(rootDir, outRel);

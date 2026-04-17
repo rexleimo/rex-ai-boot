@@ -802,6 +802,113 @@ test('buildContextPacket supports kind/ref filtering and token budget', async ()
   assert.doesNotMatch(packet.markdown, /First prompt should be excluded/);
 });
 
+test('buildContextPacket balanced token strategy keeps critical error context under tight budget', async () => {
+  const workspace = await makeWorkspace();
+  const session = await createSession({
+    workspaceRoot: workspace,
+    agent: 'codex-cli',
+    project: 'rex-cli',
+    goal: 'Preserve critical failure signals with tight token budget',
+  });
+
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    role: 'assistant',
+    kind: 'response',
+    text: Array.from({ length: 40 }).map(() => 'heartbeat ok').join('\n'),
+  });
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    role: 'tool',
+    kind: 'error',
+    text: [
+      'ERROR: migration failed while updating state table',
+      'at migrate (/repo/scripts/lib/harness/orchestrator.mjs:442:11)',
+      'at run (/repo/scripts/aios.mjs:77:3)',
+      'Caused by: timeout waiting for lock',
+    ].join('\n'),
+    refs: ['scripts/lib/harness/orchestrator.mjs'],
+  });
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    role: 'assistant',
+    kind: 'response',
+    text: 'Retry with focused lock scope and checkpoint update.',
+  });
+
+  const packet = await buildContextPacket({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    eventLimit: 20,
+    tokenBudget: 72,
+    tokenStrategy: 'balanced',
+  });
+
+  assert.match(packet.markdown, /strategy=balanced/);
+  assert.match(packet.markdown, /migration failed/i);
+  assert.match(packet.markdown, /orchestrator\.mjs/);
+  assert.match(packet.markdown, /Retry with focused lock scope/i);
+});
+
+test('contextdb cli context:pack accepts --token-strategy and writes strategy metadata', async () => {
+  const workspace = await makeWorkspace();
+  const session = await createSession({
+    workspaceRoot: workspace,
+    agent: 'claude-code',
+    project: 'rex-cli',
+    goal: 'CLI token strategy coverage',
+  });
+
+  await appendEvent({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    role: 'tool',
+    kind: 'error',
+    text: [
+      'Traceback (most recent call last):',
+      'File "/tmp/task.py", line 1, in <module>',
+      'raise RuntimeError("forced failure")',
+      'RuntimeError: forced failure',
+      'at handler (/repo/src/index.ts:10:2)',
+      'at run (/repo/src/main.ts:20:5)',
+    ].join('\n'),
+  });
+
+  const outputRel = path.join('memory', 'context-db', 'exports', `${session.sessionId}-aggressive.md`);
+  const result = spawnSync(
+    'npx',
+    [
+      'tsx',
+      'src/contextdb/cli.ts',
+      'context:pack',
+      '--workspace',
+      workspace,
+      '--session',
+      session.sessionId,
+      '--limit',
+      '30',
+      '--token-budget',
+      '48',
+      '--token-strategy',
+      'aggressive',
+      '--out',
+      outputRel,
+    ],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    }
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const packetPath = path.join(workspace, outputRel);
+  const packetRaw = await fs.readFile(packetPath, 'utf8');
+  assert.match(packetRaw, /strategy=aggressive/);
+});
+
 test('searchEvents, getEventById, and buildTimeline use sidecar indexes', async () => {
   const workspace = await makeWorkspace();
   const session = await createSession({

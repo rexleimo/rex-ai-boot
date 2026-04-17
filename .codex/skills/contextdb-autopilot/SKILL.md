@@ -92,10 +92,13 @@ npm run contextdb -- context:pack \
   --session <session_id> \
   --limit 60 \
   --token-budget 1200 \
+  --token-strategy balanced \
   --kinds prompt,response,error \
   --refs core.ts,cli.ts
 ```
 
 Defaults:
 - Event dedupe in packet view is enabled.
+- `--token-strategy` supports `legacy|balanced|aggressive` (recommended: `balanced`).
 - You can disable with `--no-dedupe` when needed for debugging.
+- For orchestrate/subagent runtime, you can set `AIOS_SUBAGENT_CONTEXT_TOKEN_STRATEGY=balanced`.

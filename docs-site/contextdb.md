@@ -62,11 +62,13 @@ npm run contextdb -- context:pack \
   --session <id> \
   --limit 60 \
   --token-budget 1200 \
+  --token-strategy balanced \
   --kinds prompt,response,error \
   --refs core.ts,cli.ts
 ```
 
 - `--token-budget`: cap recent-event payload by estimated token budget.
+- `--token-strategy`: `legacy|balanced|aggressive` (default with budget: `balanced`; recommended unless you need strict backward behavior).
 - `--kinds` / `--refs`: include only matching events.
 - default dedupe is enabled for repeated events in the packet view.
 

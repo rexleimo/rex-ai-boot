@@ -24,6 +24,7 @@ export type VerificationResult = 'unknown' | 'passed' | 'failed' | 'partial';
 export type TurnType = 'main' | 'side' | 'system-maintenance' | 'verification';
 export type TurnOutcome = 'success' | 'correction' | 'retry-needed' | 'ambiguous' | 'unknown';
 export type HindsightStatus = 'pending' | 'evaluated' | 'na' | 'failed';
+export type ContextPacketTokenStrategy = 'legacy' | 'balanced' | 'aggressive';
 
 export interface EventTurnEnvelope {
   turnId?: string;
@@ -334,6 +335,501 @@ function scoreRecallText(queryTokens: string[], text: string): number {
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / CHARS_PER_TOKEN_ESTIMATE);
 }
+
+function estimateEventLineTokens(event: Pick<ContextEvent, 'role' | 'kind'>, text: string): number {
+  return estimateTokens(`${event.role}/${event.kind}: ${sanitizeInline(text)}`);
+}
+
+function truncateTextForTokenBudget(text: string, tokenBudget: number): string {
+  const safeBudget = Math.max(4, Math.floor(tokenBudget));
+  const maxChars = Math.max(32, safeBudget * CHARS_PER_TOKEN_ESTIMATE);
+  const raw = String(text ?? '');
+  if (raw.length <= maxChars) return raw;
+  if (maxChars < 96) {
+    return `${raw.slice(0, maxChars)} [truncated]`;
+  }
+
+  const marker = ' ... [truncated] ... ';
+  const available = Math.max(16, maxChars - marker.length);
+  const headChars = Math.max(12, Math.floor(available * 0.65));
+  const tailChars = Math.max(4, available - headChars);
+  return `${raw.slice(0, headChars)}${marker}${raw.slice(-tailChars)}`;
+}
+
+const IMPORTANT_SIGNAL_RE = /\b(error|failed|failure|exception|timeout|panic|blocked|retry|todo|next(?:\s+action)?|fix|bug|regression|cannot|can't|unable|denied|forbidden|auth)\b/i;
+const STACK_LINE_RE = /^\s*(?:at\s+\S+|traceback\b|caused by:|file\s+".+", line \d+|[a-z0-9_.-]+error:)/i;
+const COMMAND_SIGNAL_RE = /\b(?:npm|pnpm|yarn|git|node|python|pytest|cargo|go\s+test|make|cmake|bun)\b/i;
+const FILE_SIGNAL_RE = /([A-Za-z0-9._/\\-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|json|md|sh|yaml|yml|toml|rs|go|java|rb|php|cpp|c|h))/i;
+
+function stripAnsi(text: string): string {
+  return String(text ?? '').replace(/\u001b\[[0-9;]*[A-Za-z]/g, '');
+}
+
+function hasImportantSignal(text: string): boolean {
+  return IMPORTANT_SIGNAL_RE.test(text) || COMMAND_SIGNAL_RE.test(text) || FILE_SIGNAL_RE.test(text);
+}
+
+function collapseRepeatingLines(lines: string[], keepRepeats: number): string[] {
+  if (lines.length === 0) return [];
+  const keptRepeats = Math.max(1, keepRepeats);
+  const output: string[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const signature = lines[index].trim();
+    let end = index + 1;
+    while (end < lines.length && lines[end].trim() === signature) {
+      end += 1;
+    }
+    const runSize = end - index;
+    if (signature.length === 0) {
+      if (output.length === 0 || output[output.length - 1] !== '') {
+        output.push('');
+      }
+      index = end;
+      continue;
+    }
+
+    if (runSize <= keptRepeats) {
+      for (let lineIndex = index; lineIndex < end; lineIndex += 1) {
+        output.push(lines[lineIndex].trim());
+      }
+    } else {
+      for (let lineIndex = 0; lineIndex < keptRepeats; lineIndex += 1) {
+        output.push(lines[index + lineIndex].trim());
+      }
+      output.push(`... [${runSize - keptRepeats} repeated lines omitted]`);
+    }
+    index = end;
+  }
+  return output;
+}
+
+function collapseStackRuns(lines: string[], mode: 'balanced' | 'aggressive'): string[] {
+  if (lines.length === 0) return [];
+  const output: string[] = [];
+  const maxInline = mode === 'aggressive' ? 4 : 7;
+  const keepHead = mode === 'aggressive' ? 2 : 3;
+  const keepTail = mode === 'aggressive' ? 1 : 2;
+  let index = 0;
+
+  while (index < lines.length) {
+    if (!STACK_LINE_RE.test(lines[index])) {
+      output.push(lines[index]);
+      index += 1;
+      continue;
+    }
+
+    let end = index + 1;
+    while (end < lines.length && STACK_LINE_RE.test(lines[end])) {
+      end += 1;
+    }
+    const run = lines.slice(index, end);
+    if (run.length <= maxInline) {
+      output.push(...run);
+      index = end;
+      continue;
+    }
+
+    output.push(...run.slice(0, keepHead));
+    output.push(`... [${run.length - (keepHead + keepTail)} stack lines omitted]`);
+    output.push(...run.slice(run.length - keepTail));
+    index = end;
+  }
+
+  return output;
+}
+
+function trimLargeLineSet(lines: string[], mode: 'balanced' | 'aggressive'): string[] {
+  const maxLines = mode === 'aggressive' ? 40 : 70;
+  if (lines.length <= maxLines) return lines;
+
+  const headCount = 3;
+  const tailCount = 3;
+  const head = lines.slice(0, headCount);
+  const tail = lines.slice(lines.length - tailCount);
+  const middle = lines.slice(headCount, Math.max(headCount, lines.length - tailCount));
+  const signalLines = middle.filter((line) => hasImportantSignal(line));
+  const allowedMiddle = Math.max(4, maxLines - headCount - tailCount - 1);
+  const keptMiddle = signalLines.slice(0, allowedMiddle);
+  const omittedCount = Math.max(0, middle.length - keptMiddle.length);
+
+  return [
+    ...head,
+    ...keptMiddle,
+    ...(omittedCount > 0 ? [`... [${omittedCount} lines omitted]`] : []),
+    ...tail,
+  ];
+}
+
+function compressEventText(rawText: string, mode: 'balanced' | 'aggressive'): string {
+  const normalized = stripAnsi(String(rawText ?? '')).replace(/\r\n/g, '\n');
+  let lines = normalized
+    .split('\n')
+    .map((line) => line.replace(/\t/g, '  ').trimEnd());
+
+  while (lines.length > 0 && lines[0].trim().length === 0) lines.shift();
+  while (lines.length > 0 && lines[lines.length - 1].trim().length === 0) lines.pop();
+  if (lines.length === 0) return sanitizeInline(normalized);
+
+  lines = collapseRepeatingLines(lines, mode === 'aggressive' ? 1 : 2);
+  lines = collapseStackRuns(lines, mode);
+  lines = trimLargeLineSet(lines, mode);
+
+  if (mode === 'aggressive') {
+    lines = lines.map((line) => {
+      if (line.length <= 220 || hasImportantSignal(line)) return line;
+      return `${line.slice(0, 220)} ... [trimmed]`;
+    });
+  }
+
+  return lines.join('\n').trim();
+}
+
+function collectCriticalTerms(text: string): string[] {
+  const raw = String(text ?? '');
+  const lower = raw.toLowerCase();
+  const terms = new Set<string>();
+  const keywordMatches = lower.match(/\b(error|failed|failure|exception|timeout|panic|blocked|retry|todo|fix|bug|regression|auth|denied|forbidden)\b/g) ?? [];
+  for (const match of keywordMatches) {
+    terms.add(match);
+  }
+
+  const fileRegex = /([A-Za-z0-9._/\\-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|json|md|sh|yaml|yml|toml|rs|go|java|rb|php|cpp|c|h))/g;
+  let fileMatch: RegExpExecArray | null = null;
+  while ((fileMatch = fileRegex.exec(raw)) !== null) {
+    if (fileMatch[1]) {
+      terms.add(fileMatch[1].toLowerCase());
+    }
+  }
+
+  return Array.from(terms);
+}
+
+function tokenContainmentRatio(sourceText: string, candidateText: string): number {
+  const sourceTokens = tokenizeForRecall(sourceText);
+  if (sourceTokens.length === 0) return 1;
+  const candidateTokens = new Set(tokenizeForRecall(candidateText));
+  let overlap = 0;
+  for (const token of sourceTokens) {
+    if (candidateTokens.has(token)) {
+      overlap += 1;
+    }
+  }
+  return overlap / sourceTokens.length;
+}
+
+function isCompressionSafe(originalText: string, compressedText: string, mode: 'balanced' | 'aggressive'): boolean {
+  if (compressedText.trim().length === 0) return false;
+  if (sanitizeInline(compressedText) === sanitizeInline(originalText)) return false;
+
+  const terms = collectCriticalTerms(originalText);
+  if (terms.length > 0) {
+    const candidateLower = compressedText.toLowerCase();
+    let matchedTerms = 0;
+    for (const term of terms) {
+      if (candidateLower.includes(term)) {
+        matchedTerms += 1;
+      }
+    }
+    const requiredMatches = terms.length <= 3
+      ? terms.length
+      : Math.max(2, Math.ceil(terms.length * 0.7));
+    if (matchedTerms < requiredMatches) {
+      return false;
+    }
+  }
+
+  const containment = tokenContainmentRatio(originalText, compressedText);
+  const minContainment = mode === 'aggressive' ? 0.55 : 0.72;
+  return containment >= minContainment;
+}
+
+function safeCompressEventText(text: string, mode: 'balanced' | 'aggressive'): string {
+  const original = String(text ?? '');
+  const compressed = compressEventText(original, mode);
+  if (!isCompressionSafe(original, compressed, mode)) {
+    return original;
+  }
+  return compressed;
+}
+
+interface TokenBudgetCandidate {
+  event: ContextEvent;
+  index: number;
+  priority: number;
+  protect: boolean;
+  hardProtect: boolean;
+  rawText: string;
+  compressedText: string;
+  chosenText: string;
+  rawTokens: number;
+  compressedTokens: number;
+  chosenTokens: number;
+  compressedApplied: boolean;
+  truncated: boolean;
+  dropped: boolean;
+}
+
+interface TokenBudgetSelection {
+  events: ContextEvent[];
+  tokenUsed: number;
+  rawTokens: number;
+  compressedEvents: number;
+  droppedEvents: number;
+  truncatedEvents: number;
+}
+
+function normalizeTokenStrategy(raw: unknown): ContextPacketTokenStrategy {
+  if (typeof raw !== 'string') return 'balanced';
+  const value = raw.trim().toLowerCase();
+  if (value === 'legacy' || value === 'balanced' || value === 'aggressive') {
+    return value;
+  }
+  return 'balanced';
+}
+
+function scoreEventPriority(event: ContextEvent, index: number, total: number): { score: number; protect: boolean } {
+  const text = String(event.text ?? '');
+  const normalizedText = sanitizeInline(text);
+  const normalizedKind = String(event.kind ?? '').toLowerCase();
+  const recency = total <= 1 ? 1 : index / Math.max(1, total - 1);
+  let score = recency * 2.2;
+
+  if (event.role === 'user') score += 1.2;
+  if (event.role === 'assistant') score += 0.6;
+  if (normalizedKind.includes('error')) score += 3;
+  if (normalizedKind.includes('warning')) score += 1.4;
+  if (hasImportantSignal(normalizedText)) score += 2;
+  if (COMMAND_SIGNAL_RE.test(normalizedText)) score += 0.9;
+  if (FILE_SIGNAL_RE.test(normalizedText)) score += 0.8;
+  if (normalizeRefs(event.refs).length > 0) score += 0.6;
+  if (Array.isArray(event.turn?.workItemRefs) && event.turn.workItemRefs.length > 0) score += 0.7;
+  if (event.turn?.outcome === 'retry-needed' || event.turn?.outcome === 'correction') score += 1.1;
+
+  const protect = index === total - 1 || score >= 4.6 || /\b(next action|todo|blocked|failure|error|fix)\b/i.test(normalizedText);
+  return { score, protect };
+}
+
+function applyLegacyTailBudget(events: ContextEvent[], tokenBudget: number): TokenBudgetSelection {
+  const rawTokens = events.reduce((sum, event) => sum + estimateEventLineTokens(event, String(event.text ?? '')), 0);
+  const selectedFromTail: ContextEvent[] = [];
+  let eventTokensUsed = 0;
+
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    const lineTokens = estimateEventLineTokens(event, String(event.text ?? ''));
+    if (selectedFromTail.length > 0 && eventTokensUsed + lineTokens > tokenBudget) {
+      break;
+    }
+    if (selectedFromTail.length === 0 && eventTokensUsed + lineTokens > tokenBudget) {
+      selectedFromTail.push({
+        ...event,
+        text: truncateTextForTokenBudget(String(event.text ?? ''), tokenBudget),
+      });
+      eventTokensUsed = estimateEventLineTokens(event, selectedFromTail[0].text);
+      break;
+    }
+    selectedFromTail.push(event);
+    eventTokensUsed += lineTokens;
+  }
+
+  const selected = selectedFromTail.reverse();
+  return {
+    events: selected,
+    tokenUsed: eventTokensUsed,
+    rawTokens,
+    compressedEvents: 0,
+    droppedEvents: Math.max(0, events.length - selected.length),
+    truncatedEvents: selected.some((item) => String(item.text || '').includes('[truncated]')) ? 1 : 0,
+  };
+}
+
+function selectEventsWithTokenBudget(
+  events: ContextEvent[],
+  tokenBudget: number,
+  strategy: ContextPacketTokenStrategy,
+): TokenBudgetSelection {
+  if (events.length === 0) {
+    return {
+      events: [],
+      tokenUsed: 0,
+      rawTokens: 0,
+      compressedEvents: 0,
+      droppedEvents: 0,
+      truncatedEvents: 0,
+    };
+  }
+
+  if (strategy === 'legacy') {
+    return applyLegacyTailBudget(events, tokenBudget);
+  }
+
+  const compressionMode = strategy === 'aggressive' ? 'aggressive' : 'balanced';
+  const lastIndex = events.length - 1;
+  const candidates: TokenBudgetCandidate[] = events.map((event, index) => {
+    const rawText = String(event.text ?? '');
+    const compressedText = safeCompressEventText(rawText, compressionMode);
+    const rawTokens = estimateEventLineTokens(event, rawText);
+    const compressedTokens = estimateEventLineTokens(event, compressedText);
+    const priorityDetails = scoreEventPriority(event, index, events.length);
+    return {
+      event,
+      index,
+      priority: priorityDetails.score,
+      protect: priorityDetails.protect,
+      hardProtect: index === lastIndex,
+      rawText,
+      compressedText,
+      chosenText: rawText,
+      rawTokens,
+      compressedTokens,
+      chosenTokens: rawTokens,
+      compressedApplied: false,
+      truncated: false,
+      dropped: false,
+    };
+  });
+
+  const rawTokens = candidates.reduce((sum, candidate) => sum + candidate.rawTokens, 0);
+  let totalTokens = rawTokens;
+
+  if (totalTokens > tokenBudget) {
+    const compressionOrder = candidates
+      .filter((candidate) => candidate.compressedTokens < candidate.rawTokens)
+      .sort((a, b) => {
+        if (a.protect !== b.protect) return a.protect ? 1 : -1;
+        const saveA = a.rawTokens - a.compressedTokens;
+        const saveB = b.rawTokens - b.compressedTokens;
+        if (saveB !== saveA) return saveB - saveA;
+        if (a.priority !== b.priority) return a.priority - b.priority;
+        return a.index - b.index;
+      });
+
+    for (const candidate of compressionOrder) {
+      if (totalTokens <= tokenBudget) break;
+      if (candidate.chosenTokens <= candidate.compressedTokens) continue;
+      totalTokens = totalTokens - candidate.chosenTokens + candidate.compressedTokens;
+      candidate.chosenText = candidate.compressedText;
+      candidate.chosenTokens = candidate.compressedTokens;
+      candidate.compressedApplied = true;
+    }
+  }
+
+  if (totalTokens > tokenBudget) {
+    const dropOrder = [...candidates].sort((a, b) => {
+      if (a.hardProtect !== b.hardProtect) return a.hardProtect ? 1 : -1;
+      if (a.protect !== b.protect) return a.protect ? 1 : -1;
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      return a.index - b.index;
+    });
+
+    for (const candidate of dropOrder) {
+      if (totalTokens <= tokenBudget) break;
+      if (candidate.hardProtect || candidate.dropped) continue;
+      const keptCount = candidates.reduce((count, item) => count + (item.dropped ? 0 : 1), 0);
+      if (keptCount <= 1) break;
+      candidate.dropped = true;
+      totalTokens -= candidate.chosenTokens;
+    }
+  }
+
+  if (totalTokens > tokenBudget) {
+    let guard = 0;
+    const maxIterations = Math.max(6, candidates.length * 6);
+    while (totalTokens > tokenBudget && guard < maxIterations) {
+      guard += 1;
+      const active = candidates.filter((candidate) => !candidate.dropped);
+      if (active.length === 0) break;
+      const target = [...active].sort((a, b) => {
+        if (a.hardProtect !== b.hardProtect) return a.hardProtect ? 1 : -1;
+        if (a.protect !== b.protect) return a.protect ? 1 : -1;
+        if (a.priority !== b.priority) return a.priority - b.priority;
+        if (b.chosenTokens !== a.chosenTokens) return b.chosenTokens - a.chosenTokens;
+        return a.index - b.index;
+      })[0];
+
+      if (!target) break;
+      const overflow = totalTokens - tokenBudget;
+      const desiredReduction = Math.max(1, Math.min(overflow, Math.floor(target.chosenTokens * 0.35)));
+      const nextBudget = Math.max(8, target.chosenTokens - desiredReduction);
+      const truncatedText = truncateTextForTokenBudget(target.chosenText, nextBudget);
+      const truncatedTokens = estimateEventLineTokens(target.event, truncatedText);
+
+      if (truncatedTokens >= target.chosenTokens) {
+        if (!target.hardProtect && active.length > 1) {
+          target.dropped = true;
+          totalTokens -= target.chosenTokens;
+          continue;
+        }
+        break;
+      }
+
+      totalTokens = totalTokens - target.chosenTokens + truncatedTokens;
+      target.chosenText = truncatedText;
+      target.chosenTokens = truncatedTokens;
+      target.truncated = true;
+    }
+  }
+
+  if (totalTokens > tokenBudget) {
+    const active = candidates.filter((candidate) => !candidate.dropped);
+    if (active.length > 1) {
+      const keep = [...active].sort((a, b) => {
+        if (a.hardProtect !== b.hardProtect) return a.hardProtect ? -1 : 1;
+        if (b.priority !== a.priority) return b.priority - a.priority;
+        return b.index - a.index;
+      })[0];
+
+      for (const candidate of active) {
+        if (candidate === keep) continue;
+        candidate.dropped = true;
+        totalTokens -= candidate.chosenTokens;
+      }
+    }
+  }
+
+  if (totalTokens > tokenBudget) {
+    const survivor = candidates.find((candidate) => !candidate.dropped);
+    if (survivor) {
+      const truncatedText = truncateTextForTokenBudget(survivor.chosenText, tokenBudget);
+      const truncatedTokens = estimateEventLineTokens(survivor.event, truncatedText);
+      totalTokens = totalTokens - survivor.chosenTokens + truncatedTokens;
+      survivor.chosenText = truncatedText;
+      survivor.chosenTokens = truncatedTokens;
+      survivor.truncated = true;
+    }
+  }
+
+  let selectedEvents = candidates
+    .filter((candidate) => !candidate.dropped)
+    .sort((a, b) => a.index - b.index)
+    .map((candidate) => ({
+      ...candidate.event,
+      text: candidate.chosenText,
+    }));
+
+  if (selectedEvents.length === 0) {
+    const latest = events[events.length - 1];
+    const text = truncateTextForTokenBudget(String(latest.text ?? ''), tokenBudget);
+    selectedEvents = [{ ...latest, text }];
+    totalTokens = estimateEventLineTokens(latest, text);
+  }
+
+  const compressedEvents = candidates.filter((candidate) => !candidate.dropped && candidate.compressedApplied).length;
+  const droppedEvents = candidates.filter((candidate) => candidate.dropped).length;
+  const truncatedEvents = candidates.filter((candidate) => !candidate.dropped && candidate.truncated).length;
+
+  return {
+    events: selectedEvents,
+    tokenUsed: Math.max(0, totalTokens),
+    rawTokens,
+    compressedEvents,
+    droppedEvents,
+    truncatedEvents,
+  };
+}
+
 function isVerificationResult(value: string): value is VerificationResult {
   return value === 'unknown' || value === 'passed' || value === 'failed' || value === 'partial';
 }
@@ -965,6 +1461,7 @@ export interface BuildPacketInput {
   sessionId: string;
   eventLimit?: number;
   tokenBudget?: number;
+  tokenStrategy?: ContextPacketTokenStrategy;
   recallStrategy?: 'tail' | 'smart';
   kinds?: string[];
   refs?: string[];
@@ -1078,32 +1575,28 @@ export async function buildContextPacket(input: BuildPacketInput): Promise<Build
   }
 
   let eventTokensUsed = 0;
+  let tokenWindowRawTokens = 0;
+  let tokenWindowCompressedEvents = 0;
+  let tokenWindowDroppedEvents = 0;
+  let tokenWindowTruncatedEvents = 0;
+  let effectiveTokenStrategy: ContextPacketTokenStrategy | null = null;
+
   if (tokenBudget !== null) {
-    const selectedFromTail: ContextEvent[] = [];
-    for (let index = selectedEvents.length - 1; index >= 0; index -= 1) {
-      const event = selectedEvents[index];
-      const lineText = `${event.role}/${event.kind}: ${sanitizeInline(event.text)}`;
-      const lineTokens = estimateTokens(lineText);
-      if (selectedFromTail.length > 0 && eventTokensUsed + lineTokens > tokenBudget) {
-        break;
-      }
-      if (selectedFromTail.length === 0 && eventTokensUsed + lineTokens > tokenBudget) {
-        const maxChars = Math.max(32, tokenBudget * CHARS_PER_TOKEN_ESTIMATE);
-        selectedFromTail.push({
-          ...event,
-          text: `${sanitizeInline(event.text).slice(0, maxChars)} [truncated]`,
-        });
-        eventTokensUsed = estimateTokens(`${event.role}/${event.kind}: ${sanitizeInline(selectedFromTail[0].text)}`);
-        break;
-      }
-      selectedFromTail.push(event);
-      eventTokensUsed += lineTokens;
-    }
-    selectedEvents = selectedFromTail.reverse();
+    effectiveTokenStrategy = normalizeTokenStrategy(input.tokenStrategy);
+    const selection = selectEventsWithTokenBudget(selectedEvents, tokenBudget, effectiveTokenStrategy);
+    selectedEvents = selection.events;
+    tokenWindowRawTokens = selection.rawTokens;
+    tokenWindowCompressedEvents = selection.compressedEvents;
+    tokenWindowDroppedEvents = selection.droppedEvents;
+    tokenWindowTruncatedEvents = selection.truncatedEvents;
+    eventTokensUsed = selectedEvents.reduce((sum, event) => {
+      return sum + estimateEventLineTokens(event, String(event.text ?? ''));
+    }, 0);
   } else {
     eventTokensUsed = selectedEvents.reduce((sum, event) => {
-      return sum + estimateTokens(`${event.role}/${event.kind}: ${sanitizeInline(event.text)}`);
+      return sum + estimateEventLineTokens(event, String(event.text ?? ''));
     }, 0);
+    tokenWindowRawTokens = eventTokensUsed;
   }
 
   const focusQuery = [
@@ -1176,6 +1669,10 @@ export async function buildContextPacket(input: BuildPacketInput): Promise<Build
       .join('\n')
     : '1. (no events yet)';
 
+  const tokenWindowLine = tokenBudget !== null
+    ? `- Event Window: selected=${selectedEvents.length} filtered=${filteredEvents.length} cap=${eventLimit} tokenBudget=${tokenBudget} tokenUsed=${eventTokensUsed} strategy=${effectiveTokenStrategy ?? 'balanced'} rawTokenUsed=${tokenWindowRawTokens} compressed=${tokenWindowCompressedEvents} dropped=${tokenWindowDroppedEvents} truncated=${tokenWindowTruncatedEvents}`
+    : `- Event Window: selected=${selectedEvents.length} filtered=${filteredEvents.length} cap=${eventLimit} tokenBudget=unbounded tokenUsed=${eventTokensUsed}`;
+
   const markdown = [
     '# Context Packet',
     '',
@@ -1186,7 +1683,7 @@ export async function buildContextPacket(input: BuildPacketInput): Promise<Build
     `- Goal: ${meta.goal}`,
     `- Status: ${meta.status}`,
     `- Event Filters: kinds=${kindFilters.size > 0 ? Array.from(kindFilters).join(',') : '(all)'} refs=${refFilters.size > 0 ? Array.from(refFilters).join(',') : '(all)'}`,
-    `- Event Window: selected=${selectedEvents.length} filtered=${filteredEvents.length} cap=${eventLimit} tokenBudget=${tokenBudget ?? 'unbounded'} tokenUsed=${eventTokensUsed}`,
+    tokenWindowLine,
     '',
     '## L0 Summary',
     summaryRaw.trim(),

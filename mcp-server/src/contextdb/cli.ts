@@ -32,7 +32,7 @@ function usage(): string {
     '  contextdb session:latest --agent <name> [--project <name>]',
     '  contextdb event:add --session <id> --role <user|assistant|tool|system> --text <text> [--kind <kind>] [--refs a,b] [--turn-id <id>] [--parent-turn-id <id>] [--turn-type main|side|system-maintenance|verification] [--environment <label>] [--work-item-refs a,b] [--next-state-refs a,b] [--hindsight-status pending|evaluated|na|failed] [--outcome success|correction|retry-needed|ambiguous|unknown]',
     '  contextdb checkpoint --session <id> --summary <text> [--status running|blocked|done] [--next a|b] [--artifacts a|b] [--verify-result unknown|passed|failed|partial] [--retry-count n] [--failure-category <label>] [--elapsed-ms n] [--cost-usd n]',
-    '  contextdb context:pack --session <id> [--limit 30] [--token-budget 1200] [--recall smart|tail] [--kinds prompt,response,error] [--refs a,b] [--no-dedupe] [--out memory/context-db/exports/<id>.md] [--stdout]',
+    '  contextdb context:pack --session <id> [--limit 30] [--token-budget 1200] [--token-strategy legacy|balanced|aggressive] [--recall smart|tail] [--kinds prompt,response,error] [--refs a,b] [--no-dedupe] [--out memory/context-db/exports/<id>.md] [--stdout]',
     '  contextdb search [--query <text>] [--project <name>] [--session <id>] [--scope events|checkpoints|all] [--role <role>] [--kinds a,b] [--refs a,b] [--statuses running,blocked,done] [--limit 20] [--semantic]',
     '  contextdb recall:sessions [--query <text>] [--project <name>] [--session <id>] [--exclude-session <id>] [--limit 3] [--highlight-limit 3] [--explain-score]',
     '  contextdb timeline [--project <name> | --session <id>] [--limit 50]',
@@ -213,6 +213,13 @@ async function main(): Promise<void> {
       const sessionId = getOption(options, 'session');
       const limit = typeof options.limit === 'string' ? Number(options.limit) : 30;
       const tokenBudget = typeof options['token-budget'] === 'string' ? Number(options['token-budget']) : undefined;
+      const tokenStrategyRaw = typeof options['token-strategy'] === 'string'
+        ? options['token-strategy'].trim().toLowerCase()
+        : '';
+      const tokenStrategy: 'legacy' | 'balanced' | 'aggressive' | undefined =
+        tokenStrategyRaw === 'legacy' || tokenStrategyRaw === 'balanced' || tokenStrategyRaw === 'aggressive'
+          ? tokenStrategyRaw
+          : undefined;
       const out = typeof options.out === 'string'
         ? options.out
         : path.join('memory', 'context-db', 'exports', `${sessionId}-context.md`);
@@ -222,6 +229,7 @@ async function main(): Promise<void> {
         sessionId,
         eventLimit: Number.isFinite(limit) ? limit : 30,
         tokenBudget: tokenBudget !== undefined && Number.isFinite(tokenBudget) ? tokenBudget : undefined,
+        tokenStrategy,
         recallStrategy: typeof options.recall === 'string' && options.recall.trim() === 'tail' ? 'tail' : 'smart',
         kinds: getOptionalCsv(options, 'kinds'),
         refs: getOptionalCsv(options, 'refs'),
