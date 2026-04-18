@@ -16,6 +16,7 @@ description: AI 기억 시스템, Hermes 워크플로, Agent Team, 자동 subage
 - **Hermes 엔진** 스타일 워크플로
 - **Agent Team** 협업 실행
 - **자동 subagent 계획** 및 실행 게이트
+- **고급 디자인 스킬** 기반 페이지 제작
 
 ## 초기 핵심 글
 
@@ -25,6 +26,7 @@ description: AI 기억 시스템, Hermes 워크플로, Agent Team, 자동 subage
 
 ## 최신 글
 
+- [고급 디자인 스킬 페이지 제작: 모호한 프롬프트를 실전 UI로](advanced-design-skills-page-building.md)
 - [RexCLI TUI 리팩토링: React Ink 기반의 현대적 터미널 UI](2026-04-rexcli-ink-tui-refactor.md)
 - [AIOS RL Training System: Multi-Environment Reinforcement Learning](rl-training-system.md)
 - [ContextDB 검색 업그레이드: FTS5/BM25 + 증분 인덱스 동기화(P1.5)](contextdb-fts-bm25-search.md)

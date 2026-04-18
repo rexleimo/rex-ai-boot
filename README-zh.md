@@ -461,12 +461,73 @@ ContextDB 包装和 CLI 的 Skills 加载是两层机制：
 # 安装可跨项目复用的全局技能
 node scripts/aios.mjs setup --components skills --client codex --scope global --skills find-skills,verification-loop
 
+# 安装 DESIGN.md 工作流技能（VoltAgent awesome-design-md）
+node scripts/aios.mjs setup --components skills --client codex --scope global --skills awesome-design-md
+
+# 安装前端设计执行技能（支持“无设计稿”）
+node scripts/aios.mjs setup --components skills --client codex --scope global --skills frontend-design
+
+# 两者一起装（推荐：没有设计稿时）
+node scripts/aios.mjs setup --components skills --client codex --scope global --skills awesome-design-md,frontend-design
+
 # 把仓库专用工作流技能安装到当前项目
 node scripts/aios.mjs setup --components skills --client codex --scope project --skills xhs-ops-methods,aios-jimeng-image-ops
 
 # 仅本地开发使用：保持技能安装回链到当前仓库
 node scripts/aios.mjs setup --components skills --client codex --scope global --install-mode link --skills find-skills
 ```
+
+### 3.2.0 官方文案：无设计稿也能做高质量 UI
+
+对外一句话（可直接用于产品文案）：
+
+`没有设计稿，也能做出好看的界面：先用 DESIGN.md 锁定风格，再用 frontend-design 落地页面实现。`
+
+用户引导文案（可用于 onboarding）：
+
+1. 在你的项目根目录安装技能（推荐项目级）：
+
+```bash
+node <AIOS_ROOT>/scripts/aios.mjs setup --components skills --client codex --scope project --skills awesome-design-md,frontend-design
+```
+
+2. 先生成一个风格基线（`DESIGN.md`）：
+
+```bash
+npx --yes getdesign@latest list
+npx --yes getdesign@latest add linear --force
+```
+
+3. 给 agent 下达固定指令：
+
+```text
+先按 DESIGN.md 定风格，再用 frontend-design 落地实现页面。
+```
+
+客服 FAQ（可直接复用）：
+
+- Q: 我没有设计稿，能用吗？
+- A: 可以。我们就是为“无设计稿”场景设计的，先自动生成 `DESIGN.md` 风格基线，再由 `frontend-design` 生成页面代码。
+- Q: 我不会设计，选什么风格？
+- A: 可以先用 `linear`（SaaS）、`framer`（营销页）、`mintlify`（文档站）作为默认起点，后续再微调。
+- Q: 会不会生成千篇一律模板？
+- A: 这套流程会先锁定风格约束，再实现页面，能明显减少“模板味”。
+
+模糊提示词兼容（建议默认开启）：
+
+- 用户即使只说一句模糊话，也可以自动收敛：
+  - `把这个页面某个元素改一下，更高级一点`
+  - `参考某种风格重做这个页面`
+  - `做一个完整的 SaaS 后台界面流程`
+- 推荐在产品里加一条系统提示词：
+
+```text
+当用户需求模糊时，请先自动判断是 Patch/Restyle/Flow 三类中的哪一类；基于 DESIGN.md 锁定风格后再实现页面。输出必须包含完整交互状态（hover/focus/active/disabled）以及核心流程的 loading/empty/error/success。
+```
+
+完整文案包见：
+
+- [docs/zh-CN/design-skills-official-copy.md](docs/zh-CN/design-skills-official-copy.md)
 
 可选：第三方 Skills（不依赖 `aios`）
 

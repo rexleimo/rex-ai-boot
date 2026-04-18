@@ -38,6 +38,30 @@
       "tags": ["general", "research"]
     },
     {
+      "name": "awesome-design-md",
+      "description": "Apply DESIGN.md templates from VoltAgent awesome-design-md via getdesign CLI.",
+      "source": "skill-sources/awesome-design-md",
+      "clients": ["codex", "claude", "gemini", "opencode"],
+      "scopes": ["global", "project"],
+      "defaultInstall": {
+        "global": false,
+        "project": false
+      },
+      "tags": ["general", "design", "ui"]
+    },
+    {
+      "name": "frontend-design",
+      "description": "Build distinctive production-grade frontend UI, including no-design-draft workflows with DESIGN.md integration.",
+      "source": "skill-sources/frontend-design",
+      "clients": ["codex", "claude", "gemini", "opencode"],
+      "scopes": ["global", "project"],
+      "defaultInstall": {
+        "global": false,
+        "project": false
+      },
+      "tags": ["general", "frontend", "design", "ui"]
+    },
+    {
       "name": "security-scan",
       "description": "Lightweight security hygiene for agent configs.",
       "source": "skill-sources/security-scan",

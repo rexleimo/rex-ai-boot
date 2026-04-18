@@ -32,8 +32,17 @@ Use it when you want:
 - `Agent Team` -> [Agent Team & HUD](team-ops.md)
 - `automatic subagent planning` -> [Architecture](architecture.md)
 
+## Advanced Design Skills for Page Building
+
+Need higher-quality page output from fuzzy prompts?
+
+- Use [Advanced Design Skills](advanced-design-skills.md) to lock style with `DESIGN.md` and implement with `frontend-design`.
+- Apply the `Patch/Restyle/Flow` pattern to keep delivery predictable.
+- For product teams, ship the built-in system prompt from the guide as your default.
+
 ## Latest
 
+- [Advanced Design Skills for Page Building: From Vague Prompts to Production UI](/blog/advanced-design-skills-page-building/)
 - [AIOS RL Training System: Multi-Environment Reinforcement Learning](/blog/rl-training-system/)
 - [ContextDB Search Upgrade: FTS5/BM25 by Default](/blog/contextdb-fts-bm25-search/)
 - [Windows CLI Startup Stability Update](/blog/windows-cli-startup-stability/)

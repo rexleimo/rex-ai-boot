@@ -16,6 +16,7 @@ description: 聚焦 AI 记忆系统、Hermes 引擎工作流、Agent Team 与自
 - **Hermes 引擎** 风格的编排工作流
 - **Agent Team** 多智能体协作
 - **自动化规划子代理** 与执行门禁
+- **高级设计技能** 页面制作与 UI/UX 落地
 
 ## 初始支柱文章
 
@@ -25,6 +26,7 @@ description: 聚焦 AI 记忆系统、Hermes 引擎工作流、Agent Team 与自
 
 ## 最新文章
 
+- [高级设计技能页面制作：把模糊提示词变成可生产 UI](advanced-design-skills-page-building.md)
 - [RexCli TUI 重构：基于 React Ink 的现代终端交互](zh/2026-04-rexcli-ink-tui-refactor.md)
 - [RexCli Skills 安装体验更新：全局/项目范围、更清晰的选择器](2026-03-rexcli-skills-install-experience.md)
 - [AIOS RL 训练系统：从合成 BUG 修复到多环境联合学习](rl-training-system.md)

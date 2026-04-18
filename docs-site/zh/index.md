@@ -34,8 +34,17 @@ RexCLI 是一层 **AI 记忆系统 + 编排层**，服务于 coding agent。
 - `Agent Team` -> [Agent Team & HUD](team-ops.md)
 - `自动化规划子代理` -> [架构](architecture.md)
 
+## 高级设计技能：页面制作
+
+如果用户需求只有一句模糊描述，也可以稳定产出高质量 UI：
+
+- 使用 [高级设计技能](advanced-design-skills.md) 先通过 `DESIGN.md` 锁定风格，再用 `frontend-design` 实现页面
+- 用 `Patch/Restyle/Flow` 三种模式收敛模糊输入
+- 对产品团队，建议把文档里的系统提示词设为默认
+
 ## 最新特性
 
+- [高级设计技能页面制作：把模糊提示词变成可生产 UI](/blog/zh/advanced-design-skills-page-building/)
 - [AIOS RL 训练系统：从合成 BUG 修复到多环境联合学习](/blog/rl-training-system/)
 - [ContextDB 检索升级：默认走 FTS5/BM25](/blog/contextdb-fts-bm25-search/)
 - [Windows 启动稳定性更新](/blog/windows-cli-startup-stability/)

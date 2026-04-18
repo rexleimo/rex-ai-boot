@@ -16,6 +16,7 @@ description: AI 記憶システム、Hermes ワークフロー、Agent Team、su
 - **Hermes エンジン** スタイルのワークフロー
 - **Agent Team** 協調実行
 - **subagent 自動計画** と実行ゲート
+- **高度デザインスキル** によるページ制作
 
 ## 初期ピラーページ
 
@@ -25,6 +26,7 @@ description: AI 記憶システム、Hermes ワークフロー、Agent Team、su
 
 ## 最新記事
 
+- [高度デザインスキルでページ制作: 曖昧プロンプトを本番 UI に変える](advanced-design-skills-page-building.md)
 - [RexCLI TUI リファクタリング：React Ink によるモダンなターミナルUI](2026-04-rexcli-ink-tui-refactor.md)
 - [AIOS RL Training System: Multi-Environment Reinforcement Learning](rl-training-system.md)
 - [ContextDB 検索アップグレード: FTS5/BM25 + 増分インデックス同期（P1.5）](contextdb-fts-bm25-search.md)

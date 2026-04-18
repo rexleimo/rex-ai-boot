@@ -492,12 +492,73 @@ Examples:
 # install reusable global skills
 node scripts/aios.mjs setup --components skills --client codex --scope global --skills find-skills,verification-loop
 
+# install DESIGN.md workflow skill (VoltAgent awesome-design-md)
+node scripts/aios.mjs setup --components skills --client codex --scope global --skills awesome-design-md
+
+# install frontend design execution skill (no-design-draft capable)
+node scripts/aios.mjs setup --components skills --client codex --scope global --skills frontend-design
+
+# install both together (recommended when users have no design handoff)
+node scripts/aios.mjs setup --components skills --client codex --scope global --skills awesome-design-md,frontend-design
+
 # install repo-specific workflow skills into the current project
 node scripts/aios.mjs setup --components skills --client codex --scope project --skills xhs-ops-methods,aios-jimeng-image-ops
 
 # local-dev-only: keep installs linked back to this repo
 node scripts/aios.mjs setup --components skills --client codex --scope global --install-mode link --skills find-skills
 ```
+
+### 3.2.0 Official Copy: High-Quality UI Without Design Handoff
+
+One-liner for product messaging:
+
+`No design handoff? Still ship beautiful UI: lock style with DESIGN.md first, then implement with frontend-design.`
+
+User onboarding copy:
+
+1. Install skills in the target project root (project scope recommended):
+
+```bash
+node <AIOS_ROOT>/scripts/aios.mjs setup --components skills --client codex --scope project --skills awesome-design-md,frontend-design
+```
+
+2. Generate a style baseline (`DESIGN.md`):
+
+```bash
+npx --yes getdesign@latest list
+npx --yes getdesign@latest add linear --force
+```
+
+3. Use this fixed instruction with your agent:
+
+```text
+First lock style with DESIGN.md, then implement the page using frontend-design.
+```
+
+Support FAQ template:
+
+- Q: Can I use this without any design file?
+- A: Yes. It is built for no-design-handoff workflows: generate `DESIGN.md` first, then implement via `frontend-design`.
+- Q: Which style should I pick first?
+- A: Start with `linear` (SaaS), `framer` (landing pages), or `mintlify` (docs).
+- Q: Will it look generic?
+- A: This flow enforces a style contract first, which significantly reduces generic template output.
+
+Vague prompt compatibility (recommended by default):
+
+- Even brief user prompts can be auto-converged:
+  - `Polish this section and keep the current structure`
+  - `Restyle this page with a Stripe-like direction`
+  - `Create a full SaaS admin UI flow`
+- Recommended system prompt:
+
+```text
+When user intent is vague, classify into Patch/Restyle/Flow first. Lock style with DESIGN.md, then implement with complete interaction states (hover/focus/active/disabled) and core flow states (loading/empty/error/success).
+```
+
+Full copy pack:
+
+- [docs/design-skills-official-copy.md](docs/design-skills-official-copy.md)
 
 Optional: third-party skills (does not depend on `aios`)
 

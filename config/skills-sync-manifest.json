@@ -24,6 +24,16 @@
       "repoTargets": ["codex", "claude", "gemini", "opencode"]
     },
     {
+      "relativeSkillPath": "awesome-design-md",
+      "installCatalogName": "awesome-design-md",
+      "repoTargets": ["codex", "claude", "gemini", "opencode"]
+    },
+    {
+      "relativeSkillPath": "frontend-design",
+      "installCatalogName": "frontend-design",
+      "repoTargets": ["codex", "gemini", "opencode"]
+    },
+    {
       "relativeSkillPath": "security-scan",
       "installCatalogName": "security-scan",
       "repoTargets": ["codex", "claude", "gemini", "opencode"]

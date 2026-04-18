@@ -16,6 +16,7 @@ This blog tracks practical patterns for:
 - **Hermes engine** style workflow orchestration
 - **Agent Team** collaboration models
 - **automatic subagent planning** and execution gates
+- **advanced design skills** for page building from vague prompts
 
 ## Getting Started Posts
 
@@ -25,6 +26,7 @@ This blog tracks practical patterns for:
 
 ## Latest Posts
 
+- [Advanced Design Skills for Page Building: From Vague Prompts to Production UI](advanced-design-skills-page-building.md)
 - [RexCLI TUI Refactor: Modern Terminal UI with React Ink](2026-04-rexcli-ink-tui-refactor.md)
 - [AIOS RL Training System: Multi-Environment Reinforcement Learning](rl-training-system.md)
 - [ContextDB Search Upgrade: FTS5/BM25 + Incremental Index Sync (P1.5)](contextdb-fts-bm25-search.md)

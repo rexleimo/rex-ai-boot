@@ -95,6 +95,7 @@ nav:
   - Docs Home: https://cli.rexai.top/
   - Blog Home: index.md
   - Posts:
+      - Advanced Design Skills Playbook: advanced-design-skills-page-building.md
       - Launch Post: launch-post.md
       - CLI Comparison: cli-comparison-post.md
       - Automation Playbook: automation-playbook-post.md

@@ -67,6 +67,7 @@ plugins:
             Core Features: 功能核心
             ContextDB: ContextDB
             Superpowers: Superpowers
+            Advanced Design Skills: 高级设计技能
             Architecture: 架构
             CLI Workflows: CLI 工作流
             Resources: 资源
@@ -95,6 +96,7 @@ plugins:
             Core Features: コアプリ 功能
             ContextDB: ContextDB
             Superpowers: Superpowers
+            Advanced Design Skills: 高度デザインスキル
             Architecture: アーキテクチャ
             CLI Workflows: CLI ワークフロー
             Resources: リソース
@@ -123,6 +125,7 @@ plugins:
             Core Features: 핵심 기능
             ContextDB: ContextDB
             Superpowers: Superpowers
+            Advanced Design Skills: 고급 디자인 스킬
             Architecture: 아키텍처
             CLI Workflows: CLI 워크플로
             Resources: 리소스
@@ -168,6 +171,7 @@ nav:
   - Core Features:
       - ContextDB: contextdb.md
       - Superpowers: superpowers.md
+      - Advanced Design Skills: advanced-design-skills.md
       - Agent Team: team-ops.md
       - HUD Guide: hud-guide.md
       - Architecture: architecture.md
