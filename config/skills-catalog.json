@@ -56,10 +56,10 @@
       "clients": ["codex", "claude", "gemini", "opencode"],
       "scopes": ["global", "project"],
       "defaultInstall": {
-        "global": false,
+        "global": true,
         "project": false
       },
-      "tags": ["general", "design", "ui"]
+      "tags": ["general", "design", "ui", "essential"]
     },
     {
       "name": "frontend-design",
@@ -68,10 +68,10 @@
       "clients": ["codex", "claude", "gemini", "opencode"],
       "scopes": ["global", "project"],
       "defaultInstall": {
-        "global": false,
+        "global": true,
         "project": false
       },
-      "tags": ["general", "frontend", "design", "ui"]
+      "tags": ["general", "frontend", "design", "ui", "essential"]
     },
     {
       "name": "security-scan",
@@ -188,10 +188,10 @@
       "clients": ["codex", "claude"],
       "scopes": ["global", "project"],
       "defaultInstall": {
-        "global": false,
+        "global": true,
         "project": false
       },
-      "tags": ["aios", "git"]
+      "tags": ["aios", "git", "essential"]
     },
     {
       "name": "aios-jimeng-image-ops",
