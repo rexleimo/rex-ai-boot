@@ -53,6 +53,58 @@ npm run contextdb -- index:sync --stats --jsonl-out memory/context-db/exports/in
 npm run contextdb -- index:rebuild
 ```
 
+## 懒加载启动（P0）
+
+ContextDB 现在支持交互式 CLI 会话的**懒加载模式**。不再在每次启动时运行完整的 `context:pack`（2~5 秒），而是让包装器加载轻量缓存的 Facade（< 50 ms），并让 Agent 在需要时自主发现记忆。
+
+### 工作原理
+
+1. **快速 Facade 读取** — 启动时加载 `memory/context-db/.facade.json`（缓存的会话摘要）。
+2. **精简提示词注入** — 注入一个 < 150 token 的 Facade 提示，告知 Agent：
+   - ContextDB 存在
+   - 完整历史记录的位置
+   - 何时加载它
+3. **后台 Bootstrap** — Fork 一个分离的进程，在后台异步重建完整的上下文包。
+4. **运行时触发机制** — 当 Agent 收到用户输入时，按短路顺序评估三个信号：
+   - **A. 意图检测** — 关键词如 "remember"、"之前"、"continue"、"resume"
+   - **B. 任务复杂度** — 多步骤、跨域、orchestrate/team 类语言
+   - **C. RL 策略门控** — 未来集成 `rl-core` 进行学习后的加载决策
+
+### 启用 / 禁用
+
+懒加载在交互式会话中**默认开启**。
+
+```bash
+# 退出（每次启动时即时打包）
+export CTXDB_LAZY_LOAD=0
+
+# 显式启用
+export CTXDB_LAZY_LOAD=1
+```
+
+One-shot 模式（`--prompt`）不受此设置影响，始终使用即时路径。
+
+### Facade JSON
+
+Facade 旁路缓存会在每次成功打包后自动生成：
+
+```json
+{
+  "version": 1,
+  "generatedAt": "2026-04-19T10:00:00Z",
+  "ttlSeconds": 3600,
+  "sessionId": "claude-code-20260419T095454-e6eb600d",
+  "goal": "Shared context session for claude-code on aios",
+  "status": "running",
+  "lastCheckpointSummary": "...",
+  "keyRefs": ["scripts/ctx-agent-core.mjs"],
+  "contextPacketPath": "memory/context-db/exports/latest-claude-code-context.md",
+  "hasStalePack": false
+}
+```
+
+如果 Facade 缺失或过期，将自动回退到从最新会话头信息生成新的 Facade。
+
 ## 上下文包控制（P0）
 
 `context:pack` 支持 token 预算与事件过滤：

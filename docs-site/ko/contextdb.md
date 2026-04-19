@@ -53,6 +53,58 @@ npm run contextdb -- index:sync --stats --jsonl-out memory/context-db/exports/in
 npm run contextdb -- index:rebuild
 ```
 
+## 레이지 로드 시작 (P0)
+
+ContextDB는 이제 인터랙티브 CLI 세션을 위한 **레이지 로드 모드**를 지원합니다. 매번 시작할 때 전체 `context:pack`을 실행하는 대신(2~5초), 래퍼가 경량 캐시된 퍼사드(< 50ms)를 로드하고 에이전트가 필요할 때 메모리를 자율 발견하도록 합니다.
+
+### 작동 방식
+
+1. **빠른 퍼사드 읽기** — 시작 시 `memory/context-db/.facade.json`(캐시된 세션 요약)을 로드합니다.
+2. **작은 프롬프트 주입** — 150토큰 미만의 퍼사드 프롬프트를 주입하여 에이전트에게 다음을 알려줍니다:
+   - ContextDB가 존재함
+   - 전체 기록을 찾을 위치
+   - 언제 로드할지
+3. **백그라운드 부트스트랩** — 분리된 프로세스를 포크하여 전체 컨텍스트 패킷을 비동기적으로 재구축합니다.
+4. **런타임 에이전트 트리거** — 에이전트가 사용자 턴을 수신하면 세 가지 신호를 단락 순서로 평가합니다:
+   - **A. 의도 감지** — "remember", "之前", "continue", "resume" 등의 키워드
+   - **B. 작업 복잡도** — 다단계, 교차 도메인, orchestrate/team 언어
+   - **C. RL 정책 게이트** — 학습된 로드 결정을 위한 향후 `rl-core` 통합
+
+### 활성화 / 비활성화
+
+레이지 로드는 인터랙티브 세션에서 **기본 ON**입니다.
+
+```bash
+# 옵트아웃 (매 시작 시 즉시 패킹)
+export CTXDB_LAZY_LOAD=0
+
+# 명시적으로 옵트인
+export CTXDB_LAZY_LOAD=1
+```
+
+원샷 모드(`--prompt`)는 이 설정과 관계없이 항상 즉시 경로를 사용합니다.
+
+### 퍼사드 JSON
+
+퍼사드 사이드카는 각 성공적인 패킹 후 자동 생성됩니다:
+
+```json
+{
+  "version": 1,
+  "generatedAt": "2026-04-19T10:00:00Z",
+  "ttlSeconds": 3600,
+  "sessionId": "claude-code-20260419T095454-e6eb600d",
+  "goal": "Shared context session for claude-code on aios",
+  "status": "running",
+  "lastCheckpointSummary": "...",
+  "keyRefs": ["scripts/ctx-agent-core.mjs"],
+  "contextPacketPath": "memory/context-db/exports/latest-claude-code-context.md",
+  "hasStalePack": false
+}
+```
+
+퍼사드가 누락되었거나 만료된 경우, 최신 세션 헤더에서 새 퍼사드를 생성하는 폴리백이 실행됩니다.
+
 ## 패킷 제어 (P0)
 
 `context:pack`은 토큰 예산과 이벤트 필터를 지원합니다:

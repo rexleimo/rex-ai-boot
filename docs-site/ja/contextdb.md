@@ -53,6 +53,58 @@ npm run contextdb -- index:sync --stats --jsonl-out memory/context-db/exports/in
 npm run contextdb -- index:rebuild
 ```
 
+## レイジーロード起動（P0）
+
+ContextDB はインタラクティブ CLI セッション用に **レイジーロードモード** をサポートしています。毎回起動時に完全な `context:pack` を実行する代わりに（2〜5秒）、ラッパーは軽量なキャッシュ済みファサード（< 50 ms）を読み込み、エージェントが必要に応じてメモリを自律発見できるようにします。
+
+### 仕組み
+
+1. **高速ファサード読み込み** — 起動時に `memory/context-db/.facade.json`（キャッシュ済みセッションサマリー）を読み込みます。
+2. **小さなプロンプト注入** — 150 トークン未満のファサードプロンプトを注入し、エージェントに以下を伝えます:
+   - ContextDB が存在すること
+   - 完全な履歴の場所
+   - いつ読み込むべきか
+3. **バックグラウンドブートストラップ** — 切り離されたプロセスをフォークし、完全なコンテキストパックを非同期に再構築します。
+4. **ランタイムの自律トリガー** — エージェントがユーザーターンを受信すると、3 つのシグナルを短絡順で評価します:
+   - **A. 意図検出** — "remember"、"之前"、"continue"、"resume" などのキーワード
+   - **B. タスク複雑度** — マルチステップ、クロスドメイン、 orchestrate/team 言語
+   - **C. RL ポリシーゲート** — 学習済み読み込み判断のための将来の `rl-core` 統合
+
+### 有効化 / 無効化
+
+レイジーロードはインタラクティブセッションで **デフォルトで有効** です。
+
+```bash
+# オプトアウト（毎回起動時に即時パック）
+export CTXDB_LAZY_LOAD=0
+
+# 明示的に有効化
+export CTXDB_LAZY_LOAD=1
+```
+
+ワンショットモード（`--prompt`）はこの設定に関わらず、常に即時パスを使用します。
+
+### ファサード JSON
+
+ファサードサイドカーは、各成功したパック後に自動生成されます:
+
+```json
+{
+  "version": 1,
+  "generatedAt": "2026-04-19T10:00:00Z",
+  "ttlSeconds": 3600,
+  "sessionId": "claude-code-20260419T095454-e6eb600d",
+  "goal": "Shared context session for claude-code on aios",
+  "status": "running",
+  "lastCheckpointSummary": "...",
+  "keyRefs": ["scripts/ctx-agent-core.mjs"],
+  "contextPacketPath": "memory/context-db/exports/latest-claude-code-context.md",
+  "hasStalePack": false
+}
+```
+
+ファサードが欠落または期限切れの場合、最新のセッションヘッダーから新しいファサードを生成するフォールバックが実行されます。
+
 ## パック制御（P0）
 
 `context:pack` はトークン予算とイベントフィルタ，支持します:
