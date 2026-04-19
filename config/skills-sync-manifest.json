@@ -9,6 +9,11 @@
   },
   "skills": [
     {
+      "relativeSkillPath": "aios-workflow-router",
+      "installCatalogName": "aios-workflow-router",
+      "repoTargets": ["codex", "claude", "gemini", "opencode", "agents"]
+    },
+    {
       "relativeSkillPath": "find-skills",
       "installCatalogName": "find-skills",
       "repoTargets": ["codex", "claude", "gemini", "opencode", "agents"]

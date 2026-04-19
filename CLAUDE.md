@@ -2,6 +2,26 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+<!-- WORKFLOW ROUTER - MANDATORY -->
+<IMPORTANT>
+## Workflow Routing (REQUIRED)
+
+**Before any action, route the task to the appropriate workflow:**
+
+1. **Check task type** by looking for these keywords:
+   - 设计/创意/新功能/brainstorm → Use brainstorming workflow
+   - 调试/bug/error/debug → Use debugging workflow
+   - 并发/并行/agent team/dispatch → Use parallel dispatch workflow
+   - 长任务/harness/multi-step → Use harness workflow
+   - 实现/implement/开发 → Use implementation workflow
+   - 分析/研究/调查 → Use analysis workflow
+
+2. **Invoke `aios-workflow-router` skill** to get the correct workflow.
+
+3. **Do NOT skip this step** - Even simple tasks benefit from proper routing.
+</IMPORTANT>
+<!-- END WORKFLOW ROUTER -->
+
 ## Project Overview
 
 This is a **Xiaohongshu (小红书) Operations Assistant** - an AI agent framework that uses Claude Code with the repo-local browser MCP (`puppeteer-stealth` alias routed to browser-use MCP) to automate operations on Xiaohongshu (xiaohongshu.com), a Chinese social media platform.

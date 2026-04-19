@@ -1,5 +1,25 @@
 # Repository Guidelines
 
+<!-- WORKFLOW ROUTER - MANDATORY -->
+<IMPORTANT>
+## Workflow Routing (REQUIRED)
+
+**Before any action, route the task to the appropriate workflow:**
+
+1. **Check task type** by looking for these keywords:
+   - 设计/创意/新功能/brainstorm → Use brainstorming workflow
+   - 调试/bug/error/debug → Use debugging workflow
+   - 并发/并行/agent team/dispatch → Use parallel dispatch workflow
+   - 长任务/harness/multi-step → Use harness workflow
+   - 实现/implement/开发 → Use implementation workflow
+   - 分析/研究/调查 → Use analysis workflow
+
+2. **Invoke `aios-workflow-router` skill** to get the correct workflow.
+
+3. **Do NOT skip this step** - Even simple tasks benefit from proper routing.
+</IMPORTANT>
+<!-- END WORKFLOW ROUTER -->
+
 ## Project Structure & Module Organization
 This repository is a local-first AI agent workspace centered on browser automation via MCP.
 

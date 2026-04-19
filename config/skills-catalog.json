@@ -2,6 +2,18 @@
   "version": 1,
   "skills": [
     {
+      "name": "aios-workflow-router",
+      "description": "Route tasks to appropriate workflows. TRIGGERS: 分析,设计,实现,调试,并发,并行,agent team,长任务,harness,plan,brainstorm,debug,multi-step",
+      "source": "skill-sources/aios-workflow-router",
+      "clients": ["codex", "claude", "gemini", "opencode"],
+      "scopes": ["global", "project"],
+      "defaultInstall": {
+        "global": true,
+        "project": false
+      },
+      "tags": ["general", "workflow", "routing", "essential"]
+    },
+    {
       "name": "find-skills",
       "description": "Discover installable skills.",
       "source": "skill-sources/find-skills",
