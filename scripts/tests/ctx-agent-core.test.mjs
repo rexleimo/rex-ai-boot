@@ -527,6 +527,7 @@ test('ctx-agent tolerates context:pack failures in interactive mode by still inv
         env: {
           ...process.env,
           CTXDB_PACK_STRICT: '0',
+          CTXDB_LAZY_LOAD: '0',
           PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
         },
       }
@@ -696,6 +697,9 @@ test('ctx-agent interactive Claude mode injects context packet as system prompt'
         encoding: 'utf8',
         env: {
           ...process.env,
+          CTXDB_LAZY_LOAD: '0',
+          CTXDB_AUTO_PROMPT: '',
+          CTXDB_TASK_ROUTER_GUIDE: '0',
           PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
         },
       }
@@ -872,6 +876,8 @@ test('ctx-agent interactive OpenCode mode sends auto prompt via context packet f
         encoding: 'utf8',
         env: {
           ...process.env,
+          CTXDB_LAZY_LOAD: '0',
+          CTXDB_AUTO_PROMPT: '',
           PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
         },
       }

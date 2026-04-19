@@ -1,5 +1,6 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { getCommandSpawnSpec } from './lib/platform/process.mjs';
+import { loadFacade, generateFacadeFromSession } from './lib/contextdb/facade.mjs';
 import { promises as fs } from 'node:fs';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -56,7 +57,8 @@ Options:
   console.log(`
 Environment:
   CTXDB_AUTO_REBUILD_NATIVE 1/true/yes/on to auto-rebuild better-sqlite3 on Node ABI mismatch (default: on)
-  CTXDB_TASK_ROUTER_GUIDE 1/true/yes/on to inject routing checklist into context packet (default: on)`);
+  CTXDB_TASK_ROUTER_GUIDE 1/true/yes/on to inject routing checklist into context packet (default: on)
+  CTXDB_LAZY_LOAD      1/true/yes/on to enable lazy context loading (default: on)`);
 }
 
 function runCommand(command, args, options = {}) {
@@ -559,6 +561,46 @@ export function shouldAutoRebuildNative(env = process.env) {
 
 function shouldStrictContextPack(env = process.env) {
   return parseBoolEnv(env.CTXDB_PACK_STRICT, false);
+}
+
+export function shouldLazyLoad(env = process.env) {
+  const value = String(env?.CTXDB_LAZY_LOAD ?? '').trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(value)) return true;
+  if (['0', 'false', 'no', 'off'].includes(value)) return false;
+  return true;
+}
+
+export function buildFacadePrompt(facade, agent) {
+  if (!facade || !facade.sessionId) {
+    return `This project uses ContextDB for session memory. No prior sessions found. Full history will be available at memory/context-db/exports/latest-${agent}-context.md.`;
+  }
+  const refs = facade.keyRefs?.length ? `refs: ${facade.keyRefs.join(', ')}` : '';
+  return [
+    `This project uses ContextDB for session memory.`,
+    `Latest session: ${facade.goal} (status: ${facade.status}${refs ? ', ' + refs : ''}).`,
+    `Full history at: ${facade.contextPacketPath}.`,
+    `Load it when you need prior context.`,
+  ].join(' ');
+}
+
+function forkAsyncBootstrap(workspaceRoot, opts) {
+  const scriptPath = path.join(__dirname, 'lib', 'contextdb', 'async-bootstrap-runner.mjs');
+  const child = spawn(
+    process.execPath,
+    [
+      scriptPath,
+      '--workspace', workspaceRoot,
+      '--agent', opts.agent,
+      '--project', opts.project,
+    ],
+    {
+      detached: true,
+      stdio: 'ignore',
+      env: process.env,
+    }
+  );
+  child.unref();
+  return child;
 }
 
 function getAutoPrompt(env = process.env) {
@@ -1204,6 +1246,45 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
       const reason = error instanceof Error ? error.message : String(error);
       console.warn(`[warn] bootstrap task initialization failed: ${reason}`);
     }
+  }
+
+  const lazyMode = shouldLazyLoad(process.env);
+
+  if (lazyMode && !opts.prompt) {
+    let facadeResult = await loadFacade(opts.workspaceRoot);
+    if (!facadeResult.ok) {
+      const fallbackFacade = await generateFacadeFromSession(opts.workspaceRoot, opts.agent, opts.project);
+      facadeResult = { ok: true, facade: fallbackFacade };
+    }
+    const facadePrompt = buildFacadePrompt(facadeResult.facade, opts.agent);
+    const routerGuide = shouldInjectTaskRouterGuide(process.env)
+      ? buildTaskRouterGuide({
+          agent: opts.agent,
+          teamProvider: opts.teamProvider,
+          teamWorkers: opts.teamWorkers,
+          blueprint: opts.blueprint,
+          routeMode: opts.routeMode,
+        })
+      : '';
+    const effectivePrompt = routerGuide
+      ? `${facadePrompt}\n\n${routerGuide}`
+      : facadePrompt;
+
+    console.log(`Session: ${facadeResult.facade?.sessionId || '(new)'}`);
+    console.log(`Workspace: ${opts.workspaceRoot}`);
+    console.log('Context packet: (lazy-load; agent self-discovers memory)');
+    if (routerGuide) {
+      console.log(`Task router guide: enabled (mode=${opts.routeMode})`);
+    }
+
+    forkAsyncBootstrap(opts.workspaceRoot, opts);
+
+    runInteractiveAgent(opts.agent, effectivePrompt, opts.extraArgs, {
+      injectContext: true,
+      teamProvider: opts.teamProvider,
+      teamWorkers: opts.teamWorkers,
+      blueprint: opts.blueprint,
+    });
   }
 
   ctx(opts.workspaceRoot, 'init', []);
