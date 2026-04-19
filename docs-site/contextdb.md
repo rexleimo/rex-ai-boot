@@ -53,6 +53,58 @@ npm run contextdb -- index:sync --stats --jsonl-out memory/context-db/exports/in
 npm run contextdb -- index:rebuild
 ```
 
+## Lazy Load Startup (P0)
+
+ContextDB now supports **lazy load mode** for interactive CLI sessions. Instead of running a full `context:pack` on every startup (2–5 s), the wrapper loads a lightweight cached facade (< 50 ms) and lets the agent self-discover memory when needed.
+
+### How it works
+
+1. **Fast facade read** — On startup, load `memory/context-db/.facade.json` (cached session summary).
+2. **Tiny prompt injection** — Inject a < 150-token facade prompt that tells the agent:
+   - That ContextDB exists
+   - Where to find the full history
+   - When to load it
+3. **Background bootstrap** — Fork a detached process to rebuild the full context pack asynchronously.
+4. **Agentic triggers at runtime** — When the agent receives a user turn, it evaluates three signals (short-circuit):
+   - **A. Intent detection** — Keywords like "remember", "之前", "continue", "resume"
+   - **B. Task complexity** — Multi-step, cross-domain, orchestrate/team language
+   - **C. RL policy gate** — Future integration with `rl-core` for learned load decisions
+
+### Enabling / disabling
+
+Lazy load is **on by default** for interactive sessions.
+
+```bash
+# Opt out (eager pack on every startup)
+export CTXDB_LAZY_LOAD=0
+
+# Explicitly opt in
+export CTXDB_LAZY_LOAD=1
+```
+
+One-shot mode (`--prompt`) always uses the eager path regardless of this setting.
+
+### Facade JSON
+
+The facade sidecar is auto-generated after each successful pack:
+
+```json
+{
+  "version": 1,
+  "generatedAt": "2026-04-19T10:00:00Z",
+  "ttlSeconds": 3600,
+  "sessionId": "claude-code-20260419T095454-e6eb600d",
+  "goal": "Shared context session for claude-code on aios",
+  "status": "running",
+  "lastCheckpointSummary": "...",
+  "keyRefs": ["scripts/ctx-agent-core.mjs"],
+  "contextPacketPath": "memory/context-db/exports/latest-claude-code-context.md",
+  "hasStalePack": false
+}
+```
+
+If the facade is missing or expired, it falls back to generating a fresh facade from the latest session headers.
+
 ## Packet Controls (P0)
 
 `context:pack` now supports token-aware and filter-aware export:
