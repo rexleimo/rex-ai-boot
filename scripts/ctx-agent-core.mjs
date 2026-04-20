@@ -583,6 +583,21 @@ export function buildFacadePrompt(facade, agent) {
   ].join(' ');
 }
 
+function normalizeFacadePathForCompare(value = '') {
+  return String(value || '').replace(/\\/g, '/');
+}
+
+export function shouldScheduleAsyncBootstrap(facadeResult, agent) {
+  if (!facadeResult?.ok || !facadeResult.facade) {
+    return true;
+  }
+  if (facadeResult.facade.hasStalePack === true) {
+    return true;
+  }
+  const expectedPath = normalizeFacadePathForCompare(path.join('memory', 'context-db', 'exports', `latest-${agent}-context.md`));
+  return normalizeFacadePathForCompare(facadeResult.facade.contextPacketPath) !== expectedPath;
+}
+
 function forkAsyncBootstrap(workspaceRoot, opts) {
   const scriptPath = path.join(__dirname, 'lib', 'contextdb', 'async-bootstrap-runner.mjs');
   const child = spawn(
@@ -1277,7 +1292,9 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
       console.log(`Task router guide: enabled (mode=${opts.routeMode})`);
     }
 
-    forkAsyncBootstrap(opts.workspaceRoot, opts);
+    if (shouldScheduleAsyncBootstrap(facadeResult, opts.agent)) {
+      forkAsyncBootstrap(opts.workspaceRoot, opts);
+    }
 
     runInteractiveAgent(opts.agent, effectivePrompt, opts.extraArgs, {
       injectContext: true,

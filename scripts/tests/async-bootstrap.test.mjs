@@ -46,3 +46,96 @@ test('async bootstrap writes .facade.json after pack', async () => {
 
   await rm(dir, { recursive: true });
 });
+
+test('async bootstrap skips refresh when facade is still fresh', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'async-bootstrap-fresh-'));
+  const contextDir = path.join(dir, 'memory', 'context-db');
+  await mkdir(contextDir, { recursive: true });
+
+  const facadePath = path.join(contextDir, '.facade.json');
+  const facade = {
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    ttlSeconds: 3600,
+    sessionId: 'claude-code-20260419T000000-abc123',
+    goal: 'fresh facade',
+    status: 'running',
+    lastCheckpointSummary: 'fresh',
+    keyRefs: [],
+    contextPacketPath: 'memory/context-db/exports/latest-claude-code-context.md',
+    hasStalePack: false,
+  };
+  await writeFile(facadePath, `${JSON.stringify(facade, null, 2)}\n`, 'utf8');
+
+  let packCalls = 0;
+  const mockPack = async () => {
+    packCalls += 1;
+    return {
+      ok: true,
+      mode: 'fresh',
+      packAbs: path.join(contextDir, 'exports', 'latest-claude-code-context.md'),
+      contextText: '# Context\n\nfresh\n',
+    };
+  };
+
+  await runAsyncBootstrap(dir, {
+    agent: 'claude-code',
+    project: 'aios',
+    safeContextPack: mockPack,
+  });
+
+  assert.equal(packCalls, 0);
+  const afterText = await readFile(facadePath, 'utf8');
+  assert.equal(afterText, `${JSON.stringify(facade, null, 2)}\n`);
+
+  await rm(dir, { recursive: true });
+});
+
+test('async bootstrap dedupes concurrent refresh runs with a workspace lock', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'async-bootstrap-lock-'));
+  const exportsDir = path.join(dir, 'memory', 'context-db', 'exports');
+  await mkdir(exportsDir, { recursive: true });
+
+  const sessionsDir = path.join(dir, 'memory', 'context-db', 'sessions');
+  const sessionId = 'claude-code-20260419T000000-lock';
+  await mkdir(path.join(sessionsDir, sessionId), { recursive: true });
+  await writeFile(
+    path.join(sessionsDir, sessionId, 'meta.json'),
+    JSON.stringify({ goal: 'test', status: 'running', updated_at: new Date().toISOString() }),
+    'utf8'
+  );
+
+  let packCalls = 0;
+  let releasePack = null;
+  const waitForRelease = new Promise((resolve) => {
+    releasePack = resolve;
+  });
+  const mockPack = async () => {
+    packCalls += 1;
+    await waitForRelease;
+    return {
+      ok: true,
+      mode: 'fresh',
+      packAbs: path.join(exportsDir, 'latest-claude-code-context.md'),
+      contextText: '# Context\n\nfresh\n',
+    };
+  };
+
+  const firstRun = runAsyncBootstrap(dir, {
+    agent: 'claude-code',
+    project: 'aios',
+    safeContextPack: mockPack,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const secondRun = runAsyncBootstrap(dir, {
+    agent: 'claude-code',
+    project: 'aios',
+    safeContextPack: mockPack,
+  });
+  releasePack();
+
+  await Promise.all([firstRun, secondRun]);
+  assert.equal(packCalls, 1);
+
+  await rm(dir, { recursive: true });
+});

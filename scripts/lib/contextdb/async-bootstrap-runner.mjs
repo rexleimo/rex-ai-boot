@@ -1,10 +1,7 @@
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { readFile, writeFile } from 'node:fs/promises';
 import { runContextDbCli } from '../contextdb-cli.mjs';
-import { generateFacadeFromSession } from './facade.mjs';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { readFile } from 'node:fs/promises';
+import { runAsyncBootstrap } from './async-bootstrap.mjs';
 
 function parseArgs(argv) {
   const opts = { workspaceRoot: '', agent: '', project: '' };
@@ -59,19 +56,16 @@ async function main() {
   }
 
   const packPath = path.join('memory', 'context-db', 'exports', `latest-${opts.agent}-context.md`);
-  const packResult = await minimalSafeContextPack(
-    opts.workspaceRoot,
-    { eventLimit: 30, packPath },
-    opts.agent,
-    opts.project
-  );
-
-  const facade = await generateFacadeFromSession(opts.workspaceRoot, opts.agent, opts.project);
-  facade.hasStalePack = packResult.mode !== 'fresh';
-  facade.contextPacketPath = packPath;
-
-  const facadePath = path.join(opts.workspaceRoot, 'memory', 'context-db', '.facade.json');
-  await writeFile(facadePath, JSON.stringify(facade, null, 2) + '\n', 'utf8');
+  await runAsyncBootstrap(opts.workspaceRoot, {
+    agent: opts.agent,
+    project: opts.project,
+    safeContextPack: (workspaceRoot, packOptions) => minimalSafeContextPack(
+      workspaceRoot,
+      { eventLimit: packOptions.eventLimit, packPath: packOptions.packPath || packPath },
+      opts.agent,
+      opts.project
+    ),
+  });
 }
 
 main().catch((err) => {

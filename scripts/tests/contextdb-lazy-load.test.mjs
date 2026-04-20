@@ -98,6 +98,6 @@ test('async bootstrap runner exists and is executable', async () => {
     'async-bootstrap-runner.mjs'
   );
   const content = await readFile(runnerPath, 'utf8');
-  assert.ok(content.includes('generateFacadeFromSession'));
+  assert.ok(content.includes('runAsyncBootstrap'));
   assert.ok(content.includes('context:pack'));
 });

@@ -19,6 +19,7 @@ export const SUBAGENT_CONTEXT_TOKEN_STRATEGY_ENV = 'AIOS_SUBAGENT_CONTEXT_TOKEN_
 export const SUBAGENT_UPSTREAM_MAX_ATTEMPTS_ENV = 'AIOS_SUBAGENT_UPSTREAM_MAX_ATTEMPTS';
 export const SUBAGENT_UPSTREAM_BACKOFF_MS_ENV = 'AIOS_SUBAGENT_UPSTREAM_BACKOFF_MS';
 export const SUBAGENT_PRE_MUTATION_SNAPSHOT_ENV = 'AIOS_SUBAGENT_PRE_MUTATION_SNAPSHOT';
+export const SUBAGENT_CODEX_DISABLE_MCP_ENV = 'AIOS_SUBAGENT_CODEX_DISABLE_MCP';
 
 const SUPPORTED_CLIENTS = new Set(['codex-cli', 'claude-code', 'gemini-cli']);
 const CLIENT_COMMAND = {
@@ -150,6 +151,14 @@ function parseBooleanEnv(raw, fallback = false) {
   if (value === '1' || value === 'true' || value === 'yes' || value === 'on') return true;
   if (value === '0' || value === 'false' || value === 'no' || value === 'off') return false;
   return fallback;
+}
+
+function buildCodexConfigArgs(env = process.env) {
+  const disableMcpStartup = parseBooleanEnv(env?.[SUBAGENT_CODEX_DISABLE_MCP_ENV], true);
+  if (!disableMcpStartup) {
+    return [];
+  }
+  return ['-c', 'mcp_servers={}', '-c', 'features.rmcp_client=false'];
 }
 
 function formatSnapshotTimestamp(ts = new Date()) {
@@ -712,6 +721,7 @@ async function runOneShot(clientId, { systemPrompt, userPrompt, timeoutMs, env, 
     const fullPrompt = systemText
       ? `${systemText}\n\n## New User Request\n${promptText}`
       : promptText;
+    const codexConfigArgs = buildCodexConfigArgs(env);
 
     const structuredFlags = [];
     if (codexOutput?.schemaPath) {
@@ -725,7 +735,7 @@ async function runOneShot(clientId, { systemPrompt, userPrompt, timeoutMs, env, 
     }
 
     if (structuredFlags.length > 0) {
-      args = ['exec', ...structuredFlags, '-'];
+      args = ['exec', ...codexConfigArgs, ...structuredFlags, '-'];
       const result = await runCodexExecWithRetry(command, args, { env, timeoutMs, cwd, input: fullPrompt, io });
       const combinedStdout = String(result.stdout || '');
       const combinedStderr = String(result.stderr || '');
@@ -753,7 +763,7 @@ async function runOneShot(clientId, { systemPrompt, userPrompt, timeoutMs, env, 
         const combined = `${combinedStdout}\n${combinedStderr}`.trim();
         const structuredFlags = ['--output-schema', '--output-last-message', '--color'];
         if (isUnsupportedCodexFlagError(combined, structuredFlags) || isCodexSchemaValidationError(combined)) {
-          const fallbackArgs = ['exec'];
+          const fallbackArgs = ['exec', ...codexConfigArgs];
           if (codexOutput?.lastMessagePath) {
             fallbackArgs.push('--output-last-message', codexOutput.lastMessagePath);
           }
@@ -787,7 +797,7 @@ async function runOneShot(clientId, { systemPrompt, userPrompt, timeoutMs, env, 
             const fallbackCombined = `${fallbackStdout}\n${fallbackStderr}`.trim();
             const fallbackFlags = ['--output-last-message', '--color'];
             if (isUnsupportedCodexFlagError(fallbackCombined, fallbackFlags)) {
-              const plainFallback = await runCodexExecWithRetry(command, ['exec', '-'], { env, timeoutMs, cwd, input: fullPrompt, io });
+              const plainFallback = await runCodexExecWithRetry(command, ['exec', ...codexConfigArgs, '-'], { env, timeoutMs, cwd, input: fullPrompt, io });
               const plainStdout = String(plainFallback.stdout || '');
               const plainStderr = String(plainFallback.stderr || '');
               const plainExit = Number.isFinite(plainFallback.status) ? plainFallback.status : 1;
@@ -832,7 +842,7 @@ async function runOneShot(clientId, { systemPrompt, userPrompt, timeoutMs, env, 
       });
     }
 
-    args = ['exec', '-'];
+    args = ['exec', ...codexConfigArgs, '-'];
     const result = await runCodexExecWithRetry(command, args, { env, timeoutMs, cwd, input: fullPrompt, io });
     const combinedStdout = String(result.stdout || '');
     const combinedStderr = String(result.stderr || '');

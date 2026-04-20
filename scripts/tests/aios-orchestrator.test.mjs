@@ -118,7 +118,14 @@ function assertSnapshotManifestShape(manifest, {
 
 async function createFakeCodexCommand(
   payload = null,
-  { usageLog = '', failOnOutputSchema = false, upstreamFailAttempts = 0, captureInputPath = '', hangAfterOutput = false } = {}
+  {
+    usageLog = '',
+    failOnOutputSchema = false,
+    upstreamFailAttempts = 0,
+    captureInputPath = '',
+    captureArgsPath = '',
+    hangAfterOutput = false,
+  } = {}
 ) {
   const binDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-orchestrator-bin-'));
   const json = payload || {
@@ -144,11 +151,13 @@ async function createFakeCodexCommand(
   const upstreamFailureLimitLiteral = Number.isFinite(upstreamFailureLimit) && upstreamFailureLimit > 0 ? String(upstreamFailureLimit) : '0';
   const attemptStatePathLiteral = JSON.stringify(path.join(binDir, 'codex-fake-attempt-count.txt'));
   const captureInputPathLiteral = JSON.stringify(String(captureInputPath || '').trim());
+  const captureArgsPathLiteral = JSON.stringify(String(captureArgsPath || '').trim());
   const scriptBody = [
     "import fs from 'node:fs';",
     "const args = process.argv.slice(2);",
     `const attemptStatePath = ${attemptStatePathLiteral};`,
     `const captureInputPath = ${captureInputPathLiteral};`,
+    `const captureArgsPath = ${captureArgsPathLiteral};`,
     "let stdinText = '';",
     'try {',
     "  stdinText = fs.readFileSync(0, 'utf8');",
@@ -158,6 +167,13 @@ async function createFakeCodexCommand(
     'if (captureInputPath) {',
     '  try {',
     "    fs.appendFileSync(captureInputPath, `===PROMPT===\\n${stdinText}\\n`, 'utf8');",
+    '  } catch {',
+    '    // ignore capture failures in test fixture',
+    '  }',
+    '}',
+    'if (captureArgsPath) {',
+    '  try {',
+    "    fs.appendFileSync(captureArgsPath, `${JSON.stringify(args)}\\n`, 'utf8');",
     '  } catch {',
     '    // ignore capture failures in test fixture',
     '  }',
@@ -778,6 +794,50 @@ test('dispatch runtime registry can execute the subagent runtime with a configur
   assert.equal((result.cost?.outputTokens || 0) > 0, true);
   assert.equal((result.cost?.totalTokens || 0) > 0, true);
   assert.equal((result.cost?.usd || 0) > 0, true);
+});
+
+test('dispatch runtime registry disables Codex MCP startup for child workers by default', async () => {
+  const runtimes = await importDispatchRuntimes();
+  assert.ok(runtimes, 'expected runtime registry module');
+
+  const captureDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-orchestrator-codex-args-'));
+  const captureArgsPath = path.join(captureDir, 'argv.jsonl');
+  const fakeBin = await createFakeCodexCommand(null, {
+    captureArgsPath,
+  });
+  const registry = runtimes.createDispatchRuntimeRegistry({ executeDryRunPlan: () => ({ mode: 'dry-run', ok: true, jobRuns: [] }) });
+  const runtime = runtimes.resolveDispatchRuntime({ runtimeId: 'subagent-runtime', executionMode: 'live' }, registry);
+
+  const plan = buildOrchestrationPlan({ blueprint: 'feature', taskTitle: 'Disable Codex MCP startup' });
+  const dispatchPlan = buildLocalDispatchPlan(plan);
+
+  const result = await runtime.execute({
+    plan,
+    dispatchPlan,
+    dispatchPolicy: null,
+    env: {
+      ...process.env,
+      AIOS_EXECUTE_LIVE: '1',
+      AIOS_SUBAGENT_CLIENT: 'codex-cli',
+      AIOS_SUBAGENT_CONCURRENCY: '1',
+      PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
+    },
+    io: { log() {} },
+  });
+
+  assert.equal(result.ok, true);
+  const argRows = (await fs.readFile(captureArgsPath, 'utf8'))
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  assert.equal(argRows.length > 0, true);
+  for (const args of argRows) {
+    assert.equal(args[0], 'exec');
+    assert.equal(args.includes('-c'), true);
+    assert.equal(args.includes('mcp_servers={}'), true);
+    assert.equal(args.includes('features.rmcp_client=false'), true);
+  }
 });
 
 test('subagent runtime captures pre-mutation snapshots with schema-checked manifest when opted in', async () => {
