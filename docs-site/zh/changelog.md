@@ -15,6 +15,7 @@ description: 版本历史、升级说明与文档变更入口。
 ## 最近版本
 
 - `main`（未发布）：
+  - **路由/并发文档更新 + 默认并发改为 3**（2026-04-20）：补充交互路由与并发参数的简化配置指南（`CTXDB_INTERACTIVE_AUTO_ROUTE`、`CTXDB_CODEX_DISABLE_MCP`、`CTXDB_TEAM_WORKERS`、`AIOS_SUBAGENT_CONCURRENCY`）；在概览核心能力中增加指南入口；live subagent runtime 默认并发从 `2` 调整为 `3`
   - **Browser MCP 迁移到 browser-use CDP**（2026-04-10）：默认浏览器运行时从 Playwright 切换到 browser-use MCP over CDP；新增启动器 `scripts/run-browser-use-mcp.sh`；迁移命令 `aios internal browser mcp-migrate`；截图超时保护可配置 `BROWSER_USE_SCREENSHOT_TIMEOUT_MS`
   - **HUD/Team skill-candidate 增强**（2026-04-09 至 2026-04-10）：`--show-skill-candidates` 详细视图参数；`--skill-candidate-limit <N>` 可配置限制数；fast-watch 模式默认限制从 6 降到 3；artifact 读取缓存优化性能；HUD 建议 `skill-candidate apply` 命令；team status 显示 skill-candidate artifacts 和 drafts
   - **Quality-gate 可见性**（2026-04-08 至 2026-04-09）：quality-gate category 在 HUD minimal status 和 team history summary 中显示；quality-failed-only 过滤器；quality prefix 过滤器支持多值

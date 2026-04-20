@@ -1279,7 +1279,7 @@ export async function executeSubagentDispatchPlan(
   const contextPacket = await loadContextPacket({ rootDir, sessionId, env, io });
   const contextText = contextPacket.ok ? contextPacket.contextText : '';
 
-  const concurrency = parsePositiveInt(env?.[SUBAGENT_CONCURRENCY_ENV], 2);
+  const concurrency = parsePositiveInt(env?.[SUBAGENT_CONCURRENCY_ENV], 3);
   const timeoutMs = parsePositiveInt(env?.[SUBAGENT_TIMEOUT_MS_ENV], 10 * 60 * 1000);
   const preMutationSnapshotEnabled = parseBooleanEnv(env?.[SUBAGENT_PRE_MUTATION_SNAPSHOT_ENV], false);
 

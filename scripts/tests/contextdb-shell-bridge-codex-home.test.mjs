@@ -284,9 +284,32 @@ test('wrapped interactive codex runs inject route auto prompt by default', async
 
   assert.equal(result.status, 0);
   const autoPrompt = parseRunnerAutoPrompt(result.stdout);
-  assert.match(autoPrompt, /Auto-route each new user request as single\/subagent\/team/u);
+  assert.match(autoPrompt, /Routing policy: default to single-route execution\./u);
+  assert.match(autoPrompt, /Do NOT spawn built-in explorer\/worker subagents just to scan a codebase/u);
+  assert.match(autoPrompt, /post a heartbeat every 30s and stop waiting after 120s/u);
   assert.match(autoPrompt, /node scripts\/aios\.mjs team --provider codex --workers 3 --task "<task>" --live/u);
   assert.match(autoPrompt, /AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=codex-cli node scripts\/aios\.mjs orchestrate feature --task "<task>" --dispatch local --execute live/u);
+});
+
+test('wrapped interactive codex runs can disable route auto prompt injection via env', async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), 'aios-bridge-interactive-route-disabled-'));
+  const fakeBin = await createFakeCodexCommand();
+  const fakeRunner = await createFakeRunner();
+
+  const result = runBridge({
+    cwd,
+    pathPrefix: fakeBin,
+    args: [],
+    env: {
+      CTXDB_RUNNER: fakeRunner,
+      CTXDB_WRAP_MODE: 'all',
+      CTXDB_INTERACTIVE_AUTO_ROUTE: '0',
+    },
+  });
+
+  assert.equal(result.status, 0);
+  const autoPrompt = parseRunnerAutoPrompt(result.stdout);
+  assert.equal(autoPrompt, '');
 });
 
 test('wrapped interactive codex runs preserve explicit CTXDB_AUTO_PROMPT overrides', async () => {

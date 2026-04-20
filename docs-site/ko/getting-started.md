@@ -285,8 +285,34 @@ Tip (codex-cli): Codex CLI v0.114+는 `codex exec` 구조화 출력(`--output-sc
 
 선택 제어:
 
-- `AIOS_SUBAGENT_CONCURRENCY` (default: `2`)
+- `AIOS_SUBAGENT_CONCURRENCY` (default: `3`)
 - `AIOS_SUBAGENT_TIMEOUT_MS` (default: `600000`)
+
+### 5.1.1) 라우팅 + 병렬 설정 프로필 (권장)
+
+병렬 실행은 유지하고 설정은 최소로 가져가려면 아래를 그대로 사용하세요:
+
+단독 빠른 참조 페이지: [라우팅/병렬 프로필](route-concurrency-profiles.md).
+
+```bash
+export CTXDB_INTERACTIVE_AUTO_ROUTE=1
+export CTXDB_CODEX_DISABLE_MCP=1
+export CTXDB_TEAM_WORKERS=3
+export AIOS_SUBAGENT_CONCURRENCY=3
+```
+
+변수 의미:
+
+- `CTXDB_INTERACTIVE_AUTO_ROUTE`: interactive wrapper의 자동 라우팅(`single/subagent/team`) 주입 여부
+- `CTXDB_CODEX_DISABLE_MCP`: wrapper로 실행한 `codex`에서 MCP 시작을 건너뛸지 여부 (`1`이면 cold-start 대기 완화)
+- `CTXDB_TEAM_WORKERS`: `aios team ...` 병렬 worker 수
+- `AIOS_SUBAGENT_CONCURRENCY`: `aios orchestrate --execute live` 병렬 실행 수
+
+권장 프리셋:
+
+- 균형 기본값(권장): `3 + 3`
+- 고처리량: `4 + 4`
+- 디버그 안정 모드: `1 + 1`
 
 ## 5.2) 선택: HUD 와 Team Ops 가시성
 

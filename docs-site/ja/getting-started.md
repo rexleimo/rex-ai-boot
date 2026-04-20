@@ -285,8 +285,34 @@ Tip (codex-cli): Codex CLI v0.114+ は `codex exec` の構造化出力 (`--outpu
 
 任意の制御:
 
-- `AIOS_SUBAGENT_CONCURRENCY` (default: `2`)
+- `AIOS_SUBAGENT_CONCURRENCY` (default: `3`)
 - `AIOS_SUBAGENT_TIMEOUT_MS` (default: `600000`)
+
+### 5.1.1) ルーティング + 並列数プロファイル（推奨）
+
+並列実行を使いつつ設定を最小化したい場合は、次をそのまま使ってください:
+
+単独の早見ページは [ルーティングと並列プロファイル](route-concurrency-profiles.md) を参照。
+
+```bash
+export CTXDB_INTERACTIVE_AUTO_ROUTE=1
+export CTXDB_CODEX_DISABLE_MCP=1
+export CTXDB_TEAM_WORKERS=3
+export AIOS_SUBAGENT_CONCURRENCY=3
+```
+
+各変数の役割:
+
+- `CTXDB_INTERACTIVE_AUTO_ROUTE`: interactive wrapper が自動ルーティング（`single/subagent/team`）を注入するか
+- `CTXDB_CODEX_DISABLE_MCP`: wrapper 経由の `codex` で MCP 起動をスキップするか（`1` で cold-start 待ちを回避）
+- `CTXDB_TEAM_WORKERS`: `aios team ...` の並列 worker 数
+- `AIOS_SUBAGENT_CONCURRENCY`: `aios orchestrate --execute live` の並列実行数
+
+推奨プリセット:
+
+- バランス（推奨）: `3 + 3`
+- 高スループット: `4 + 4`
+- デバッグ安定モード: `1 + 1`
 
 ## 5.2) 任意：HUD と Team Ops の可視化
 

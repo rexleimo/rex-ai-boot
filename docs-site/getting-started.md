@@ -289,8 +289,34 @@ Tip (codex-cli): Codex CLI v0.114+ supports `codex exec` structured outputs (`--
 
 Optional controls:
 
-- `AIOS_SUBAGENT_CONCURRENCY` (default: `2`)
+- `AIOS_SUBAGENT_CONCURRENCY` (default: `3`)
 - `AIOS_SUBAGENT_TIMEOUT_MS` (default: `600000`)
+
+### 5.1.1) Route + concurrency profile (recommended)
+
+If you want parallel work but do not want to memorize many env vars, use this compact profile:
+
+Need a standalone reference page? See [Route & Concurrency Profiles](route-concurrency-profiles.md).
+
+```bash
+export CTXDB_INTERACTIVE_AUTO_ROUTE=1
+export CTXDB_CODEX_DISABLE_MCP=1
+export CTXDB_TEAM_WORKERS=3
+export AIOS_SUBAGENT_CONCURRENCY=3
+```
+
+What each variable controls:
+
+- `CTXDB_INTERACTIVE_AUTO_ROUTE`: whether interactive wrapper injects auto-route policy (`single/subagent/team`)
+- `CTXDB_CODEX_DISABLE_MCP`: whether wrapped `codex` skips MCP startup (use `1` to avoid MCP cold-start stalls)
+- `CTXDB_TEAM_WORKERS`: parallel worker count for `aios team ...`
+- `AIOS_SUBAGENT_CONCURRENCY`: parallel executor count for `aios orchestrate --execute live`
+
+Recommended presets:
+
+- Balanced default (recommended): `3 + 3`
+- Higher throughput: `4 + 4`
+- Debug stability mode: `1 + 1`
 
 ## 5.2) Optional: HUD and Team Ops visibility
 

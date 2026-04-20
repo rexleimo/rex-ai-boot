@@ -289,8 +289,34 @@ aios orchestrate --session <session-id> --dispatch local --execute live --format
 
 可选控制项：
 
-- `AIOS_SUBAGENT_CONCURRENCY`（默认：`2`）
+- `AIOS_SUBAGENT_CONCURRENCY`（默认：`3`）
 - `AIOS_SUBAGENT_TIMEOUT_MS`（默认：`600000`）
+
+### 5.1.1) 路由 + 并发配置（推荐）
+
+如果你想保留并发能力、又不想记太多变量，直接用这组简化配置：
+
+需要独立速查页可看：[路由与并发档位](route-concurrency-profiles.md)。
+
+```bash
+export CTXDB_INTERACTIVE_AUTO_ROUTE=1
+export CTXDB_CODEX_DISABLE_MCP=1
+export CTXDB_TEAM_WORKERS=3
+export AIOS_SUBAGENT_CONCURRENCY=3
+```
+
+各变量含义：
+
+- `CTXDB_INTERACTIVE_AUTO_ROUTE`：是否在交互包装层注入自动路由策略（`single/subagent/team`）
+- `CTXDB_CODEX_DISABLE_MCP`：包装后的 `codex` 是否跳过 MCP 启动（设为 `1` 可规避 MCP 冷启动卡顿）
+- `CTXDB_TEAM_WORKERS`：`aios team ...` 的并行 worker 数
+- `AIOS_SUBAGENT_CONCURRENCY`：`aios orchestrate --execute live` 的并行执行数
+
+推荐档位：
+
+- 默认均衡（推荐）：`3 + 3`
+- 高吞吐：`4 + 4`
+- 调试稳态：`1 + 1`
 
 ## 5.2) 可选：HUD 和 Team Ops 可见性
 

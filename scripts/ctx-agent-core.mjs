@@ -25,6 +25,7 @@ const ROUTE_EXECUTION_MODES = new Set(['dry-run', 'live']);
 const TEAM_ROUTE_PROVIDERS = new Set(['auto', 'codex', 'claude', 'gemini']);
 const ORCHESTRATE_BLUEPRINTS = new Set(['feature', 'bugfix', 'refactor', 'security']);
 const SUPPORTED_SUBAGENT_CLIENT_IDS = new Set(['codex-cli', 'claude-code', 'gemini-cli']);
+const CTXDB_CODEX_DISABLE_MCP_ENV = 'CTXDB_CODEX_DISABLE_MCP';
 const TEAM_ROUTE_KEYWORD_PATTERNS = [
   /并行|并发|同时推进|拆分|多模块|跨模块|跨系统|多阶段/u,
   /subagent|agent\s*team|multi[-\s]?agent|parallel|split/i,
@@ -58,6 +59,7 @@ Options:
 Environment:
   CTXDB_AUTO_REBUILD_NATIVE 1/true/yes/on to auto-rebuild better-sqlite3 on Node ABI mismatch (default: on)
   CTXDB_TASK_ROUTER_GUIDE 1/true/yes/on to inject routing checklist into context packet (default: on)
+  CTXDB_CODEX_DISABLE_MCP 1/true/yes/on to launch Codex without MCP startup (-c mcp_servers={} -c features.rmcp_client=false)
   CTXDB_LAZY_LOAD      1/true/yes/on to enable lazy context loading (default: on)`);
 }
 
@@ -211,6 +213,12 @@ function shouldInjectTaskRouterGuide(env = process.env) {
   return parseBoolEnv(env.CTXDB_TASK_ROUTER_GUIDE, true);
 }
 
+function buildCodexMcpDisableArgs(env = process.env) {
+  const disableMcpStartup = parseBoolEnv(env?.[CTXDB_CODEX_DISABLE_MCP_ENV], false);
+  if (!disableMcpStartup) return [];
+  return ['-c', 'mcp_servers={}', '-c', 'features.rmcp_client=false'];
+}
+
 function buildTaskRouterGuide({
   agent = '',
   teamProvider = 'auto',
@@ -235,6 +243,10 @@ function buildTaskRouterGuide({
     '- single: one focused domain with low coupling; continue in the active client.',
     '- subagent: one primary domain but needs staged orchestration/verification gates.',
     '- team: 2+ independent domains, parallelizable work-items, or merge-gate heavy delivery.',
+    'Guardrails:',
+    '- Prefer single by default; do not escalate to subagent/team unless delegation is explicitly requested or clearly necessary.',
+    '- Do not spawn built-in explorer/worker subagents only to "scan/explain a codebase".',
+    '- If waiting for delegated workers, emit heartbeat every 30s; stop waiting after 120s and provide fallback next steps.',
     'Policy: when route=subagent/team, execute the matching AIOS command directly (live) unless user explicitly requests preview/dry-run.',
     'User trigger shortcuts in one-shot prompt text:',
     '- /single <task>',
@@ -263,7 +275,10 @@ function buildInteractiveRouteAutoPrompt({
   });
   return [
     'Continue from this state and execute the next best step.',
-    'Auto-route rule: classify each new user request as single/subagent/team before planning.',
+    'Routing policy: default to single-route execution.',
+    'Only choose team/subagent when the user explicitly asks for delegation/parallel work, or when there are 2+ clearly independent domains.',
+    'Do NOT spawn built-in explorer/worker subagents just to scan a codebase; start single-agent first.',
+    'If delegated workers are running, post a heartbeat every 30s and stop waiting after 120s with a fallback plan.',
     'If route=team, run: node scripts/aios.mjs team --provider '
       + `${provider} --workers ${workers} --task "<task>" --live --preflight auto --format json`,
     'If route=subagent, run: AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT='
@@ -910,15 +925,16 @@ function runOneShotAgent(agent, contextText, prompt, extraArgs, { injectContext 
     }
   } else if (agent === 'codex-cli') {
     cmd = 'codex';
+    const codexConfigArgs = buildCodexMcpDisableArgs(process.env);
     if (injectContext) {
       const fullPrompt = `${contextText}\n\n## New User Request\n${prompt}`;
-      args = ['exec', '-', ...extraArgs];
+      args = ['exec', '-', ...codexConfigArgs, ...extraArgs];
       const result = runCommandWithInput(cmd, args, fullPrompt);
       const output = `${result.stdout || ''}${result.stderr || ''}`;
       const exitCode = result.status ?? 1;
       return { output, exitCode };
     } else {
-      args = ['exec', '-', ...extraArgs];
+      args = ['exec', '-', ...codexConfigArgs, ...extraArgs];
       const result = runCommandWithInput(cmd, args, prompt);
       const output = `${result.stdout || ''}${result.stderr || ''}`;
       const exitCode = result.status ?? 1;
@@ -1125,6 +1141,7 @@ function runInteractiveAgent(
     args = combinedPrompt ? ['-i', combinedPrompt, ...extraArgs] : [...extraArgs];
   } else if (agent === 'codex-cli') {
     cmd = 'codex';
+    const codexConfigArgs = buildCodexMcpDisableArgs(process.env);
     let shouldInject = injectContext;
     if (shouldInject && process.platform === 'win32') {
       const spec = getCommandSpawnSpec(cmd, [], { env: process.env });
@@ -1151,7 +1168,7 @@ function runInteractiveAgent(
       const promptSource = explicitAutoPrompt ? 'env' : 'context handoff';
       console.log(`Auto prompt: enabled (${promptSource})`);
     }
-    args = combinedPrompt ? [...extraArgs, combinedPrompt] : [...extraArgs];
+    args = combinedPrompt ? [...codexConfigArgs, ...extraArgs, combinedPrompt] : [...codexConfigArgs, ...extraArgs];
   } else {
     cmd = 'opencode';
     const promptText = buildOpenCodePrompt({

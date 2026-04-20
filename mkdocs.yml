@@ -67,6 +67,7 @@ plugins:
             Core Features: 功能核心
             ContextDB: ContextDB
             Superpowers: Superpowers
+            Route & Concurrency Profiles: 路由与并发档位
             Advanced Design Skills: 高级设计技能
             Architecture: 架构
             CLI Workflows: CLI 工作流
@@ -96,6 +97,7 @@ plugins:
             Core Features: コアプリ 功能
             ContextDB: ContextDB
             Superpowers: Superpowers
+            Route & Concurrency Profiles: ルーティングと並列プロファイル
             Advanced Design Skills: 高度デザインスキル
             Architecture: アーキテクチャ
             CLI Workflows: CLI ワークフロー
@@ -125,6 +127,7 @@ plugins:
             Core Features: 핵심 기능
             ContextDB: ContextDB
             Superpowers: Superpowers
+            Route & Concurrency Profiles: 라우팅/병렬 프로필
             Advanced Design Skills: 고급 디자인 스킬
             Architecture: 아키텍처
             CLI Workflows: CLI 워크플로
@@ -171,6 +174,7 @@ nav:
   - Core Features:
       - ContextDB: contextdb.md
       - Superpowers: superpowers.md
+      - Route & Concurrency Profiles: route-concurrency-profiles.md
       - Advanced Design Skills: advanced-design-skills.md
       - Agent Team: team-ops.md
       - HUD Guide: hud-guide.md

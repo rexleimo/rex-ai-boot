@@ -38,6 +38,8 @@ Environment:
   CTXDB_WRAP_MODE        all|repo-only|opt-in|off (default: repo-only)
   CTXDB_MARKER_FILE      Marker filename for opt-in mode (default: .contextdb-enable)
   CTXDB_AUTO_CREATE_MARKER 1/true/yes/on to auto-create marker in opt-in mode (default: on)
+  CTXDB_INTERACTIVE_AUTO_ROUTE 1/true/yes/on to inject route auto prompt in interactive mode (default: on)
+  CTXDB_CODEX_DISABLE_MCP 1/true/yes/on to launch Codex without MCP startup in wrapped runs
   CTXDB_DEBUG            1/true/yes/on to print bridge decisions`);
 }
 
@@ -270,11 +272,18 @@ function buildInteractiveAutoPrompt(command, env) {
 
   return [
     'Continue from this state and execute the next best step.',
-    'Auto-route each new user request as single/subagent/team before planning.',
+    'Routing policy: default to single-route execution.',
+    'Only choose team/subagent when the user explicitly asks for delegation/parallel work, or when there are 2+ clearly independent domains.',
+    'Do NOT spawn built-in explorer/worker subagents just to scan a codebase; start single-agent first.',
+    'If delegated workers are running, post a heartbeat every 30s and stop waiting after 120s with a fallback plan.',
     `If route=team, run: node scripts/aios.mjs team --provider ${provider} --workers ${workers} --task "<task>" --live --preflight auto --format json`,
     `If route=subagent, run: AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=${subagentClient} node scripts/aios.mjs orchestrate ${blueprint} --task "<task>" --dispatch local --execute live --preflight auto --format json`,
     'Do not ask the user to manually trigger these commands unless they requested preview/dry-run.',
   ].join('\n');
+}
+
+function shouldInjectInteractiveAutoPrompt(env) {
+  return parseBoolEnv(env.CTXDB_INTERACTIVE_AUTO_ROUTE, true);
 }
 
 function shouldDebug(env) {
@@ -374,12 +383,14 @@ function main(argv = process.argv.slice(2)) {
   // Interactive mode detection: bare command invocation (no subcommand/flags) triggers
   // automatic handoff prompt injection so the new session resumes from the last checkpoint.
   const interactive = isInteractivePassthrough(opts.command, opts.passthroughArgs);
-  if (interactive && !env.CTXDB_AUTO_PROMPT) {
+  if (interactive && !env.CTXDB_AUTO_PROMPT && shouldInjectInteractiveAutoPrompt(env)) {
     env.CTXDB_AUTO_PROMPT = buildInteractiveAutoPrompt(opts.command, env);
     if (shouldDebug(env)) {
       const preview = String(env.CTXDB_AUTO_PROMPT || '').split(/\r?\n/u)[0] || 'continue';
       console.error(`[contextdb-shell-bridge] interactive detected; auto-prompt=${preview}`);
     }
+  } else if (interactive && shouldDebug(env) && !env.CTXDB_AUTO_PROMPT) {
+    console.error('[contextdb-shell-bridge] interactive detected; auto-prompt disabled by CTXDB_INTERACTIVE_AUTO_ROUTE');
   }
 
   const firstArg = opts.passthroughArgs[0] || '';

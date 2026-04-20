@@ -1,0 +1,75 @@
+---
+title: 路由与并发档位
+description: 用最少变量选择 RexCLI 的交互路由与并发执行配置。
+---
+
+# 路由与并发档位
+
+如果你不想记很多环境变量，只想快速选一个“可用档位”，用这一页就够了。
+
+## 核心变量
+
+- `CTXDB_INTERACTIVE_AUTO_ROUTE`：是否开启交互自动路由（`single/subagent/team`）
+- `CTXDB_CODEX_DISABLE_MCP`：包装后的 `codex` 是否跳过 MCP 启动（`1` = 启动更快，但该次会话不使用 MCP 工具）
+- `CTXDB_TEAM_WORKERS`：`aios team ...` 的并行 worker 数
+- `AIOS_SUBAGENT_CONCURRENCY`：`aios orchestrate --execute live` 的并行执行数
+
+## 推荐档位
+
+### 1) 默认均衡（推荐）
+
+```bash
+export CTXDB_INTERACTIVE_AUTO_ROUTE=1
+export CTXDB_CODEX_DISABLE_MCP=1
+export CTXDB_TEAM_WORKERS=3
+export AIOS_SUBAGENT_CONCURRENCY=3
+```
+
+适合日常开发：保留并发吞吐，同时减少 MCP 冷启动卡顿。
+
+### 2) 高吞吐
+
+```bash
+export CTXDB_INTERACTIVE_AUTO_ROUTE=1
+export CTXDB_CODEX_DISABLE_MCP=1
+export CTXDB_TEAM_WORKERS=4
+export AIOS_SUBAGENT_CONCURRENCY=4
+```
+
+适合任务域较独立、需要更高并发时使用。若冲突/重试明显增多，建议回退到 `3 + 3`。
+
+### 3) 调试稳态
+
+```bash
+export CTXDB_INTERACTIVE_AUTO_ROUTE=0
+export CTXDB_CODEX_DISABLE_MCP=1
+export CTXDB_TEAM_WORKERS=1
+export AIOS_SUBAGENT_CONCURRENCY=1
+```
+
+适合故障排查和稳定复现，减少并发噪音。
+
+## 一键切换别名（可选）
+
+```bash
+alias rex-par3='export CTXDB_INTERACTIVE_AUTO_ROUTE=1 CTXDB_CODEX_DISABLE_MCP=1 CTXDB_TEAM_WORKERS=3 AIOS_SUBAGENT_CONCURRENCY=3'
+alias rex-par4='export CTXDB_INTERACTIVE_AUTO_ROUTE=1 CTXDB_CODEX_DISABLE_MCP=1 CTXDB_TEAM_WORKERS=4 AIOS_SUBAGENT_CONCURRENCY=4'
+alias rex-debug='export CTXDB_INTERACTIVE_AUTO_ROUTE=0 CTXDB_CODEX_DISABLE_MCP=1 CTXDB_TEAM_WORKERS=1 AIOS_SUBAGENT_CONCURRENCY=1'
+```
+
+然后执行：
+
+```bash
+rex-par3
+codex
+```
+
+## 说明
+
+- 变量修改只影响**新启动会话**；请重启 `codex/claude/gemini/opencode` 生效。
+- 真正控制并发数的是 `CTXDB_TEAM_WORKERS` 和 `AIOS_SUBAGENT_CONCURRENCY`，不是 `CTXDB_INTERACTIVE_AUTO_ROUTE`。
+- 如需使用 MCP 工具（如 context7/figma），可临时启动：
+
+```bash
+CTXDB_CODEX_DISABLE_MCP=0 codex
+```

@@ -56,7 +56,7 @@ Four things it adds:
 
 1. **Memory that survives restarts** - Your project context comes back automatically after you close and reopen the terminal, and syncs across devices for the same project.
 2. **Browser automation** - Control Chrome via MCP without manually clicking around.
-3. **Superpowers** - Smart planning: auto-decompose requirements, parallel task distribution, automatic verification.
+3. **Superpowers** - Smart planning: auto-decompose requirements, parallel task distribution, automatic verification. Use the [route + concurrency profile guide](route-concurrency-profiles.md) to choose `3+3` / `4+4` / debug modes.
 4. **Privacy Guard** - Automatically redacts secrets before they leak into prompts or logs.
 
 ## Who is this for?
@@ -85,7 +85,7 @@ Windows PowerShell commands are listed on the [Quick Start](getting-started.md) 
 |---|---|
 | ContextDB | Persistent memory across sessions |
 | Playwright MCP | Browser automation |
-| Superpowers | Smart planning (auto-decompose, parallel dispatch, auto-verify) |
+| Superpowers | Smart planning (auto-decompose, parallel dispatch, auto-verify) + route/concurrency profiles (`3+3` default) |
 | Privacy Guard | Redact secrets automatically |
 
 ## FAQ

@@ -15,6 +15,7 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
 ## Recent Versions
 
 - `main` (Unreleased):
+  - **Route/concurrency docs refresh + default concurrency = 3** (2026-04-20): documented a compact profile for interactive routing and parallel settings (`CTXDB_INTERACTIVE_AUTO_ROUTE`, `CTXDB_CODEX_DISABLE_MCP`, `CTXDB_TEAM_WORKERS`, `AIOS_SUBAGENT_CONCURRENCY`); added core-overview links to the selection guide; changed live subagent runtime default concurrency from `2` to `3`
   - **Documentation: Agent Team & HUD** (2026-04-11): Added comprehensive documentation for Team Operations - new pages [Agent Team & HUD](team-ops.md), [HUD Guide](hud-guide.md), and [Skill Candidates](skill-candidates.md); updated [Superpowers](superpowers.md) and [Architecture](architecture.md) with Team Ops references
   - **Browser MCP migration to browser-use CDP** (2026-04-10): default browser runtime switched from Playwright to browser-use MCP over CDP; new launcher `scripts/run-browser-use-mcp.sh`; migration command `aios internal browser mcp-migrate`; screenshot timeout guard with configurable `BROWSER_USE_SCREENSHOT_TIMEOUT_MS`
   - **HUD/Team skill-candidate enhancements** (2026-04-09 to 2026-04-10): `--show-skill-candidates` flag for detailed view; `--skill-candidate-limit <N>` configurable limit; fast-watch mode defaults to 3 candidates (down from 6); artifact reads cached for performance; HUD suggests `skill-candidate apply` commands; team status surfaces skill-candidate artifacts and drafts

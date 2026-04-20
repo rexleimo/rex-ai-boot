@@ -599,6 +599,64 @@ test('ctx-agent interactive Codex mode appends env auto prompt to injected conte
   }
 });
 
+test('ctx-agent interactive Codex mode can disable MCP startup via env override', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'aios-ctx-agent-codex-disable-mcp-'));
+  const sessionId = 'ctx-codex-disable-mcp';
+  const fakeBin = await createFakeCodexCommand();
+  const autoPrompt = 'Continue with the current task.';
+
+  try {
+    runContextDbCli([
+      'session:new',
+      '--workspace',
+      workspaceRoot,
+      '--agent',
+      'codex-cli',
+      '--project',
+      'tmp-project',
+      '--goal',
+      'Verify codex mcp disable args',
+      '--session-id',
+      sessionId,
+    ]);
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        'scripts/ctx-agent.mjs',
+        '--agent',
+        'codex-cli',
+        '--workspace',
+        workspaceRoot,
+        '--project',
+        'tmp-project',
+        '--session',
+        sessionId,
+        '--no-bootstrap',
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          CTXDB_AUTO_PROMPT: autoPrompt,
+          CTXDB_CODEX_DISABLE_MCP: '1',
+          PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
+        },
+      }
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const payload = parseLastJsonPayload(result.stdout);
+    assert.equal(payload.marker, 'FAKE_CODEX_OK');
+    const argv = Array.isArray(payload.argv) ? payload.argv : [];
+    assert.equal(argv.includes('mcp_servers={}'), true);
+    assert.equal(argv.includes('features.rmcp_client=false'), true);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
 test('ctx-agent interactive Gemini mode appends env auto prompt to injected context', async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'aios-ctx-agent-gemini-auto-prompt-'));
   const sessionId = 'ctx-gemini-auto-prompt';

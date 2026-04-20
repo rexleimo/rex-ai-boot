@@ -44,8 +44,10 @@ description: "Route tasks to appropriate workflows. TRIGGER: 分析、设计、�
 
 **Route to**: Parallel dispatch workflow
 1. Identify independent problem domains
-2. Use `superpowers:dispatching-parallel-agents` if available
-3. If no subagent tool available, emulate with explicit task queues
+2. Confirm there are at least 2 truly independent domains before dispatching
+3. Use `superpowers:dispatching-parallel-agents` if available
+4. If no subagent tool available, emulate with explicit task queues
+5. While waiting, emit heartbeat progress every ~30s; if no worker completes after ~120s, stop waiting and fall back to sequential execution
 
 ### 5. Implementation Tasks (实现任务)
 **Keywords**: 实现、implement、开发、develop、编码、code、写代码
@@ -63,6 +65,7 @@ description: "Route tasks to appropriate workflows. TRIGGER: 分析、设计、�
 1. Gather information from codebase, logs, history
 2. Document findings
 3. Present recommendations
+4. Default to single-agent execution; do not dispatch explorer/parallel agents unless the user explicitly asks for delegation or parallel work
 
 ## Workflow Execution
 

@@ -670,7 +670,9 @@ PowerShell 包装入口是 `scripts/contextdb-shell.ps1`，底层跨平台运行
 - 自动做：`init`、`session:latest/new`、`context:pack`
 - 作用域：当前 git 项目根目录（`--workspace <git-root>`）
 - 用途：启动时自动带上历史上下文
-- `codex` / `claude` / `gemini` / `opencode` 包装器默认都会注入自动路由启动提示，智能体可在对话中自行判定 `single/subagent/team` 并直接触发 `aios team` / `aios orchestrate`，无需用户手动下触发命令
+- `codex` / `claude` / `gemini` / `opencode` 包装器默认会注入自动路由启动提示；现在采用更保守策略（默认先走 `single`，只有在明确需要委派/并行时才升级到 `subagent/team`）
+- 可设置 `CTXDB_INTERACTIVE_AUTO_ROUTE=0` 完全关闭交互模式的自动路由提示注入
+- 可设置 `CTXDB_CODEX_DISABLE_MCP=1` 让包装后的 Codex 会话跳过 MCP 启动（可规避 MCP 冷启动卡顿）
 - `opencode` 会自动回退到受支持的 subagent runtime（默认 `codex-cli`，也可用 `CTXDB_ROUTE_SUBAGENT_CLIENT=<codex-cli|claude-code|gemini-cli>` 覆盖）
 - 注意：CLI 内的重置命令（如 Codex 的 `/new`、Claude/Gemini 的 `/clear`）会清空对话状态。退出并重新启动 CLI 可重新注入；或在新对话第一句引用 `memory/context-db/exports/latest-<agent>-context.md`。
 - 边界：不会在每一轮消息后自动写 checkpoint
