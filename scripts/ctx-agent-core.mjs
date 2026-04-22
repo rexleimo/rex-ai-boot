@@ -852,13 +852,24 @@ function validateOpts(opts) {
   opts.blueprint = normalizeOrchestrateBlueprint(opts.blueprint);
 }
 
+const COMPILED_CONTEXTDB_CLI = path.join(MCP_DIR, 'dist', 'contextdb', 'cli.js');
+const HAS_COMPILED_CLI = existsSync(COMPILED_CONTEXTDB_CLI);
+
 let nativeRepairAttempted = false;
 
 function ctx(workspaceRoot, subcommand, args) {
-  const commandArgs = ['run', '-s', 'contextdb', '--', subcommand, '--workspace', workspaceRoot, ...args];
-  const firstResult = runCommand('npm', commandArgs, {
-    cwd: MCP_DIR,
-  });
+  // Prefer compiled CLI to avoid npm + tsx overhead (~0.3s -> ~0.06s per call)
+  let firstResult;
+  if (HAS_COMPILED_CLI) {
+    firstResult = runCommand(process.execPath, [COMPILED_CONTEXTDB_CLI, subcommand, '--workspace', workspaceRoot, ...args], {
+      cwd: MCP_DIR,
+    });
+  } else {
+    const commandArgs = ['run', '-s', 'contextdb', '--', subcommand, '--workspace', workspaceRoot, ...args];
+    firstResult = runCommand('npm', commandArgs, {
+      cwd: MCP_DIR,
+    });
+  }
 
   if (!firstResult.error && firstResult.status === 0) {
     return (firstResult.stdout || '').trim();
@@ -885,9 +896,17 @@ function ctx(workspaceRoot, subcommand, args) {
     throw new Error(`contextdb ${subcommand} failed: ${firstFailure}\nauto-rebuild failed: ${rebuildFailure}`);
   }
 
-  const retryResult = runCommand('npm', commandArgs, {
-    cwd: MCP_DIR,
-  });
+  let retryResult;
+  if (HAS_COMPILED_CLI) {
+    retryResult = runCommand(process.execPath, [COMPILED_CONTEXTDB_CLI, subcommand, '--workspace', workspaceRoot, ...args], {
+      cwd: MCP_DIR,
+    });
+  } else {
+    const commandArgs = ['run', '-s', 'contextdb', '--', subcommand, '--workspace', workspaceRoot, ...args];
+    retryResult = runCommand('npm', commandArgs, {
+      cwd: MCP_DIR,
+    });
+  }
   ensureSuccess(retryResult, `contextdb ${subcommand} failed`);
   return (retryResult.stdout || '').trim();
 }

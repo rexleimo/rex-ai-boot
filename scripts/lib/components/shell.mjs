@@ -44,20 +44,38 @@ function resolveTargetFiles({ platform = process.platform, rcFile, env = process
 function ensureContextDbRuntime({ rootDir, platform = process.platform, env = process.env, io = console, commandRunner = runCommand } = {}) {
   const mcpDir = path.join(rootDir, 'mcp-server');
   const packageJson = path.join(mcpDir, 'package.json');
-  const tsxBin = platform === 'win32' ? 'tsx.cmd' : 'tsx';
-  const tsxPath = path.join(mcpDir, 'node_modules', '.bin', tsxBin);
+  const compiledCli = path.join(mcpDir, 'dist', 'contextdb', 'cli.js');
 
   if (!fs.existsSync(packageJson)) {
     throw new Error(`mcp-server package.json not found: ${packageJson}`);
   }
 
-  if (fs.existsSync(tsxPath)) {
+  const hasCompiledCli = fs.existsSync(compiledCli);
+  const tsxBin = platform === 'win32' ? 'tsx.cmd' : 'tsx';
+  const tsxPath = path.join(mcpDir, 'node_modules', '.bin', tsxBin);
+  const hasTsx = fs.existsSync(tsxPath);
+
+  if (hasCompiledCli && hasTsx) {
     io.log(`[ok] ContextDB runtime ready: ${mcpDir}`);
     return { status: 'reused', mcpDir };
   }
 
-  io.log(`+ (cd ${mcpDir} && npm install)`);
-  commandRunner('npm', ['install'], { cwd: mcpDir, env, platform });
+  if (!hasTsx) {
+    io.log(`+ (cd ${mcpDir} && npm install)`);
+    commandRunner('npm', ['install'], { cwd: mcpDir, env, platform });
+  }
+
+  if (!hasCompiledCli) {
+    io.log(`+ (cd ${mcpDir} && npm run build)`);
+    try {
+      commandRunner('npm', ['run', 'build'], { cwd: mcpDir, env, platform });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      io.log(`[warn] npm run build failed: ${reason}`);
+      io.log(`[warn] ContextDB will use slower npm-run mode. Run 'cd ${mcpDir} && npm run build' manually to fix.`);
+    }
+  }
+
   return { status: 'installed', mcpDir };
 }
 

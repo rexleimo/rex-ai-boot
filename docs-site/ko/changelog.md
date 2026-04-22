@@ -15,6 +15,10 @@ description: 릴리스 이력, 업그레이드 안내, 관련 문서 링크.
 ## 최근 버전
 
 - `main` (미릴리스):
+  - **ContextDB Shell 시작 최적화** (2026-04-22): `ctx()` 가 `npm run -s contextdb` 대신 컴파일된 `mcp-server/dist/contextdb/cli.js` 를 우선 사용하여 호출당 오버헤드를 ~0.3s 에서 ~0.06s 로 감소; one-shot 에이전트 실행을 ~2.2s 에서 ~0.5s 로 단축(약 78% 빨라짐); shell-bridge 의 `detectRunner` 가 `tsx` 를 더 이상 필요로 하지 않음; 설치 시 `dist/` 가 없으면 자동 빌드하고 빌드 실패 시 npm-run 모드로 우아하게 폴패
+  - **기본 core skills 업데이트** (2026-04-19): `awesome-design-md`, `frontend-design`, `cap-commit-push` 를 기본 core skills 로 승격
+  - **ContextDB 레이지 로드** (2026-04-18 ~ 2026-04-19): 대화형 세션이 기본적으로 레이지 컨텍스트 로드 (`CTXDB_LAZY_LOAD=on`) 를 사용; 에이전트가 전체 컨텍스트 팩 주입 대신 퍼싸드 프롬프트로 메모리를 자체 발견; [레이지 로드 문서](contextdb.md#lazy-load) 및 다국어 블로그 게시글 추가
+  - **AIOS 워크플로우 라우터 skill** (2026-04-18): 안정적인 태스크에서 skill 로의 라우팅과 발견을 위해 `.claude/skills/aios-workflow-router` 추가
   - **Browser MCP 를 browser-use CDP 로 마이그레이션** (2026-04-10): 기본 브라우저 런타임을 Playwright 에서 browser-use MCP over CDP 로 전환；새 런처 `scripts/run-browser-use-mcp.sh`；마이그레이션 명령 `aios internal browser mcp-migrate`；스크린샷 타임아웃 가드 `BROWSER_USE_SCREENSHOT_TIMEOUT_MS` 설정 가능
   - **HUD/Team skill-candidate 기능 개선** (2026-04-09 ~ 2026-04-10): 상세 보기를 위한 `--show-skill-candidates` 플래그；설정 가능한 `--skill-candidate-limit <N>`；fast-watch 모드 기본 제한을 6 에서 3 으로 축소；performance 향상을 위한 artifact 읽기 캐싱；HUD 가 `skill-candidate apply` 명령 제안；team status 에서 skill-candidate artifacts 와 drafts 표시
   - **Quality-gate 가시성** (2026-04-08 ~ 2026-04-09): HUD minimal status 와 team history summary 에 quality-gate category 표시；quality-failed-only 필터；multi-value 지원 quality prefix 필터

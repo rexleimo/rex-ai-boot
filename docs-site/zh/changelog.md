@@ -15,6 +15,10 @@ description: 版本历史、升级说明与文档变更入口。
 ## 最近版本
 
 - `main`（未发布）：
+  - **ContextDB Shell 启动优化**（2026-04-22）：`ctx()` 优先使用编译后的 `mcp-server/dist/contextdb/cli.js`，单次调用开销从 ~0.3s 降至 ~0.06s；one-shot 代理启动从 ~2.2s 优化到 ~0.5s（快约 78%）；shell-bridge 的 `detectRunner` 不再依赖 `tsx`；安装时如缺少 `dist/` 自动触发 build，build 失败则优雅回退到 npm-run 模式
+  - **默认核心技能更新**（2026-04-19）：`awesome-design-md`、`frontend-design`、`cap-commit-push` 提升为默认核心技能
+  - **ContextDB 懒加载**（2026-04-18 至 2026-04-19）：交互式会话默认启用懒加载上下文（`CTXDB_LAZY_LOAD=on`）；代理通过 facade prompt 自主发现记忆，不再直接注入完整上下文包；新增[懒加载文档](contextdb.md#lazy-load)及多语言博客文章
+  - **AIOS 工作流路由 skill**（2026-04-18）：新增 `.claude/skills/aios-workflow-router`，提供可靠的任务到技能路由与发现能力
   - **路由/并发文档更新 + 默认并发改为 3**（2026-04-20）：补充交互路由与并发参数的简化配置指南（`CTXDB_INTERACTIVE_AUTO_ROUTE`、`CTXDB_CODEX_DISABLE_MCP`、`CTXDB_TEAM_WORKERS`、`AIOS_SUBAGENT_CONCURRENCY`）；在概览核心能力中增加指南入口；live subagent runtime 默认并发从 `2` 调整为 `3`
   - **Browser MCP 迁移到 browser-use CDP**（2026-04-10）：默认浏览器运行时从 Playwright 切换到 browser-use MCP over CDP；新增启动器 `scripts/run-browser-use-mcp.sh`；迁移命令 `aios internal browser mcp-migrate`；截图超时保护可配置 `BROWSER_USE_SCREENSHOT_TIMEOUT_MS`
   - **HUD/Team skill-candidate 增强**（2026-04-09 至 2026-04-10）：`--show-skill-candidates` 详细视图参数；`--skill-candidate-limit <N>` 可配置限制数；fast-watch 模式默认限制从 6 降到 3；artifact 读取缓存优化性能；HUD 建议 `skill-candidate apply` 命令；team status 显示 skill-candidate artifacts 和 drafts
