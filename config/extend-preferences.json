@@ -1,0 +1,152 @@
+{
+  "name": "AIOS User Preferences",
+  "description": "用户创作偏好配置系统。持久化用户的风格、布局、配色、语言等偏好，减少重复确认。支持三级配置：项目级 > XDG级 > 用户级",
+  "version": "1.0.0",
+  "config_levels": {
+    "project": {
+      "path": ".aios/extend-preferences.json",
+      "scope": "当前项目",
+      "priority": "最高"
+    },
+    "xdg": {
+      "path": "${XDG_CONFIG_HOME:-$HOME/.config}/aios/extend-preferences.json",
+      "scope": "当前用户（跨项目）",
+      "priority": "中"
+    },
+    "home": {
+      "path": "$HOME/.aios/extend-preferences.json",
+      "scope": "当前用户（兼容模式）",
+      "priority": "最低"
+    }
+  },
+  "preferences": {
+    "visual_style": {
+      "description": "默认视觉风格",
+      "type": "string",
+      "options": ["cute", "fresh", "warm", "bold", "minimal", "retro", "pop", "notion", "chalkboard", "study-notes", "screen-print", "sketch-notes"],
+      "default": "cute",
+      "override_by_content": true
+    },
+    "layout": {
+      "description": "默认布局",
+      "type": "string",
+      "options": ["sparse", "balanced", "dense", "list", "comparison", "flow", "mindmap", "quadrant"],
+      "default": "balanced",
+      "override_by_content": true
+    },
+    "palette": {
+      "description": "默认配色覆盖",
+      "type": "string",
+      "options": ["default", "macaron", "warm", "neon"],
+      "default": "default",
+      "note": "default表示使用style的默认配色"
+    },
+    "content_strategy": {
+      "description": "默认内容策略",
+      "type": "string",
+      "options": ["auto", "A", "B", "C"],
+      "default": "auto",
+      "meanings": {
+        "auto": "自动选择",
+        "A": "故事驱动 (Story-Driven)",
+        "B": "信息密集 (Information-Dense)",
+        "C": "视觉优先 (Visual-First)"
+      }
+    },
+    "confirm_strategy": {
+      "description": "确认策略",
+      "type": "string",
+      "options": ["quick", "custom", "detailed"],
+      "default": "custom",
+      "meanings": {
+        "quick": "快速确认：信任自动推荐，一键生成",
+        "custom": "自定义：展示推荐参数，允许修改",
+        "detailed": "详细模式：完整内容分析，三种大纲变体供选择"
+      }
+    },
+    "language": {
+      "description": "输出语言",
+      "type": "string",
+      "options": ["zh", "en", "ja", "ko"],
+      "default": "zh",
+      "note": "分析、提示词、报告的语言"
+    },
+    "image_provider": {
+      "description": "首选AI图像生成供应商",
+      "type": "string",
+      "options": ["auto", "jimeng", "tongyi", "seedream", "dashscope"],
+      "default": "auto",
+      "meanings": {
+        "auto": "自动选择（根据可用性和风格需求）",
+        "jimeng": "即梦AI（jimeng.jianying.com）",
+        "tongyi": "通义万相",
+        "seedream": "豆包/Seedream",
+        "dashscope": "阿里DashScope"
+      }
+    },
+    "image_quality": {
+      "description": "图片质量预设",
+      "type": "string",
+      "options": ["normal", "2k"],
+      "default": "2k",
+      "meanings": {
+        "normal": "快速预览",
+        "2k": "高质量（封面、插画、信息图推荐）"
+      }
+    },
+    "aspect_ratio": {
+      "description": "默认图片比例",
+      "type": "string",
+      "options": ["3:4", "1:1", "16:9", "9:16"],
+      "default": "3:4"
+    },
+    "watermark": {
+      "enabled": false,
+      "content": "@your_handle",
+      "position": "bottom-right",
+      "style": "subtle",
+      "note": "subtle表示可见但不干扰"
+    },
+    "batch_settings": {
+      "max_parallel": 3,
+      "retry_attempts": 3,
+      "auto_retry_on_block": true
+    },
+    "publish_settings": {
+      "default_visibility": "private",
+      "options": ["private", "public"],
+      "meanings": {
+        "private": "仅自己可见（推荐预览）",
+        "public": "公开发布"
+      },
+      "auto_add_tags": true,
+      "suggested_tag_count": 5
+    }
+  },
+  "first_time_setup": {
+    "description": "首次使用引导流程",
+    "steps": [
+      "1. 询问用户偏好的视觉风格（展示示例）",
+      "2. 询问确认策略偏好（quick/custom/detailed）",
+      "3. 询问首选图像供应商",
+      "4. 询问水印设置（可选）",
+      "5. 保存配置到对应级别",
+      "6. 展示配置摘要"
+    ],
+    "skip_flag": "--yes 或 '直接生成' 等明确跳过确认的指令"
+  },
+  "changing_preferences": {
+    "description": "修改偏好的方法",
+    "methods": [
+      "直接编辑 extend-preferences.json 文件",
+      "运行时通过指令修改：'重新配置偏好' / 'reconfigure preferences'",
+      "单个参数修改：'设置默认风格为notion' / '设置确认策略为quick'"
+    ]
+  },
+  "notes": [
+    "此文件是AIOS的'用户大脑'，记录创作偏好",
+    "项目级配置覆盖XDG级，XDG级覆盖用户级",
+    "删除此文件可触发重新配置",
+    "所有偏好都可以在运行时被用户指令覆盖"
+  ]
+}
