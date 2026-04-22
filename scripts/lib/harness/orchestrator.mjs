@@ -2059,12 +2059,50 @@ function formatWorkItemTelemetry(workItemTelemetry) {
   return lines;
 }
 
+function formatDispatchInsights(dispatchInsights) {
+  if (!dispatchInsights || typeof dispatchInsights !== 'object') {
+    return [];
+  }
+
+  const runtime = dispatchInsights.runtime && typeof dispatchInsights.runtime === 'object'
+    ? dispatchInsights.runtime
+    : {};
+  const signals = Array.isArray(dispatchInsights.signals) ? dispatchInsights.signals : [];
+  const actions = Array.isArray(dispatchInsights.suggestedActions) ? dispatchInsights.suggestedActions : [];
+  const lines = [
+    'Dispatch Insights:',
+    `- status=${String(dispatchInsights.status || 'attention')} score=${Number.isFinite(dispatchInsights.score) ? Math.max(0, Math.floor(dispatchInsights.score)) : 0}`,
+    `- runtime=${String(runtime.id || 'unknown')} executionMode=${String(runtime.executionMode || 'none')} mode=${String(runtime.mode || 'none')}`,
+  ];
+
+  if (signals.length > 0) {
+    lines.push(...signals.map((signal) => {
+      const count = Number.isFinite(signal?.count) ? ` count=${Math.max(0, Math.floor(signal.count))}` : '';
+      const evidence = signal?.evidence ? ` evidence=${signal.evidence}` : '';
+      return `- signal ${signal?.severity || 'info'} ${signal?.id || 'unknown'}${count}: ${signal?.message || ''}${evidence}`;
+    }));
+  } else {
+    lines.push('- signals=(none)');
+  }
+
+  if (actions.length > 0) {
+    lines.push(...actions.map((action) => {
+      const command = action?.command ? ` command=${action.command}` : '';
+      return `- action ${action?.id || 'unknown'}: ${action?.label || ''}${command}`;
+    }));
+  }
+
+  lines.push('');
+  return lines;
+}
+
 export function renderOrchestrationReport(input = {}) {
   const plan = Array.isArray(input.phases)
     ? input
     : {
       ...buildOrchestrationPlan(input),
       ...(Object.prototype.hasOwnProperty.call(input, 'workItemTelemetry') ? { workItemTelemetry: input.workItemTelemetry } : {}),
+      ...(Object.prototype.hasOwnProperty.call(input, 'dispatchInsights') ? { dispatchInsights: input.dispatchInsights } : {}),
     };
   return [
     `ORCHESTRATION BLUEPRINT: ${plan.blueprint}`,
@@ -2085,6 +2123,7 @@ export function renderOrchestrationReport(input = {}) {
     ...formatDispatchRun(plan.dispatchRun),
     ...formatDispatchEvidence(plan.dispatchEvidence),
     ...formatWorkItemTelemetry(plan.workItemTelemetry),
+    ...formatDispatchInsights(plan.dispatchInsights),
     'Merge Gate:',
     '- Block on handoff status = blocked|needs-input',
     '- Block when read-only roles report filesTouched',

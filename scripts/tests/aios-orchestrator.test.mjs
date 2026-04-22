@@ -22,6 +22,7 @@ import {
   renderOrchestrationReport,
 } from '../lib/harness/orchestrator.mjs';
 import { evaluateClarityGate } from '../lib/harness/clarity-gate.mjs';
+import { buildDispatchInsights } from '../lib/harness/dispatch-insights.mjs';
 import { persistDispatchEvidence } from '../lib/harness/orchestrator-evidence.mjs';
 import { buildWorkItemTelemetry } from '../lib/harness/work-item-telemetry.mjs';
 import { planOrchestrate, runOrchestrate } from '../lib/lifecycle/orchestrate.mjs';
@@ -505,6 +506,90 @@ test('buildWorkItemTelemetry maps blocked retries to failure and retry classes',
   assert.equal(blocked.retryClass, 'same-hypothesis');
   assert.equal(blocked.attempts, 2);
   assert.equal(blocked.artifactRefs.length, 1);
+});
+
+test('buildDispatchInsights ranks blocked retries and clarity gate as blocking signals', () => {
+  const insights = buildDispatchInsights({
+    dispatchRun: {
+      mode: 'live',
+      ok: false,
+      runtime: { id: 'subagent-runtime', executionMode: 'live' },
+      jobRuns: [
+        {
+          jobId: 'phase.implement',
+          jobType: 'phase',
+          role: 'implementer',
+          status: 'blocked',
+          attempts: 2,
+          output: {
+            error: 'timed out waiting for handoff',
+            outputType: 'error',
+          },
+        },
+      ],
+      cost: { totalTokens: 250000, usd: 1.25 },
+    },
+    workItemTelemetry: {
+      schemaVersion: 1,
+      totals: { total: 1, queued: 0, running: 0, blocked: 1, done: 0 },
+      items: [
+        {
+          itemId: 'phase.implement',
+          itemType: 'phase',
+          role: 'implementer',
+          status: 'blocked',
+          failureClass: 'timeout',
+          retryClass: 'same-hypothesis',
+          attempts: 2,
+        },
+      ],
+    },
+    executorCapabilityManifest: {
+      executionMode: 'live',
+      runtimeId: 'subagent-runtime',
+      summary: { read: 'yes', write: 'yes', network: 'unknown', browser: 'no', sideEffect: 'unknown' },
+      executors: [],
+    },
+    clarityGate: { needsHuman: true, reasons: ['risk signal present'] },
+  }, { costTokenWarningThreshold: 100000 });
+
+  assert.equal(insights.schemaVersion, 1);
+  assert.equal(insights.status, 'blocked');
+  assert.equal(insights.runtime.id, 'subagent-runtime');
+  assert.equal(insights.runtime.executionMode, 'live');
+  assert.ok(insights.score < 100);
+  assert.ok(insights.signals.some((signal) => signal.id === 'work.blocked' && signal.severity === 'block'));
+  assert.ok(insights.signals.some((signal) => signal.id === 'retry.same-hypothesis'));
+  assert.ok(insights.signals.some((signal) => signal.id === 'capability.unknown'));
+  assert.ok(insights.signals.some((signal) => signal.id === 'clarity.human-gate'));
+  assert.ok(insights.signals.some((signal) => signal.id === 'cost.high'));
+  assert.ok(insights.suggestedActions.some((action) => action.id === 'revise-before-retry'));
+  assert.ok(insights.suggestedActions.some((action) => action.id === 'review-clarity-gate'));
+});
+
+test('buildDispatchInsights marks successful dispatch as clear with learn-eval follow-up', () => {
+  const insights = buildDispatchInsights({
+    dispatchRun: {
+      mode: 'dry-run',
+      ok: true,
+      runtime: { id: 'local-dry-run', executionMode: 'dry-run' },
+      jobRuns: [
+        { jobId: 'phase.plan', jobType: 'phase', role: 'planner', status: 'simulated', output: { outputType: 'handoff' } },
+      ],
+    },
+    workItemTelemetry: {
+      schemaVersion: 1,
+      totals: { total: 1, queued: 0, running: 0, blocked: 0, done: 1 },
+      items: [
+        { itemId: 'phase.plan', itemType: 'phase', role: 'planner', status: 'done', failureClass: 'none', retryClass: 'none' },
+      ],
+    },
+  });
+
+  assert.equal(insights.status, 'clear');
+  assert.equal(insights.score, 100);
+  assert.equal(insights.signals.some((signal) => signal.severity === 'block'), false);
+  assert.ok(insights.suggestedActions.some((action) => action.id === 'run-learn-eval'));
 });
 
 test('evaluateClarityGate flags sensitive command and boundary-crossing signals', () => {
@@ -2293,6 +2378,10 @@ test('runOrchestrate persists live dispatch evidence with runtime cost telemetry
   assert.equal(report.workItemTelemetry.schemaVersion, 1);
   assert.equal(report.workItemTelemetry.totals.total > 0, true);
   assert.equal(report.workItemTelemetry.totals.done > 0, true);
+  assert.equal(report.dispatchInsights.schemaVersion, 1);
+  assert.equal(report.dispatchInsights.runtime.id, 'subagent-runtime');
+  assert.equal(report.dispatchInsights.runtime.executionMode, 'live');
+  assert.ok(report.dispatchInsights.signals.some((signal) => signal.id === 'capability.unknown'));
   assert.equal(report.entropyGc.mode, 'auto');
   assert.equal(report.entropyGc.evidence?.persisted, true);
 
@@ -2313,6 +2402,8 @@ test('runOrchestrate persists live dispatch evidence with runtime cost telemetry
   assert.equal((artifact.dispatchRun.cost?.usd || 0) > 0, true);
   assert.equal(artifact.workItemTelemetry.schemaVersion, 1);
   assert.equal(artifact.workItemTelemetry.totals.total > 0, true);
+  assert.equal(artifact.dispatchInsights.schemaVersion, 1);
+  assert.equal(artifact.dispatchInsights.runtime.id, 'subagent-runtime');
   assert.equal(
     artifact.workItemTelemetry.items.every((item) => item.artifactRefs.includes(report.dispatchEvidence.artifactPath)),
     true
@@ -3518,6 +3609,39 @@ test('renderOrchestrationReport includes work-item telemetry summary', () => {
   assert.match(report, /blockedByType .*phase=2\/3/);
   assert.match(report, /failureClasses/);
   assert.match(report, /retryClasses same-hypothesis=1/);
+});
+
+test('renderOrchestrationReport includes dispatch insights summary', () => {
+  const report = renderOrchestrationReport({
+    blueprint: 'feature',
+    taskTitle: 'Ship blueprints',
+    dispatchInsights: {
+      schemaVersion: 1,
+      status: 'attention',
+      score: 85,
+      runtime: { id: 'subagent-runtime', executionMode: 'live', mode: 'live' },
+      signals: [
+        {
+          id: 'capability.unknown',
+          severity: 'warn',
+          message: 'Executor capability manifest has unknown surfaces: network.',
+          count: 1,
+        },
+      ],
+      suggestedActions: [
+        {
+          id: 'resolve-capabilities',
+          label: 'Run dry-run first or declare capability risk acceptance before live execution.',
+        },
+      ],
+    },
+  });
+
+  assert.match(report, /Dispatch Insights:/);
+  assert.match(report, /status=attention score=85/);
+  assert.match(report, /runtime=subagent-runtime executionMode=live mode=live/);
+  assert.match(report, /signal warn capability\.unknown count=1/);
+  assert.match(report, /action resolve-capabilities/);
 });
 
 test('renderOrchestrationReport includes local dispatch skeleton summary', () => {

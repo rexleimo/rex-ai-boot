@@ -17,6 +17,7 @@ import {
   resolveDispatchRuntime,
 } from '../harness/orchestrator-runtimes.mjs';
 import { persistDispatchEvidence } from '../harness/orchestrator-evidence.mjs';
+import { buildDispatchInsights } from '../harness/dispatch-insights.mjs';
 import { buildLearnEvalReport } from '../harness/learn-eval.mjs';
 import { buildWorkItemTelemetry } from '../harness/work-item-telemetry.mjs';
 import { parseArgs } from '../cli/parse-args.mjs';
@@ -1144,6 +1145,13 @@ export async function runOrchestrate(
     dispatchPlan,
     dispatchRun,
   });
+  const dispatchInsights = buildDispatchInsights({
+    dispatchPlan,
+    dispatchRun,
+    workItemTelemetry,
+    executorCapabilityManifest,
+    clarityGate: resolvedClarityGate,
+  });
 
   const reportBasePlan = buildOrchestrationPlan({
     blueprint,
@@ -1169,6 +1177,7 @@ export async function runOrchestrate(
         ...(resolvedClarityGate ? { clarityGate: resolvedClarityGate } : {}),
         ...(entropyGc ? { entropyGc } : {}),
         ...(workItemTelemetry ? { workItemTelemetry } : {}),
+        ...(dispatchInsights ? { dispatchInsights } : {}),
         ...(retryReplay ? { retryReplay } : {}),
       },
       elapsedMs: Date.now() - dispatchRunStartedAt,
@@ -1185,6 +1194,7 @@ export async function runOrchestrate(
     ...(resolvedClarityGate ? { clarityGate: resolvedClarityGate } : {}),
     ...(entropyGc ? { entropyGc } : {}),
     ...(workItemTelemetry ? { workItemTelemetry } : {}),
+    ...(dispatchInsights ? { dispatchInsights } : {}),
     ...(retryReplay ? { retryReplay } : {}),
     ...(dispatchEvidence ? { dispatchEvidence } : {}),
   };

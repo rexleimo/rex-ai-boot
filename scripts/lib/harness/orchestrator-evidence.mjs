@@ -271,6 +271,7 @@ export async function persistDispatchEvidence({ rootDir, sessionId, report, elap
     dispatchPlan: report.dispatchPlan || null,
     dispatchRun: dispatchRunForArtifact,
     workItemTelemetry: withWorkItemArtifactRef(report.workItemTelemetry || null, artifactPath),
+    dispatchInsights: report.dispatchInsights || null,
   };
 
   await writeArtifact(artifactAbsPath, artifactPayload);
