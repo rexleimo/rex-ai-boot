@@ -111,9 +111,11 @@ test('shell install writes managed block and uninstall removes it', async () => 
   const installed = await readFile(rcFile, 'utf8');
   assert.match(installed, /# >>> contextdb-shell >>>/);
   assert.match(installed, /CTXDB_WRAP_MODE:-repo-only/);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
   assert.equal(calls[0].command, 'npm');
   assert.deepEqual(calls[0].args, ['install']);
+  assert.equal(calls[1].command, 'npm');
+  assert.deepEqual(calls[1].args, ['run', 'build']);
 
   await uninstallContextDbShell({ rcFile, platform: 'darwin' });
   const removed = await readFile(rcFile, 'utf8');
@@ -139,7 +141,11 @@ test('windows shell install writes managed block to both PowerShell profiles', a
 
   assert.match(pwshContent, /# >>> contextdb-shell >>>/);
   assert.match(winPsContent, /# >>> contextdb-shell >>>/);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].command, 'npm');
+  assert.deepEqual(calls[0].args, ['install']);
+  assert.equal(calls[1].command, 'npm');
+  assert.deepEqual(calls[1].args, ['run', 'build']);
 
   await uninstallContextDbShell({ platform: 'win32', homeDir });
   assert.doesNotMatch(await readFile(pwshProfile, 'utf8'), /# >>> contextdb-shell >>>/);
@@ -179,8 +185,11 @@ test('shell install reuses existing ContextDB runtime without reinstall', async 
   const rootDir = await makeTemp('aios-shell-runtime-root-');
   const rcFile = path.join(rootDir, '.zshrc');
   const mcpDir = await makeFakeMcpServer(rootDir);
+  const compiledCli = path.join(mcpDir, 'dist', 'contextdb', 'cli.js');
   const tsxPath = path.join(mcpDir, 'node_modules', '.bin', 'tsx');
+  await mkdir(path.dirname(compiledCli), { recursive: true });
   await mkdir(path.dirname(tsxPath), { recursive: true });
+  await writeFile(compiledCli, '', 'utf8');
   await writeFile(tsxPath, '', 'utf8');
 
   let called = false;

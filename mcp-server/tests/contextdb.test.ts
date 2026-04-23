@@ -28,6 +28,15 @@ async function makeWorkspace(): Promise<string> {
   return workspace;
 }
 
+function runContextDbCli(args: string[]) {
+  const tsxCli = path.join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
+  const contextDbCli = path.join(process.cwd(), 'src', 'contextdb', 'cli.ts');
+  return spawnSync(process.execPath, [tsxCli, contextDbCli, ...args], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  });
+}
+
 test('ensureContextDb initializes expected directory structure', async () => {
   const workspace = await makeWorkspace();
   const dbRoot = await ensureContextDb(workspace);
@@ -69,10 +78,7 @@ test('contextdb cli supports index:rebuild', async () => {
     text: 'Need index rebuild command',
   });
 
-  const result = spawnSync('npx', ['tsx', 'src/contextdb/cli.ts', 'index:rebuild', '--workspace', workspace], {
-    cwd: process.cwd(),
-    encoding: 'utf8',
-  });
+  const result = runContextDbCli(['index:rebuild', '--workspace', workspace]);
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse((result.stdout || '{}').trim()) as { ok?: boolean };
@@ -113,14 +119,7 @@ test('contextdb cli supports index:sync --stats with incremental counters', asyn
   state.lastEventAt = ts;
   await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
 
-  const result = spawnSync(
-    'npx',
-    ['tsx', 'src/contextdb/cli.ts', 'index:sync', '--workspace', workspace, '--force', '--stats'],
-    {
-      cwd: process.cwd(),
-      encoding: 'utf8',
-    }
-  );
+  const result = runContextDbCli(['index:sync', '--workspace', workspace, '--force', '--stats']);
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse((result.stdout || '{}').trim()) as {
@@ -156,24 +155,15 @@ test('contextdb cli index:sync writes jsonl records with --jsonl-out', async () 
   });
 
   const outputPath = path.join('memory', 'context-db', 'exports', 'index-sync-stats.jsonl');
-  const result = spawnSync(
-    'npx',
-    [
-      'tsx',
-      'src/contextdb/cli.ts',
-      'index:sync',
-      '--workspace',
-      workspace,
-      '--force',
-      '--stats',
-      '--jsonl-out',
-      outputPath,
-    ],
-    {
-      cwd: process.cwd(),
-      encoding: 'utf8',
-    }
-  );
+  const result = runContextDbCli([
+    'index:sync',
+    '--workspace',
+    workspace,
+    '--force',
+    '--stats',
+    '--jsonl-out',
+    outputPath,
+  ]);
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const absoluteOut = path.join(workspace, outputPath);
@@ -196,40 +186,31 @@ test('contextdb cli checkpoint accepts telemetry flags', async () => {
     goal: 'checkpoint cli telemetry',
   });
 
-  const result = spawnSync(
-    'npx',
-    [
-      'tsx',
-      'src/contextdb/cli.ts',
-      'checkpoint',
-      '--workspace',
-      workspace,
-      '--session',
-      session.sessionId,
-      '--summary',
-      'CLI telemetry checkpoint',
-      '--verify-result',
-      'failed',
-      '--verify-evidence',
-      'quality-gate quick',
-      '--retry-count',
-      '3',
-      '--failure-category',
-      'timeout',
-      '--elapsed-ms',
-      '987',
-      '--cost-input-tokens',
-      '120',
-      '--cost-output-tokens',
-      '80',
-      '--cost-usd',
-      '0.45',
-    ],
-    {
-      cwd: process.cwd(),
-      encoding: 'utf8',
-    }
-  );
+  const result = runContextDbCli([
+    'checkpoint',
+    '--workspace',
+    workspace,
+    '--session',
+    session.sessionId,
+    '--summary',
+    'CLI telemetry checkpoint',
+    '--verify-result',
+    'failed',
+    '--verify-evidence',
+    'quality-gate quick',
+    '--retry-count',
+    '3',
+    '--failure-category',
+    'timeout',
+    '--elapsed-ms',
+    '987',
+    '--cost-input-tokens',
+    '120',
+    '--cost-output-tokens',
+    '80',
+    '--cost-usd',
+    '0.45',
+  ]);
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse((result.stdout || '{}').trim()) as {
@@ -311,44 +292,35 @@ test('contextdb cli event:add accepts turn envelope flags', async () => {
     goal: 'event add turn flags',
   });
 
-  const result = spawnSync(
-    'npx',
-    [
-      'tsx',
-      'src/contextdb/cli.ts',
-      'event:add',
-      '--workspace',
-      workspace,
-      '--session',
-      session.sessionId,
-      '--role',
-      'assistant',
-      '--kind',
-      'response',
-      '--text',
-      'cli turn envelope event',
-      '--turn-id',
-      'turn-2',
-      '--parent-turn-id',
-      'turn-1',
-      '--turn-type',
-      'main',
-      '--environment',
-      'cli',
-      '--work-item-refs',
-      'wi-2,wi-1,wi-2',
-      '--next-state-refs',
-      'artifact:b,artifact:a',
-      '--hindsight-status',
-      'evaluated',
-      '--outcome',
-      'correction',
-    ],
-    {
-      cwd: process.cwd(),
-      encoding: 'utf8',
-    }
-  );
+  const result = runContextDbCli([
+    'event:add',
+    '--workspace',
+    workspace,
+    '--session',
+    session.sessionId,
+    '--role',
+    'assistant',
+    '--kind',
+    'response',
+    '--text',
+    'cli turn envelope event',
+    '--turn-id',
+    'turn-2',
+    '--parent-turn-id',
+    'turn-1',
+    '--turn-type',
+    'main',
+    '--environment',
+    'cli',
+    '--work-item-refs',
+    'wi-2,wi-1,wi-2',
+    '--next-state-refs',
+    'artifact:b,artifact:a',
+    '--hindsight-status',
+    'evaluated',
+    '--outcome',
+    'correction',
+  ]);
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse((result.stdout || '{}').trim()) as {
@@ -878,30 +850,21 @@ test('contextdb cli context:pack accepts --token-strategy and writes strategy me
   });
 
   const outputRel = path.join('memory', 'context-db', 'exports', `${session.sessionId}-aggressive.md`);
-  const result = spawnSync(
-    'npx',
-    [
-      'tsx',
-      'src/contextdb/cli.ts',
-      'context:pack',
-      '--workspace',
-      workspace,
-      '--session',
-      session.sessionId,
-      '--limit',
-      '30',
-      '--token-budget',
-      '48',
-      '--token-strategy',
-      'aggressive',
-      '--out',
-      outputRel,
-    ],
-    {
-      cwd: process.cwd(),
-      encoding: 'utf8',
-    }
-  );
+  const result = runContextDbCli([
+    'context:pack',
+    '--workspace',
+    workspace,
+    '--session',
+    session.sessionId,
+    '--limit',
+    '30',
+    '--token-budget',
+    '48',
+    '--token-strategy',
+    'aggressive',
+    '--out',
+    outputRel,
+  ]);
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const packetPath = path.join(workspace, outputRel);
@@ -996,26 +959,17 @@ test('searchEvents rebuilds sqlite sidecar when context.db is missing', async ()
   await fs.rm(walPath, { force: true });
   await fs.rm(shmPath, { force: true });
 
-  const cli = spawnSync(
-    'npx',
-    [
-      'tsx',
-      'src/contextdb/cli.ts',
-      'search',
-      '--workspace',
-      workspace,
-      '--project',
-      'rex-cli',
-      '--query',
-      'recover this event',
-      '--limit',
-      '5',
-    ],
-    {
-      cwd: process.cwd(),
-      encoding: 'utf8',
-    }
-  );
+  const cli = runContextDbCli([
+    'search',
+    '--workspace',
+    workspace,
+    '--project',
+    'rex-cli',
+    '--query',
+    'recover this event',
+    '--limit',
+    '5',
+  ]);
 
   assert.equal(cli.status, 0, cli.stderr || cli.stdout);
   const found = JSON.parse((cli.stdout || '{}').trim()) as { results?: Array<{ eventId: string }> };
@@ -1350,29 +1304,20 @@ test('contextdb cli supports recall:sessions', async () => {
     refs: ['core.ts'],
   });
 
-  const result = spawnSync(
-    'npx',
-    [
-      'tsx',
-      'src/contextdb/cli.ts',
-      'recall:sessions',
-      '--workspace',
-      workspace,
-      '--project',
-      'rex-cli',
-      '--query',
-      'retry guidance',
-      '--limit',
-      '3',
-      '--highlight-limit',
-      '2',
-      '--explain-score',
-    ],
-    {
-      cwd: process.cwd(),
-      encoding: 'utf8',
-    }
-  );
+  const result = runContextDbCli([
+    'recall:sessions',
+    '--workspace',
+    workspace,
+    '--project',
+    'rex-cli',
+    '--query',
+    'retry guidance',
+    '--limit',
+    '3',
+    '--highlight-limit',
+    '2',
+    '--explain-score',
+  ]);
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse((result.stdout || '{}').trim()) as {
@@ -1413,49 +1358,37 @@ test('contextdb cli search supports --scope checkpoints and --scope all', async 
     summary: 'retry guidance checkpoint',
   });
 
-  const checkpointsOnly = spawnSync(
-    'npx',
-    [
-      'tsx',
-      'src/contextdb/cli.ts',
-      'search',
-      '--workspace',
-      workspace,
-      '--session',
-      session.sessionId,
-      '--query',
-      'retry guidance',
-      '--scope',
-      'checkpoints',
-      '--limit',
-      '5',
-    ],
-    { cwd: process.cwd(), encoding: 'utf8' }
-  );
+  const checkpointsOnly = runContextDbCli([
+    'search',
+    '--workspace',
+    workspace,
+    '--session',
+    session.sessionId,
+    '--query',
+    'retry guidance',
+    '--scope',
+    'checkpoints',
+    '--limit',
+    '5',
+  ]);
   assert.equal(checkpointsOnly.status, 0, checkpointsOnly.stderr || checkpointsOnly.stdout);
   const checkpointPayload = JSON.parse((checkpointsOnly.stdout || '{}').trim()) as { results?: Array<{ checkpointId?: string }> };
   assert.equal(Array.isArray(checkpointPayload.results), true);
   assert.equal((checkpointPayload.results?.[0]?.checkpointId ?? '').includes('#C'), true);
 
-  const allScope = spawnSync(
-    'npx',
-    [
-      'tsx',
-      'src/contextdb/cli.ts',
-      'search',
-      '--workspace',
-      workspace,
-      '--session',
-      session.sessionId,
-      '--query',
-      'retry guidance',
-      '--scope',
-      'all',
-      '--limit',
-      '10',
-    ],
-    { cwd: process.cwd(), encoding: 'utf8' }
-  );
+  const allScope = runContextDbCli([
+    'search',
+    '--workspace',
+    workspace,
+    '--session',
+    session.sessionId,
+    '--query',
+    'retry guidance',
+    '--scope',
+    'all',
+    '--limit',
+    '10',
+  ]);
   assert.equal(allScope.status, 0, allScope.stderr || allScope.stdout);
   const allPayload = JSON.parse((allScope.stdout || '{}').trim()) as { results?: Array<{ itemType?: string }> };
   assert.equal(Array.isArray(allPayload.results), true);
