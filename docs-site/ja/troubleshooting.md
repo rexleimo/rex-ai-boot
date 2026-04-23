@@ -11,14 +11,19 @@ description: よくあるセットアップ/ランタイムの問題と直接的
 
 ## better-sqlite3 / ContextDB が Node 切り替え後に失敗
 
-RexCLI は **Node 22 LTS** に対応しています。shell が Node 25 や古い ABI 非互換インストールで動作している場合、ContextDB 関連コマンドが失敗する可能性があります。
+RexCLI は **Node 22 LTS** を前提としており、`mcp-server` の npm scripts は `scripts/with-project-node.mjs` を通じてその runtime を自動で優先します。
+
+`Unable to resolve a Node runtime matching .nvmrc=22` が出た場合は、まず Node 22 をインストールしてから再試行してください。
 
 素早い修正:
 
 ```bash
 node -v
-source ~/.nvm/nvm.sh && nvm use 22
+source ~/.nvm/nvm.sh
+nvm install 22
+nvm use 22
 cd mcp-server && npm rebuild better-sqlite3
+cd mcp-server && npm run test:contextdb
 ```
 
 リトライ:
@@ -141,6 +146,8 @@ codex
 期待動作: TTY エラー（`stdout is not a terminal` など）がなく、インタラクティブな `codex` セッションがターミナルに正しくアタッチされる。
 
 ヒント (codex-cli): Codex CLI v0.114+ は `codex exec` 構造化出力をサポート（`--output-schema`、`--output-last-message`、stdin）。AIOS は利用可能な場合、安定した JSON handoff のためにこれらを使用します。
+
+もし routed startup が current の non-AIOS repo 内で `scripts/aios.mjs` を探し続ける場合は、最新 `main` を pull してください。最近の build では routed `ctx-agent` startup が source-repo レイアウトを前提にせず、workspace-aware に動作します。
 
 ヒント: モデルコールなしで DAG を検証するには、`--execute dry-run` を使用（またはライブランタイム adapter シミュレーション用に `AIOS_SUBAGENT_SIMULATE=1`）。
 

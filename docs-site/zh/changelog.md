@@ -15,6 +15,7 @@ description: 版本历史、升级说明与文档变更入口。
 ## 最近版本
 
 - `main`（未发布）：
+  - **按工作区路由启动 + 项目级 Node 选择**（2026-04-23）：`ctx-agent` 的路由启动现在会保留当前 git 工作区，即使它是从非 AIOS 仓库触发；`mcp-server` 的 npm scripts 统一经由 `scripts/with-project-node.mjs` 运行，持续遵循 `.nvmrc` / Node 22，降低 `better-sqlite3` ABI 漂移，并在本机缺少 Node 22 时给出明确报错
   - **ContextDB Shell 启动优化**（2026-04-22）：`ctx()` 优先使用编译后的 `mcp-server/dist/contextdb/cli.js`，单次调用开销从 ~0.3s 降至 ~0.06s；one-shot 代理启动从 ~2.2s 优化到 ~0.5s（快约 78%）；shell-bridge 的 `detectRunner` 不再依赖 `tsx`；安装时如缺少 `dist/` 自动触发 build，build 失败则优雅回退到 npm-run 模式
   - **默认核心技能更新**（2026-04-19）：`awesome-design-md`、`frontend-design`、`cap-commit-push` 提升为默认核心技能
   - **ContextDB 懒加载**（2026-04-18 至 2026-04-19）：交互式会话默认启用懒加载上下文（`CTXDB_LAZY_LOAD=on`）；代理通过 facade prompt 自主发现记忆，不再直接注入完整上下文包；新增[懒加载文档](contextdb.md#lazy-load)及多语言博客文章

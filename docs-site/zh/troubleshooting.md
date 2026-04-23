@@ -11,14 +11,19 @@ description: 常见报错与修复步骤。
 
 ## `better-sqlite3` / ContextDB 切换 Node 后失败
 
-RexCLI 现在明确以 **Node 22 LTS** 为运行基线。如果你的 shell 还在跑 Node 25，或者 native 依赖是按别的 Node ABI 编出来的，ContextDB 相关命令就可能报错。
+RexCLI 现在明确以 **Node 22 LTS** 为运行基线，`mcp-server` 的 npm scripts 也会通过 `scripts/with-project-node.mjs` 自动优先选择这个运行时。
+
+如果命令直接报 `Unable to resolve a Node runtime matching .nvmrc=22`，说明本机还没有可用的 Node 22，需要先安装再重试。
 
 快速修复：
 
 ```bash
 node -v
-source ~/.nvm/nvm.sh && nvm use 22
+source ~/.nvm/nvm.sh
+nvm install 22
+nvm use 22
 cd mcp-server && npm rebuild better-sqlite3
+cd mcp-server && npm run test:contextdb
 ```
 
 然后重新验证：
@@ -71,38 +76,20 @@ npm run test:scripts
 
 ## 命令完全没有被包装
 
-输入 `codex` / `claude` / `gemini` 后完全没有被包装：
+检查这些条件：
 
-1. 执行 `source ~/.zshrc`（或 `~/.bashrc`）重新加载 wrapper
-2. 用 `echo $CTXDB_WRAP_MODE` 确认 wrapper 作用域（若是 `opt-in` 则需要 `.contextdb-enable` 标记）
-3. `cd` 到需要包装的目录（确认 `.contextdb-enable` 文件存在）
-4. 打开新的终端会话
+- 你当前在一个 git 仓库里（`git rev-parse --show-toplevel` 能成功）
+- `ROOTPATH/scripts/contextdb-shell.zsh` 存在并且已经被 `source`
+- `CTXDB_WRAP_MODE` 允许当前仓库（`opt-in` 模式需要 `.contextdb-enable`）
 
-## 命令被包装了但应该透传
-
-如果你想透传而不是包装：
-
-```zsh
-export CTXDB_WRAP_MODE=passthrough
-# 这样 codex/claude/gemini 会直接执行
-```
-
-## better-sqlite3 / ContextDB 切换 Node 后失败
-
-RexCLI 现在明确以 **Node 22 LTS** 为运行基线。如果你的 shell 还在跑 Node 25，或者 native 依赖是按别的 Node ABI 编出来的，ContextDB 相关命令就可能报错。
-
-快速修复：
+先跑 wrapper doctor：
 
 ```bash
-node -v
-source ~/.nvm/nvm.sh && nvm use 22
-cd mcp-server && npm rebuild better-sqlite3
+scripts/doctor-contextdb-shell.sh
 ```
 
-然后重新验证：
-
-```bash
-npm run test:scripts
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\doctor-contextdb-shell.ps1
 ```
 
 ## `search` 结果异常为空
@@ -160,6 +147,8 @@ export AIOS_SUBAGENT_CLIENT=codex-cli  # 必填（live 目前仅支持 codex-cli
 ```
 
 如果你使用 `codex` v0.114+，AIOS 会优先使用 `codex exec` 结构化输出以获得稳定的 JSON handoff（旧版本自动降级）。
+
+如果 routed startup 还在当前这个非 AIOS 仓库里找 `scripts/aios.mjs`，先拉取最新 `main`。最近的版本已经把 routed `ctx-agent` startup 改成按当前工作区感知，而不是假定 source-repo 布局。
 
 ## `ctx-agent` 执行报错: `claude: command not found`
 

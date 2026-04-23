@@ -214,6 +214,11 @@ npm install
 npm run build
 ```
 
+说明：
+
+- `mcp-server` 的 npm scripts 现在会自动按 `.nvmrc` 解析项目运行时，预期统一运行在 Node 22 LTS。
+- 如果看到 `Unable to resolve a Node runtime matching .nvmrc=22`，先安装并切换到 Node 22（例如 `nvm install 22 && nvm use 22`），再重试命令。
+
 ## 3) 安装命令包装（推荐）
 
 === "macOS / Linux (zsh)"

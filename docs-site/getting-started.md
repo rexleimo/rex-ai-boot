@@ -214,6 +214,11 @@ npm install
 npm run build
 ```
 
+Notes:
+
+- `mcp-server` package scripts now resolve the project runtime from `.nvmrc` automatically and are expected to run on Node 22 LTS.
+- If you see `Unable to resolve a Node runtime matching .nvmrc=22`, install Node 22 first (for example `nvm install 22 && nvm use 22`) and rerun the command.
+
 ## 3) Install command wrappers (recommended)
 
 === "macOS / Linux (zsh)"

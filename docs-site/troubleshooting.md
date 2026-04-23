@@ -11,14 +11,19 @@ Most failures are setup-scope issues (missing MCP runtime, wrapper not loaded, o
 
 ## `better-sqlite3` / ContextDB fails after switching Node
 
-RexCLI now targets **Node 22 LTS**. If your shell is still running Node 25 or an older ABI-incompatible install, ContextDB-related commands can fail even when the repo code is correct.
+RexCLI now targets **Node 22 LTS**, and `mcp-server` package scripts try to honor that automatically through `scripts/with-project-node.mjs`.
+
+If a command exits with `Unable to resolve a Node runtime matching .nvmrc=22`, install Node 22 first, then retry.
 
 Quick fix:
 
 ```bash
 node -v
-source ~/.nvm/nvm.sh && nvm use 22
+source ~/.nvm/nvm.sh
+nvm install 22
+nvm use 22
 cd mcp-server && npm rebuild better-sqlite3
+cd mcp-server && npm run test:contextdb
 ```
 
 Then retry:
@@ -136,6 +141,8 @@ codex
 Expected: no TTY errors like `stdout is not a terminal`, and the interactive `codex` session attaches to the terminal correctly.
 
 Tip (codex-cli): Codex CLI v0.114+ supports `codex exec` structured outputs (`--output-schema`, `--output-last-message`, stdin). AIOS uses them when available for more reliable JSON handoffs.
+
+If routed startup is still looking for `scripts/aios.mjs` inside the current non-AIOS repo, pull latest `main`; recent builds make routed `ctx-agent` startup workspace-aware instead of assuming the source-repo layout.
 
 Tip: to validate the DAG without any model calls, use `--execute dry-run` (or set `AIOS_SUBAGENT_SIMULATE=1` for the live runtime adapter simulation).
 
