@@ -3,6 +3,10 @@ import { spawnSync } from 'node:child_process';
 import { getCommandSpawnSpec } from './lib/platform/process.mjs';
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const CTX_AGENT_CLI_PATH = path.join(ROOT_DIR, 'scripts', 'ctx-agent.mjs');
 
 const BLOCKED_SUBCOMMANDS = {
   codex: new Set([
@@ -203,6 +207,50 @@ function parsePositiveInteger(value, fallback) {
   return parsed;
 }
 
+function formatShellArg(value = '') {
+  const text = String(value ?? '');
+  return /^[A-Za-z0-9_./:@=-]+$/u.test(text) ? text : JSON.stringify(text);
+}
+
+function buildCtxAgentRoutePreview({
+  agent = 'codex-cli',
+  workspaceRoot = '',
+  project = '',
+  routeMode = 'team',
+  executionMode = 'live',
+  teamProvider = 'codex',
+  teamWorkers = 3,
+  blueprint = 'feature',
+  taskPrompt = '<task>',
+} = {}) {
+  const args = [CTX_AGENT_CLI_PATH, '--agent', agent];
+  if (String(workspaceRoot || '').trim()) {
+    args.push('--workspace', String(workspaceRoot).trim());
+  }
+  if (String(project || '').trim()) {
+    args.push('--project', String(project).trim());
+  }
+  args.push(
+    '--route',
+    String(routeMode || 'team').trim(),
+    '--route-execute',
+    String(executionMode || 'live').trim(),
+    '--team-provider',
+    normalizeTeamProvider(teamProvider) || 'codex',
+    '--team-workers',
+    String(parsePositiveInteger(teamWorkers, 3)),
+  );
+  if (String(routeMode || '').trim() === 'subagent') {
+    args.push('--blueprint', blueprint);
+  }
+  args.push(
+    '--prompt',
+    String(taskPrompt || '').trim() || '<task>',
+    '--no-bootstrap',
+  );
+  return `node ${args.map((item) => formatShellArg(item)).join(' ')}`;
+}
+
 function normalizeTeamProvider(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'claude' || normalized === 'gemini' || normalized === 'codex') {
@@ -248,7 +296,13 @@ function resolveSubagentClientForPrompt(command, provider, env) {
   return inferSubagentClientFromProvider(provider);
 }
 
-function buildInteractiveAutoPrompt(command, env) {
+function buildInteractiveAutoPrompt({
+  agent = 'codex-cli',
+  command = 'codex',
+  workspaceRoot = '',
+  project = '',
+  env = process.env,
+} = {}) {
   const provider = normalizeTeamProvider(env.CTXDB_TEAM_PROVIDER)
     || (normalizeTeamProvider(env.AIOS_TEAM_PROVIDER))
     || inferTeamProviderFromCommand(command);
@@ -258,6 +312,27 @@ function buildInteractiveAutoPrompt(command, env) {
     ? rawBlueprint
     : 'feature';
   const subagentClient = resolveSubagentClientForPrompt(command, provider, env);
+  const teamCommand = buildCtxAgentRoutePreview({
+    agent,
+    workspaceRoot,
+    project,
+    routeMode: 'team',
+    executionMode: 'live',
+    teamProvider: provider,
+    teamWorkers: workers,
+    taskPrompt: '<task>',
+  });
+  const subagentCommand = buildCtxAgentRoutePreview({
+    agent: subagentClient,
+    workspaceRoot,
+    project,
+    routeMode: 'subagent',
+    executionMode: 'live',
+    teamProvider: provider,
+    teamWorkers: workers,
+    blueprint,
+    taskPrompt: '<task>',
+  });
 
   return [
     'Continue from this state and execute the next best step.',
@@ -265,8 +340,8 @@ function buildInteractiveAutoPrompt(command, env) {
     'Only choose team/subagent when the user explicitly asks for delegation/parallel work, or when there are 2+ clearly independent domains.',
     'Do NOT spawn built-in explorer/worker subagents just to scan a codebase; start single-agent first.',
     'If delegated workers are running, post a heartbeat every 30s and stop waiting after 120s with a fallback plan.',
-    `If route=team, run: node scripts/aios.mjs team --provider ${provider} --workers ${workers} --task "<task>" --live --preflight auto --format json`,
-    `If route=subagent, run: AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=${subagentClient} node scripts/aios.mjs orchestrate ${blueprint} --task "<task>" --dispatch local --execute live --preflight auto --format json`,
+    `If route=team, run: ${teamCommand}`,
+    `If route=subagent, run: ${subagentCommand}`,
     'Do not ask the user to manually trigger these commands unless they requested preview/dry-run.',
   ].join('\n');
 }
@@ -369,23 +444,38 @@ function main(argv = process.argv.slice(2)) {
     normalizeCodeHome(env, opts.cwd);
   }
 
+  const firstArg = opts.passthroughArgs[0] || '';
+  const blockedSubcommand = isBlockedSubcommand(opts.command, firstArg);
+  const runner = blockedSubcommand ? null : detectRunner(env);
+  const workspace = blockedSubcommand ? '' : detectWorkspaceRoot(opts.cwd);
+  const project = env.CTXDB_REPO_NAME || (workspace ? path.basename(workspace) : '');
+
   // Interactive mode detection: bare command invocation (no subcommand/flags) triggers
   // automatic handoff prompt injection so the new session resumes from the last checkpoint.
   const interactive = isInteractivePassthrough(opts.command, opts.passthroughArgs);
-  if (interactive && !env.CTXDB_AUTO_PROMPT && shouldInjectInteractiveAutoPrompt(env)) {
-    env.CTXDB_AUTO_PROMPT = buildInteractiveAutoPrompt(opts.command, env);
+  if (interactive && !env.CTXDB_AUTO_PROMPT && shouldInjectInteractiveAutoPrompt(env) && runner && workspace) {
+    env.CTXDB_AUTO_PROMPT = buildInteractiveAutoPrompt({
+      agent: opts.agent,
+      command: opts.command,
+      workspaceRoot: workspace,
+      project,
+      env,
+    });
     if (shouldDebug(env)) {
       const preview = String(env.CTXDB_AUTO_PROMPT || '').split(/\r?\n/u)[0] || 'continue';
       console.error(`[contextdb-shell-bridge] interactive detected; auto-prompt=${preview}`);
     }
   } else if (interactive && shouldDebug(env) && !env.CTXDB_AUTO_PROMPT) {
-    console.error('[contextdb-shell-bridge] interactive detected; auto-prompt disabled by CTXDB_INTERACTIVE_AUTO_ROUTE');
+    const reason = !shouldInjectInteractiveAutoPrompt(env)
+      ? 'disabled by CTXDB_INTERACTIVE_AUTO_ROUTE'
+      : !runner
+        ? 'runner unavailable'
+        : !workspace
+          ? 'workspace unavailable'
+          : 'skipped';
+    console.error(`[contextdb-shell-bridge] interactive detected; auto-prompt ${reason}`);
   }
 
-  const firstArg = opts.passthroughArgs[0] || '';
-  const blockedSubcommand = isBlockedSubcommand(opts.command, firstArg);
-  const runner = blockedSubcommand ? null : detectRunner(env);
-  const workspace = blockedSubcommand ? '' : detectWorkspaceRoot(opts.cwd);
   const mode = (env.CTXDB_WRAP_MODE || 'repo-only').trim().toLowerCase();
   let markerCreated = false;
   let markerCreateError = '';
@@ -427,7 +517,6 @@ function main(argv = process.argv.slice(2)) {
     process.exit(code);
   }
 
-  const project = env.CTXDB_REPO_NAME || path.basename(workspace);
   const args = [
     ...runner.args,
     '--workspace', workspace,

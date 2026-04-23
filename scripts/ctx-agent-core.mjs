@@ -20,6 +20,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 const MCP_DIR = path.join(ROOT_DIR, 'mcp-server');
+const CTX_AGENT_CLI_PATH = path.join(ROOT_DIR, 'scripts', 'ctx-agent.mjs');
 const ROUTE_MODES = new Set(['auto', 'single', 'team', 'subagent']);
 const ROUTE_EXECUTION_MODES = new Set(['dry-run', 'live']);
 const TEAM_ROUTE_PROVIDERS = new Set(['auto', 'codex', 'claude', 'gemini']);
@@ -219,12 +220,87 @@ function buildCodexMcpDisableArgs(env = process.env) {
   return ['-c', 'mcp_servers={}', '-c', 'features.rmcp_client=false'];
 }
 
+function formatShellArg(value = '') {
+  const text = String(value ?? '');
+  return /^[A-Za-z0-9_./:@=-]+$/u.test(text) ? text : JSON.stringify(text);
+}
+
+function buildCtxAgentRoutePreview({
+  agent = 'codex-cli',
+  workspaceRoot = '',
+  project = '',
+  sessionId = '',
+  routeMode = 'team',
+  executionMode = 'live',
+  teamProvider = 'auto',
+  teamWorkers = 3,
+  blueprint = 'feature',
+  taskPrompt = '<task>',
+} = {}) {
+  const args = [CTX_AGENT_CLI_PATH, '--agent', agent];
+  if (String(workspaceRoot || '').trim()) {
+    args.push('--workspace', String(workspaceRoot).trim());
+  }
+  if (String(project || '').trim()) {
+    args.push('--project', String(project).trim());
+  }
+  if (String(sessionId || '').trim()) {
+    args.push('--session', String(sessionId).trim());
+  }
+  args.push(
+    '--route',
+    normalizeRouteMode(routeMode),
+    '--route-execute',
+    normalizeRouteExecutionMode(executionMode),
+    '--team-provider',
+    normalizeTeamRouteProvider(teamProvider),
+    '--team-workers',
+    String(parsePositiveInteger(teamWorkers, 3)),
+  );
+  if (normalizeRouteMode(routeMode) === 'subagent') {
+    args.push('--blueprint', normalizeOrchestrateBlueprint(blueprint));
+  }
+  args.push(
+    '--prompt',
+    String(taskPrompt || '').trim() || '<task>',
+    '--no-bootstrap',
+  );
+  return `node ${args.map((item) => formatShellArg(item)).join(' ')}`;
+}
+
+function buildRouteRuntimeEnv({
+  agent = 'codex-cli',
+  teamProvider = 'auto',
+  teamWorkers = 3,
+  executionMode = 'live',
+} = {}) {
+  const provider = teamProvider === 'auto'
+    ? inferTeamProviderFromAgent(agent)
+    : normalizeTeamRouteProvider(teamProvider);
+  const env = {
+    ...process.env,
+    AIOS_SUBAGENT_CLIENT: resolveRoutedSubagentClient({
+      agent,
+      teamProvider: provider,
+      env: process.env,
+    }),
+    AIOS_SUBAGENT_CONCURRENCY: String(parsePositiveInteger(teamWorkers, 3)),
+  };
+  if (normalizeRouteExecutionMode(executionMode) === 'live') {
+    env.AIOS_EXECUTE_LIVE = '1';
+  }
+  return { env, provider };
+}
+
 function buildTaskRouterGuide({
   agent = '',
+  workspaceRoot = '',
+  project = '',
   teamProvider = 'auto',
   teamWorkers = 3,
   blueprint = 'feature',
   routeMode = 'auto',
+  sessionId = '',
 } = {}) {
   const provider = teamProvider === 'auto' ? inferTeamProviderFromAgent(agent) : teamProvider;
   const workers = parsePositiveInteger(teamWorkers, 3);
@@ -234,6 +310,29 @@ function buildTaskRouterGuide({
     agent,
     teamProvider: provider,
     env: process.env,
+  });
+  const teamCommand = buildCtxAgentRoutePreview({
+    agent,
+    workspaceRoot,
+    project,
+    sessionId,
+    routeMode: 'team',
+    executionMode: 'live',
+    teamProvider: provider,
+    teamWorkers: workers,
+    taskPrompt: '<task>',
+  });
+  const subagentCommand = buildCtxAgentRoutePreview({
+    agent: subagentClient,
+    workspaceRoot,
+    project,
+    sessionId,
+    routeMode: 'subagent',
+    executionMode: 'live',
+    teamProvider: provider,
+    teamWorkers: workers,
+    blueprint: resolvedBlueprint,
+    taskPrompt: '<task>',
   });
 
   return [
@@ -252,16 +351,19 @@ function buildTaskRouterGuide({
     '- /single <task>',
     '- /subagent <task>',
     '- /team <task>',
-    `Team trigger command: node scripts/aios.mjs team --provider ${provider} --workers ${workers} --task "<task>" --live --preflight auto --format json`,
-    `Subagent trigger command: AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=${subagentClient} node scripts/aios.mjs orchestrate ${resolvedBlueprint} --task "<task>" --dispatch local --execute live --preflight auto --format json`,
+    `Team trigger command: ${teamCommand}`,
+    `Subagent trigger command: ${subagentCommand}`,
   ].join('\n');
 }
 
 function buildInteractiveRouteAutoPrompt({
   agent = 'codex-cli',
+  workspaceRoot = '',
+  project = '',
   teamProvider = 'auto',
   teamWorkers = 3,
   blueprint = 'feature',
+  sessionId = '',
 } = {}) {
   const provider = teamProvider === 'auto'
     ? inferTeamProviderFromAgent(agent)
@@ -273,16 +375,37 @@ function buildInteractiveRouteAutoPrompt({
     teamProvider: provider,
     env: process.env,
   });
+  const teamCommand = buildCtxAgentRoutePreview({
+    agent,
+    workspaceRoot,
+    project,
+    sessionId,
+    routeMode: 'team',
+    executionMode: 'live',
+    teamProvider: provider,
+    teamWorkers: workers,
+    taskPrompt: '<task>',
+  });
+  const subagentCommand = buildCtxAgentRoutePreview({
+    agent: subagentClient,
+    workspaceRoot,
+    project,
+    sessionId,
+    routeMode: 'subagent',
+    executionMode: 'live',
+    teamProvider: provider,
+    teamWorkers: workers,
+    blueprint: resolvedBlueprint,
+    taskPrompt: '<task>',
+  });
   return [
     'Continue from this state and execute the next best step.',
     'Routing policy: default to single-route execution.',
     'Only choose team/subagent when the user explicitly asks for delegation/parallel work, or when there are 2+ clearly independent domains.',
     'Do NOT spawn built-in explorer/worker subagents just to scan a codebase; start single-agent first.',
     'If delegated workers are running, post a heartbeat every 30s and stop waiting after 120s with a fallback plan.',
-    'If route=team, run: node scripts/aios.mjs team --provider '
-      + `${provider} --workers ${workers} --task "<task>" --live --preflight auto --format json`,
-    'If route=subagent, run: AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT='
-      + `${subagentClient} node scripts/aios.mjs orchestrate ${resolvedBlueprint} --task "<task>" --dispatch local --execute live --preflight auto --format json`,
+    `If route=team, run: ${teamCommand}`,
+    `If route=subagent, run: ${subagentCommand}`,
     'Do not ask the user to manually trigger these commands unless they requested dry-run/preview.',
   ].join('\n');
 }
@@ -979,6 +1102,7 @@ function runOneShotAgent(agent, contextText, prompt, extraArgs, { injectContext 
 
 function buildRoutedCommandSpec({
   workspaceRoot = process.cwd(),
+  project = '',
   agent = 'codex-cli',
   routeMode = 'team',
   routeExecutionMode = 'dry-run',
@@ -986,53 +1110,36 @@ function buildRoutedCommandSpec({
   teamWorkers = 3,
   blueprint = 'feature',
   taskPrompt = '',
+  sessionId = '',
 } = {}) {
-  const provider = teamProvider === 'auto'
-    ? inferTeamProviderFromAgent(agent)
-    : normalizeTeamRouteProvider(teamProvider);
-  const subagentClient = resolveRoutedSubagentClient({
-    agent,
-    teamProvider: provider,
-    env: process.env,
-  });
-  const workers = parsePositiveInteger(teamWorkers, 3);
   const executionMode = normalizeRouteExecutionMode(routeExecutionMode);
   const effectiveRoute = normalizeRouteMode(routeMode);
   const effectivePrompt = String(taskPrompt || '').trim();
-  const commandEnv = {
-    ...process.env,
-    AIOS_SUBAGENT_CLIENT: subagentClient,
-  };
-  if (executionMode === 'live') {
-    commandEnv.AIOS_EXECUTE_LIVE = '1';
-  }
+  const { env: commandEnv, provider } = buildRouteRuntimeEnv({
+    agent,
+    teamProvider,
+    teamWorkers,
+    executionMode,
+  });
+  const workers = parsePositiveInteger(teamWorkers, 3);
 
   if (effectiveRoute === 'team') {
-    const args = [
-      'scripts/aios.mjs',
-      'team',
-      '--provider',
-      provider,
-      '--workers',
-      String(workers),
-      '--task',
-      effectivePrompt,
-      '--preflight',
-      'auto',
-      '--format',
-      'json',
-    ];
-    if (executionMode === 'dry-run') {
-      args.push('--dry-run');
-    } else {
-      args.push('--live');
-    }
     return {
       command: process.execPath,
-      args,
+      args: [],
       env: commandEnv,
       cwd: workspaceRoot,
-      preview: `node scripts/aios.mjs team --provider ${provider} --workers ${workers} --task "${effectivePrompt}" --preflight auto --format json --${executionMode === 'dry-run' ? 'dry-run' : 'live'}`,
+      preview: buildCtxAgentRoutePreview({
+        agent,
+        workspaceRoot,
+        project,
+        sessionId,
+        routeMode: 'team',
+        executionMode,
+        teamProvider: provider,
+        teamWorkers: workers,
+        taskPrompt: effectivePrompt,
+      }),
       provider,
       workers,
       executionMode,
@@ -1042,27 +1149,28 @@ function buildRoutedCommandSpec({
 
   if (effectiveRoute === 'subagent') {
     const effectiveBlueprint = normalizeOrchestrateBlueprint(blueprint);
-    const args = [
-      'scripts/aios.mjs',
-      'orchestrate',
-      effectiveBlueprint,
-      '--task',
-      effectivePrompt,
-      '--dispatch',
-      'local',
-      '--execute',
-      executionMode,
-      '--preflight',
-      'auto',
-      '--format',
-      'json',
-    ];
+    const subagentClient = resolveRoutedSubagentClient({
+      agent,
+      teamProvider: provider,
+      env: process.env,
+    });
     return {
       command: process.execPath,
-      args,
+      args: [],
       env: commandEnv,
       cwd: workspaceRoot,
-      preview: `node scripts/aios.mjs orchestrate ${effectiveBlueprint} --task "${effectivePrompt}" --dispatch local --execute ${executionMode} --preflight auto --format json`,
+      preview: buildCtxAgentRoutePreview({
+        agent: subagentClient,
+        workspaceRoot,
+        project,
+        sessionId,
+        routeMode: 'subagent',
+        executionMode,
+        teamProvider: provider,
+        teamWorkers: workers,
+        blueprint: effectiveBlueprint,
+        taskPrompt: effectivePrompt,
+      }),
       provider,
       workers,
       executionMode,
@@ -1074,8 +1182,9 @@ function buildRoutedCommandSpec({
   throw new Error(`Unsupported routed mode: ${effectiveRoute}`);
 }
 
-function runRoutedOneShotTask({
+async function runRoutedOneShotTask({
   workspaceRoot = process.cwd(),
+  project = '',
   agent = 'codex-cli',
   routeMode = 'team',
   routeExecutionMode = 'dry-run',
@@ -1083,9 +1192,11 @@ function runRoutedOneShotTask({
   teamWorkers = 3,
   blueprint = 'feature',
   taskPrompt = '',
+  sessionId = '',
 } = {}) {
   const spec = buildRoutedCommandSpec({
     workspaceRoot,
+    project,
     agent,
     routeMode,
     routeExecutionMode,
@@ -1093,12 +1204,31 @@ function runRoutedOneShotTask({
     teamWorkers,
     blueprint,
     taskPrompt,
+    sessionId,
   });
-  const result = runCommand(spec.command, spec.args, {
-    cwd: spec.cwd,
+  const { runOrchestrate } = await import('./lib/lifecycle/orchestrate.mjs');
+  const outputChunks = [];
+  const io = {
+    log: (...parts) => outputChunks.push(parts.join(' ')),
+    warn: (...parts) => outputChunks.push(parts.join(' ')),
+    error: (...parts) => outputChunks.push(parts.join(' ')),
+  };
+  const orchestrateOptions = {
+    blueprint: spec.routeMode === 'subagent' ? spec.blueprint : blueprint,
+    taskTitle: String(taskPrompt || '').trim(),
+    contextSummary: '',
+    sessionId: String(sessionId || '').trim(),
+    dispatchMode: 'local',
+    executionMode: spec.executionMode,
+    preflightMode: 'auto',
+    format: 'json',
+  };
+  const result = await runOrchestrate(orchestrateOptions, {
+    rootDir: workspaceRoot,
     env: spec.env,
+    io,
   });
-  const commandOutput = `${result.stdout || ''}${result.stderr || ''}`.trim();
+  const commandOutput = outputChunks.join('\n').trim();
   const lines = [
     `[ctx-agent route] mode=${spec.routeMode} execute=${spec.executionMode}`,
     `Command: ${spec.preview}`,
@@ -1108,7 +1238,7 @@ function runRoutedOneShotTask({
   }
   return {
     output: `${lines.join('\n')}\n`,
-    exitCode: result.status ?? 1,
+    exitCode: result.exitCode ?? 1,
     preview: spec.preview,
     routeMode: spec.routeMode,
     executionMode: spec.executionMode,
@@ -1122,9 +1252,12 @@ function runInteractiveAgent(
   {
     injectContext = true,
     contextPacketPath = '',
+    workspaceRoot = '',
+    project = '',
     teamProvider = 'auto',
     teamWorkers = 3,
     blueprint = 'feature',
+    sessionId = '',
   } = {},
 ) {
   let cmd = '';
@@ -1145,9 +1278,12 @@ function runInteractiveAgent(
     cmd = 'gemini';
     const effectiveAutoPrompt = autoPrompt || buildInteractiveRouteAutoPrompt({
       agent,
+      workspaceRoot,
+      project,
       teamProvider,
       teamWorkers,
       blueprint,
+      sessionId,
     });
     let combinedPrompt = injectContext ? contextText : '';
     if (effectiveAutoPrompt) {
@@ -1175,9 +1311,12 @@ function runInteractiveAgent(
         ? ''
         : (autoPrompt || buildInteractiveRouteAutoPrompt({
           agent,
+          workspaceRoot,
+          project,
           teamProvider,
           teamWorkers,
           blueprint,
+          sessionId,
         }));
     let combinedPrompt = shouldInject ? contextText : '';
     if (effectiveAutoPrompt) {
@@ -1311,10 +1450,13 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
     const routerGuide = shouldInjectTaskRouterGuide(process.env)
       ? buildTaskRouterGuide({
           agent: opts.agent,
+          workspaceRoot: opts.workspaceRoot,
+          project: opts.project,
           teamProvider: opts.teamProvider,
           teamWorkers: opts.teamWorkers,
           blueprint: opts.blueprint,
           routeMode: opts.routeMode,
+          sessionId: facadeResult.facade?.sessionId || '',
         })
       : '';
     const effectivePrompt = routerGuide
@@ -1334,9 +1476,12 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
 
     runInteractiveAgent(opts.agent, effectivePrompt, opts.extraArgs, {
       injectContext: true,
+      workspaceRoot: opts.workspaceRoot,
+      project: opts.project,
       teamProvider: opts.teamProvider,
       teamWorkers: opts.teamWorkers,
       blueprint: opts.blueprint,
+      sessionId: facadeResult.facade?.sessionId || '',
     });
   }
 
@@ -1391,10 +1536,13 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
   const routerGuide = shouldInjectTaskRouterGuide(process.env)
     ? buildTaskRouterGuide({
       agent: opts.agent,
+      workspaceRoot: opts.workspaceRoot,
+      project: opts.project,
       teamProvider: opts.teamProvider,
       teamWorkers: opts.teamWorkers,
       blueprint: opts.blueprint,
       routeMode: opts.routeMode,
+      sessionId: opts.sessionId,
     })
     : '';
   const effectiveContextText = routerGuide
@@ -1486,6 +1634,7 @@ Prompt: ${routedPrompt}`;
       } else {
         const routedSpec = buildRoutedCommandSpec({
           workspaceRoot: opts.workspaceRoot,
+          project: opts.project,
           agent: opts.agent,
           routeMode: routeDecision.routeMode,
           routeExecutionMode: opts.routeExecutionMode,
@@ -1493,6 +1642,7 @@ Prompt: ${routedPrompt}`;
           teamWorkers: opts.teamWorkers,
           blueprint: opts.blueprint,
           taskPrompt: routedPrompt,
+          sessionId: opts.sessionId,
         });
         output = `[dry-run] routed task via ${routeDecision.routeMode} (${routedSpec.executionMode})
 Command: ${routedSpec.preview}
@@ -1507,8 +1657,9 @@ Task: ${routedPrompt}`;
         output = result.output;
         exitCode = result.exitCode;
       } else {
-        const result = runRoutedOneShotTask({
+        const result = await runRoutedOneShotTask({
           workspaceRoot: opts.workspaceRoot,
+          project: opts.project,
           agent: opts.agent,
           routeMode: routeDecision.routeMode,
           routeExecutionMode: opts.routeExecutionMode,
@@ -1516,6 +1667,7 @@ Task: ${routedPrompt}`;
           teamWorkers: opts.teamWorkers,
           blueprint: opts.blueprint,
           taskPrompt: routedPrompt,
+          sessionId: opts.sessionId,
         });
         output = result.output;
         exitCode = result.exitCode;
@@ -1589,8 +1741,11 @@ Task: ${routedPrompt}`;
   runInteractiveAgent(opts.agent, effectiveContextText, opts.extraArgs, {
     injectContext,
     contextPacketPath: openCodeContextPacketPath,
+    workspaceRoot: opts.workspaceRoot,
+    project: opts.project,
     teamProvider: opts.teamProvider,
     teamWorkers: opts.teamWorkers,
     blueprint: opts.blueprint,
+    sessionId: opts.sessionId,
   });
 }

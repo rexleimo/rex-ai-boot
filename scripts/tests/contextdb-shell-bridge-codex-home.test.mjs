@@ -9,6 +9,11 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const BRIDGE = path.join(ROOT, 'scripts', 'contextdb-shell-bridge.mjs');
+const CTX_AGENT_CLI = path.join(ROOT, 'scripts', 'ctx-agent.mjs');
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 async function createFakeCodexCommand() {
   const binDir = await mkdtemp(path.join(os.tmpdir(), 'aios-bridge-bin-'));
@@ -287,8 +292,14 @@ test('wrapped interactive codex runs inject route auto prompt by default', async
   assert.match(autoPrompt, /Routing policy: default to single-route execution\./u);
   assert.match(autoPrompt, /Do NOT spawn built-in explorer\/worker subagents just to scan a codebase/u);
   assert.match(autoPrompt, /post a heartbeat every 30s and stop waiting after 120s/u);
-  assert.match(autoPrompt, /node scripts\/aios\.mjs team --provider codex --workers 3 --task "<task>" --live/u);
-  assert.match(autoPrompt, /AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=codex-cli node scripts\/aios\.mjs orchestrate feature --task "<task>" --dispatch local --execute live/u);
+  assert.match(
+    autoPrompt,
+    new RegExp(`node ${escapeRegExp(CTX_AGENT_CLI)} --agent codex-cli --workspace ${escapeRegExp(cwd)} --project ${escapeRegExp(path.basename(cwd))} --route team --route-execute live --team-provider codex --team-workers 3 --prompt "<task>" --no-bootstrap`, 'u')
+  );
+  assert.match(
+    autoPrompt,
+    new RegExp(`node ${escapeRegExp(CTX_AGENT_CLI)} --agent codex-cli --workspace ${escapeRegExp(cwd)} --project ${escapeRegExp(path.basename(cwd))} --route subagent --route-execute live --team-provider codex --team-workers 3 --blueprint feature --prompt "<task>" --no-bootstrap`, 'u')
+  );
 });
 
 test('wrapped interactive codex runs can disable route auto prompt injection via env', async () => {
@@ -357,8 +368,14 @@ test('wrapped interactive claude and gemini runs inject provider-specific route 
 
     assert.equal(result.status, 0, result.stderr || result.stdout);
     const autoPrompt = parseRunnerAutoPrompt(result.stdout);
-    assert.match(autoPrompt, new RegExp(`node scripts/aios\\.mjs team --provider ${item.expectedProvider} --workers 3 --task "<task>" --live`));
-    assert.match(autoPrompt, new RegExp(`AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=${item.expectedClient} node scripts/aios\\.mjs orchestrate feature --task "<task>" --dispatch local --execute live`));
+    assert.match(
+      autoPrompt,
+      new RegExp(`node ${escapeRegExp(CTX_AGENT_CLI)} --agent ${item.expectedClient} --workspace ${escapeRegExp(cwd)} --project ${escapeRegExp(path.basename(cwd))} --route team --route-execute live --team-provider ${item.expectedProvider} --team-workers 3 --prompt "<task>" --no-bootstrap`)
+    );
+    assert.match(
+      autoPrompt,
+      new RegExp(`node ${escapeRegExp(CTX_AGENT_CLI)} --agent ${item.expectedClient} --workspace ${escapeRegExp(cwd)} --project ${escapeRegExp(path.basename(cwd))} --route subagent --route-execute live --team-provider ${item.expectedProvider} --team-workers 3 --blueprint feature --prompt "<task>" --no-bootstrap`)
+    );
   }
 });
 
@@ -381,8 +398,14 @@ test('wrapped interactive opencode runs fallback subagent client to codex-cli by
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const autoPrompt = parseRunnerAutoPrompt(result.stdout);
-  assert.match(autoPrompt, /node scripts\/aios\.mjs team --provider codex --workers 3 --task "<task>" --live/u);
-  assert.match(autoPrompt, /AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=codex-cli node scripts\/aios\.mjs orchestrate feature --task "<task>" --dispatch local --execute live/u);
+  assert.match(
+    autoPrompt,
+    new RegExp(`node ${escapeRegExp(CTX_AGENT_CLI)} --agent opencode-cli --workspace ${escapeRegExp(cwd)} --project ${escapeRegExp(path.basename(cwd))} --route team --route-execute live --team-provider codex --team-workers 3 --prompt "<task>" --no-bootstrap`, 'u')
+  );
+  assert.match(
+    autoPrompt,
+    new RegExp(`node ${escapeRegExp(CTX_AGENT_CLI)} --agent codex-cli --workspace ${escapeRegExp(cwd)} --project ${escapeRegExp(path.basename(cwd))} --route subagent --route-execute live --team-provider codex --team-workers 3 --blueprint feature --prompt "<task>" --no-bootstrap`, 'u')
+  );
 });
 
 test('opencode interactive runs are wrapped through ctx-agent without prompt rewriting', async () => {

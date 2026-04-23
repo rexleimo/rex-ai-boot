@@ -15,6 +15,12 @@ import {
 } from '../ctx-agent-core.mjs';
 import { runContextDbCli } from '../lib/contextdb-cli.mjs';
 
+const CTX_AGENT_CLI = path.resolve('scripts', 'ctx-agent.mjs');
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 async function createFakeCliCommand(commandName, marker) {
   const binDir = await mkdtemp(path.join(os.tmpdir(), 'aios-ctx-agent-bin-'));
   const markerLiteral = JSON.stringify(marker);
@@ -427,23 +433,8 @@ test('ctx-agent one-shot writes turn envelope metadata for prompt/response event
 
 test('ctx-agent one-shot dry-run route team prints trigger command', async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'aios-ctx-agent-route-team-'));
-  const sessionId = 'ctx-route-team';
 
   try {
-    runContextDbCli([
-      'session:new',
-      '--workspace',
-      workspaceRoot,
-      '--agent',
-      'codex-cli',
-      '--project',
-      'tmp-project',
-      '--goal',
-      'Verify routed team dry-run trigger',
-      '--session-id',
-      sessionId,
-    ]);
-
     const result = spawnSync(
       process.execPath,
       [
@@ -454,8 +445,6 @@ test('ctx-agent one-shot dry-run route team prints trigger command', async () =>
         workspaceRoot,
         '--project',
         'tmp-project',
-        '--session',
-        sessionId,
         '--route',
         'team',
         '--route-execute',
@@ -473,7 +462,86 @@ test('ctx-agent one-shot dry-run route team prints trigger command', async () =>
 
     assert.equal(result.status, 0, result.stderr || result.stdout);
     assert.match(result.stdout, /\[route\] mode=team/);
-    assert.match(result.stdout, /Command: node scripts\/aios\.mjs team --provider codex --workers 3 --task "并行改造 UI、API 和测试"/u);
+    assert.match(
+      result.stdout,
+      new RegExp(`Command: node ${escapeRegExp(CTX_AGENT_CLI)} --agent codex-cli --workspace ${escapeRegExp(workspaceRoot)} --project tmp-project --session codex-cli-[^\\s]+ --route team --route-execute dry-run --team-provider codex --team-workers 3 --prompt "并行改造 UI、API 和测试" --no-bootstrap`, 'u')
+    );
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('ctx-agent executes routed team dry-run from a non-AIOS workspace', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'aios-ctx-agent-route-team-live-'));
+
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [
+        'scripts/ctx-agent.mjs',
+        '--agent',
+        'codex-cli',
+        '--workspace',
+        workspaceRoot,
+        '--project',
+        'tmp-project',
+        '--route',
+        'team',
+        '--route-execute',
+        'dry-run',
+        '--prompt',
+        '/team smoke',
+        '--no-bootstrap',
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+      }
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.match(result.stdout, /\[ctx-agent route\] mode=team execute=dry-run/u);
+    assert.match(result.stdout, /"dispatchRun"/u);
+    assert.doesNotMatch(result.stdout, /MODULE_NOT_FOUND/u);
+    assert.doesNotMatch(result.stdout, /--preflight requires --session/u);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('ctx-agent executes routed subagent dry-run from a non-AIOS workspace', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'aios-ctx-agent-route-subagent-live-'));
+
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [
+        'scripts/ctx-agent.mjs',
+        '--agent',
+        'codex-cli',
+        '--workspace',
+        workspaceRoot,
+        '--project',
+        'tmp-project',
+        '--route',
+        'subagent',
+        '--route-execute',
+        'dry-run',
+        '--prompt',
+        '/subagent smoke',
+        '--no-bootstrap',
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+      }
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.match(result.stdout, /\[ctx-agent route\] mode=subagent execute=dry-run/u);
+    assert.match(result.stdout, /"dispatchRun"/u);
+    assert.doesNotMatch(result.stdout, /MODULE_NOT_FOUND/u);
+    assert.doesNotMatch(result.stdout, /--preflight requires --session/u);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
   }

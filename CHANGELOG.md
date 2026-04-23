@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-04-23
+
+- fix routed team/subagent startup in external workspaces
+
 ## [1.1.0] - 2026-04-02
 
 - feat(tui): switch to React Ink + Ink UI component architecture for TUI installer
