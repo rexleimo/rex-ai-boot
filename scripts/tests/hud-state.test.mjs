@@ -646,6 +646,37 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
     kind: 'orchestration.dispatch-run',
     sessionId,
     persistedAt: '2026-04-05T01:00:00.000Z',
+    dispatchInsights: {
+      schemaVersion: 1,
+      generatedAt: '2026-04-05T01:00:00.000Z',
+      status: 'attention',
+      score: 85,
+      signals: [
+        {
+          id: 'retry.same-hypothesis',
+          severity: 'warn',
+          message: 'Retry attempts repeated the same hypothesis.',
+          count: 1,
+        },
+        {
+          id: 'work.blocked',
+          severity: 'block',
+          message: 'Blocked dispatch work detected.',
+          count: 1,
+          evidence: 'phase.implement.wi.1',
+        },
+      ],
+      suggestedActions: [
+        {
+          id: 'revise-before-retry',
+          label: 'Change the hypothesis or execution plan before retrying blocked jobs.',
+        },
+        {
+          id: 'inspect-blockers',
+          label: 'Inspect blocked handoffs and resolve the first concrete blocker before rerunning.',
+        },
+      ],
+    },
     dispatchRun: {
       ok: false,
       mode: 'dry-run',
@@ -778,6 +809,10 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
   assert.equal(state.dispatchHindsight?.repeatedBlockedTurns, 1);
   assert.equal(state.dispatchHindsight?.topRepeatedFailureClasses?.[0]?.failureClass, 'ownership-policy');
   assert.equal(state.dispatchFixHint?.targetId, 'runbook.dispatch-merge-triage');
+  assert.equal(state.latestDispatch?.dispatchInsights?.status, 'attention');
+  assert.equal(state.latestDispatch?.dispatchInsights?.score, 85);
+  assert.equal(state.latestDispatch?.dispatchInsights?.signals?.[0]?.id, 'retry.same-hypothesis');
+  assert.equal(state.latestDispatch?.dispatchInsights?.suggestedActions?.[0]?.id, 'revise-before-retry');
   assert.match(
     state.dispatchFixHint?.nextCommand ?? '',
     /orchestrate --session session-2 --dispatch local --execute dry-run --format json/
@@ -788,12 +823,16 @@ test('readHudState includes latest checkpoint and dispatch evidence', async () =
   assert.ok(state.suggestedCommands.some((cmd) => cmd.includes('--apply-draft draft.skill.repeat-blocked.ownership-policy')));
 
   const rendered = renderHud(state, { preset: 'focused' });
+  assert.match(rendered, /Dispatch Insights: status=attention score=85/);
   assert.match(rendered, /Dispatch Progress: jobs total=2 done=1 running=0 blocked=1 queued=0 completion=50%/);
   assert.match(rendered, /Tool Progress: local-phase 1\/2 \(r=0 b=1 q=0\)/);
   assert.match(rendered, /Quality: failed \(quality-logs\)/);
   assert.match(rendered, /Dispatch Hindsight: pairs=1/);
   assert.match(rendered, /FixHint: \[runbook\.dispatch-merge-triage\]/);
   assert.match(rendered, /SkillCandidate: skill=skill-constraints/);
+
+  const minimal = renderHud(state, { preset: 'minimal' });
+  assert.match(minimal, /insights=attention\(85\)/);
 });
 
 test('readHudState caches latest checkpoint tail until file changes', async () => {
@@ -1178,6 +1217,36 @@ test('readHudDispatchSummary includes latest dispatch, hindsight, and fix hint',
     kind: 'orchestration.dispatch-run',
     sessionId,
     persistedAt: '2026-04-05T03:00:00.000Z',
+    dispatchInsights: {
+      schemaVersion: 1,
+      generatedAt: '2026-04-05T03:00:00.000Z',
+      status: 'attention',
+      score: 85,
+      signals: [
+        {
+          id: 'work.blocked',
+          severity: 'block',
+          message: 'Blocked dispatch work detected.',
+          count: 1,
+        },
+        {
+          id: 'retry.same-hypothesis',
+          severity: 'warn',
+          message: 'Retry attempts repeated the same hypothesis.',
+          count: 1,
+        },
+      ],
+      suggestedActions: [
+        {
+          id: 'inspect-blockers',
+          label: 'Inspect blocked handoffs and resolve the first concrete blocker before rerunning.',
+        },
+        {
+          id: 'revise-before-retry',
+          label: 'Change the hypothesis or execution plan before retrying blocked jobs.',
+        },
+      ],
+    },
     dispatchRun: {
       ok: false,
       mode: 'dry-run',
@@ -1363,6 +1432,36 @@ test('runTeamHistory includes dispatch hindsight summary and fix hint', async ()
     kind: 'orchestration.dispatch-run',
     sessionId,
     persistedAt: '2026-04-05T03:00:00.000Z',
+    dispatchInsights: {
+      schemaVersion: 1,
+      generatedAt: '2026-04-05T03:00:00.000Z',
+      status: 'attention',
+      score: 85,
+      signals: [
+        {
+          id: 'work.blocked',
+          severity: 'block',
+          message: 'Blocked dispatch work detected.',
+          count: 1,
+        },
+        {
+          id: 'retry.same-hypothesis',
+          severity: 'warn',
+          message: 'Retry attempts repeated the same hypothesis.',
+          count: 1,
+        },
+      ],
+      suggestedActions: [
+        {
+          id: 'inspect-blockers',
+          label: 'Inspect blocked handoffs and resolve the first concrete blocker before rerunning.',
+        },
+        {
+          id: 'revise-before-retry',
+          label: 'Change the hypothesis or execution plan before retrying blocked jobs.',
+        },
+      ],
+    },
     dispatchRun: {
       ok: false,
       mode: 'dry-run',
@@ -1426,8 +1525,15 @@ test('runTeamHistory includes dispatch hindsight summary and fix hint', async ()
   assert.equal(report.summary.topJobs?.[0]?.jobId, 'phase.implement.wi.1');
   assert.equal(report.summary.topSkillCandidates?.[0]?.skillId, 'skill-constraints');
   assert.equal(report.summary.topSkillCandidates?.[0]?.failureClass, 'ownership-policy');
+  assert.equal(report.summary.topInsightSignals?.[0]?.signalId, 'work.blocked');
   const record = report.records.find((item) => item.sessionId === sessionId);
   assert.ok(record, 'expected history record');
+  assert.equal(record.dispatchInsights.status, 'attention');
+  assert.equal(record.dispatchInsights.score, 85);
+  assert.equal(record.dispatchInsights.topSignalId, 'work.blocked');
+  assert.equal(record.dispatchInsights.topSignalSeverity, 'block');
+  assert.equal(record.dispatchInsights.signalCount, 2);
+  assert.equal(record.dispatchInsights.topActionId, 'inspect-blockers');
   assert.equal(record.dispatchHindsight.pairsAnalyzed, 1);
   assert.equal(record.dispatchHindsight.repeatedBlockedTurns, 1);
   assert.equal(record.dispatchHindsight.topFailureClass, 'ownership-policy');
@@ -1462,6 +1568,26 @@ test('runTeamHistory fast mode skips dispatch hindsight and fix hint', async () 
     kind: 'orchestration.dispatch-run',
     sessionId,
     persistedAt: '2026-04-06T03:00:00.000Z',
+    dispatchInsights: {
+      schemaVersion: 1,
+      generatedAt: '2026-04-06T03:00:00.000Z',
+      status: 'blocked',
+      score: 40,
+      signals: [
+        {
+          id: 'work.blocked',
+          severity: 'block',
+          message: 'Blocked dispatch work detected.',
+          count: 1,
+        },
+      ],
+      suggestedActions: [
+        {
+          id: 'inspect-blockers',
+          label: 'Inspect blocked handoffs and resolve the first concrete blocker before rerunning.',
+        },
+      ],
+    },
     dispatchRun: {
       ok: false,
       mode: 'dry-run',
@@ -1529,6 +1655,12 @@ test('runTeamHistory fast mode skips dispatch hindsight and fix hint', async () 
   assert.equal(report.records.length, 1);
   const record = report.records[0];
   assert.equal(record.sessionId, sessionId);
+  assert.equal(record.dispatchInsights.status, 'blocked');
+  assert.equal(record.dispatchInsights.score, 40);
+  assert.equal(record.dispatchInsights.topSignalId, 'work.blocked');
+  assert.equal(record.dispatchInsights.topSignalSeverity, 'block');
+  assert.equal(record.dispatchInsights.signalCount, 1);
+  assert.equal(record.dispatchInsights.topActionId, 'inspect-blockers');
   assert.equal(record.dispatchHindsight, null);
   assert.equal(record.dispatchFixHint, null);
   assert.equal(record.skillCandidate.skillId, 'skill-constraints');

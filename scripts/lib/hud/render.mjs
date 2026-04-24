@@ -99,6 +99,42 @@ function formatDispatchLine(state) {
   ].filter(Boolean).join(' ');
 }
 
+function formatDispatchInsightsSignals(insights = null) {
+  const signals = Array.isArray(insights?.signals) ? insights.signals : [];
+  if (signals.length === 0) return 'signals=(none)';
+
+  const parts = signals.slice(0, 3).map((signal) => {
+    const id = normalizeText(signal?.id) || 'unknown';
+    const severity = normalizeText(signal?.severity) || 'info';
+    const count = Number.isFinite(signal?.count) && signal.count > 1 ? `#${Math.max(0, Math.floor(signal.count))}` : '';
+    return `${id}:${severity}${count}`;
+  });
+
+  return `signals=${parts.join(', ')}`;
+}
+
+function formatDispatchInsightsActions(insights = null) {
+  const actions = Array.isArray(insights?.suggestedActions) ? insights.suggestedActions : [];
+  if (actions.length === 0) return 'actions=(none)';
+
+  const parts = actions.slice(0, 3).map((action) => normalizeText(action?.id) || normalizeText(action?.label) || 'unknown');
+  return `actions=${parts.join(', ')}`;
+}
+
+function formatDispatchInsightsLine(state) {
+  const insights = state?.latestDispatch?.dispatchInsights && typeof state.latestDispatch.dispatchInsights === 'object'
+    ? state.latestDispatch.dispatchInsights
+    : null;
+  if (!insights) return '';
+
+  const status = normalizeText(insights.status) || 'attention';
+  const score = Number.isFinite(insights.score) ? Math.max(0, Math.floor(insights.score)) : 0;
+  return clipLine(
+    `Dispatch Insights: status=${status} score=${score} ${formatDispatchInsightsSignals(insights)} ${formatDispatchInsightsActions(insights)}`,
+    260
+  );
+}
+
 function normalizeProgressCounts(progress = null) {
   if (!progress || typeof progress !== 'object') return null;
   const total = Number.isFinite(progress.total) ? Math.max(0, Math.floor(progress.total)) : 0;
@@ -469,7 +505,13 @@ export function renderHud(state, { preset = 'focused', watchMeta = null } = {}) 
     const dispatchProgressLabel = formatMinimalDispatchProgressLabel(state);
     const qualityLabel = formatMinimalQualityLabel(state);
     const skillCandidateLabel = formatMinimalSkillCandidateLabel(state);
-    const statusLine = [dispatchLabel, dispatchProgressLabel, qualityLabel, skillCandidateLabel].filter(Boolean).join(' ');
+    const insights = dispatch?.dispatchInsights && typeof dispatch.dispatchInsights === 'object'
+      ? dispatch.dispatchInsights
+      : null;
+    const insightsLabel = insights && insights.status && insights.status !== 'clear'
+      ? `insights=${normalizeText(insights.status)}(${Number.isFinite(insights.score) ? Math.max(0, Math.floor(insights.score)) : 0})`
+      : '';
+    const statusLine = [dispatchLabel, insightsLabel, dispatchProgressLabel, qualityLabel, skillCandidateLabel].filter(Boolean).join(' ');
     return watchLine
       ? `${sessionLine}\n${statusLine}\n${watchLine}\n`
       : `${sessionLine}\n${statusLine}\n`;
@@ -483,6 +525,7 @@ export function renderHud(state, { preset = 'focused', watchMeta = null } = {}) 
     `Goal: ${clipLine(state?.session?.goal, 200) || '(none)'}`,
     formatCheckpointLine(state),
     formatDispatchLine(state),
+    formatDispatchInsightsLine(state),
   ];
 
   const dispatchProgressLine = formatDispatchProgressLine(state);

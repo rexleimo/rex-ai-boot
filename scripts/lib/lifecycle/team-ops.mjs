@@ -599,12 +599,26 @@ function formatHistoryLine(record) {
   const skillCandidateLabel = skillId
     ? `skillCandidate=${skillId}${skillFailure ? `/${skillFailure}` : ''}${skillLessons > 0 ? `#${skillLessons}` : ''}`
     : '';
+  const dispatchInsights = record.dispatchInsights && typeof record.dispatchInsights === 'object'
+    ? record.dispatchInsights
+    : null;
+  const dispatchInsightsStatus = normalizeText(dispatchInsights?.status);
+  const dispatchInsightsScore = normalizeCounter(dispatchInsights?.score);
+  const dispatchInsightsTopSignalId = normalizeText(dispatchInsights?.topSignalId);
+  const dispatchInsightsTopSignalSeverity = normalizeText(dispatchInsights?.topSignalSeverity);
+  const dispatchInsightsTopActionId = normalizeText(dispatchInsights?.topActionId);
+  const dispatchInsightsLabel = dispatchInsightsStatus
+    ? (dispatchInsightsStatus === 'clear'
+      ? `insights=clear(${dispatchInsightsScore})`
+      : `insights=${dispatchInsightsStatus}(${dispatchInsightsScore})${dispatchInsightsTopSignalId ? ` signal=${dispatchInsightsTopSignalId}/${dispatchInsightsTopSignalSeverity || 'info'}` : ''}${dispatchInsightsTopActionId ? ` action=${dispatchInsightsTopActionId}` : ''}`)
+    : '';
 
   const bits = [
     updatedAt ? `[${updatedAt}]` : '',
     sessionId ? `session=${sessionId}` : '',
     status ? `status=${status}` : '',
     dispatchLabel,
+    dispatchInsightsLabel,
     qualityLabel,
     hindsightLabel,
     fixHintLabel,
@@ -612,6 +626,26 @@ function formatHistoryLine(record) {
     goal ? `goal="${goal.length > 80 ? goal.slice(0, 79) + '…' : goal}"` : '',
   ].filter(Boolean);
   return `- ${bits.join(' | ')}`;
+}
+
+function mapDispatchInsightsRecord(dispatchInsights = null) {
+  if (!dispatchInsights || typeof dispatchInsights !== 'object') {
+    return null;
+  }
+
+  const signals = Array.isArray(dispatchInsights.signals) ? dispatchInsights.signals : [];
+  const suggestedActions = Array.isArray(dispatchInsights.suggestedActions) ? dispatchInsights.suggestedActions : [];
+  const topSignal = signals.length > 0 ? signals[0] : null;
+  const topAction = suggestedActions.length > 0 ? suggestedActions[0] : null;
+
+  return {
+    status: normalizeText(dispatchInsights.status) || null,
+    score: normalizeCounter(dispatchInsights.score),
+    topSignalId: normalizeText(topSignal?.id) || null,
+    topSignalSeverity: normalizeText(topSignal?.severity) || null,
+    signalCount: signals.length,
+    topActionId: normalizeText(topAction?.id) || null,
+  };
 }
 
 function summarizeHistory(records = []) {
@@ -623,6 +657,7 @@ function summarizeHistory(records = []) {
   const fixHintCounts = new Map();
   const topJobCounts = new Map();
   const topSkillCandidateCounts = new Map();
+  const topInsightSignalCounts = new Map();
 
   for (const record of Array.isArray(records) ? records : []) {
     const dispatch = record?.dispatch && typeof record.dispatch === 'object' ? record.dispatch : null;
@@ -676,6 +711,14 @@ function summarizeHistory(records = []) {
       topSkillCandidateCounts.set(key, existing);
     }
 
+    const dispatchInsights = record?.dispatchInsights && typeof record.dispatchInsights === 'object'
+      ? record.dispatchInsights
+      : null;
+    const topInsightSignalId = normalizeText(dispatchInsights?.topSignalId);
+    if (topInsightSignalId) {
+      topInsightSignalCounts.set(topInsightSignalId, (topInsightSignalCounts.get(topInsightSignalId) || 0) + 1);
+    }
+
     const qualityGate = record?.qualityGate && typeof record.qualityGate === 'object'
       ? record.qualityGate
       : null;
@@ -707,6 +750,10 @@ function summarizeHistory(records = []) {
       || left.skillId.localeCompare(right.skillId)
       || String(left.failureClass || left.scope || '').localeCompare(String(right.failureClass || right.scope || '')))
     .slice(0, 5);
+  const topInsightSignals = Array.from(topInsightSignalCounts.entries())
+    .map(([signalId, count]) => ({ signalId, count }))
+    .sort((left, right) => right.count - left.count || left.signalId.localeCompare(right.signalId))
+    .slice(0, 5);
 
   return {
     total,
@@ -717,6 +764,7 @@ function summarizeHistory(records = []) {
     topFixHints,
     topJobs,
     topSkillCandidates,
+    topInsightSignals,
   };
 }
 
@@ -793,6 +841,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
       updatedAt: normalizeText(meta.updatedAt) || normalizeText(meta.createdAt),
       status: normalizeText(meta.status),
       goal: normalizeText(meta.goal),
+      dispatchInsights: mapDispatchInsightsRecord(state.latestDispatch?.dispatchInsights),
       dispatch: state.latestDispatch
         ? {
           ok: state.latestDispatch.ok === true,
@@ -891,7 +940,7 @@ export async function runTeamHistory(rawOptions = {}, { rootDir, io = console } 
   const lines = [
     `AIOS Team History (provider=${provider} agent=${agent})`,
     filterLabels.length > 0 ? `Filter: ${filterLabels.join('; ')}` : '',
-    `Summary: sessions=${summary.total} dispatchBlocked=${summary.dispatchBlocked} hindsightUnstable=${summary.hindsightUnstable} topFailures=${summary.topFailures.map((item) => `${item.failureClass}=${item.count}`).join(', ') || 'none'} topQualityFailures=${summary.topQualityFailures.map((item) => `${item.failureCategory}=${item.count}`).join(', ') || 'none'} topFixHints=${summary.topFixHints.map((item) => `${item.targetId}=${item.count}`).join(', ') || 'none'} topJobs=${summary.topJobs.map((item) => `${item.jobId}=${item.count}`).join(', ') || 'none'} topSkillCandidates=${summary.topSkillCandidates.map((item) => `${item.skillId}${item.failureClass ? `/${item.failureClass}` : item.scope ? `/${item.scope}` : ''}=${item.count}`).join(', ') || 'none'}`,
+    `Summary: sessions=${summary.total} dispatchBlocked=${summary.dispatchBlocked} hindsightUnstable=${summary.hindsightUnstable} topFailures=${summary.topFailures.map((item) => `${item.failureClass}=${item.count}`).join(', ') || 'none'} topQualityFailures=${summary.topQualityFailures.map((item) => `${item.failureCategory}=${item.count}`).join(', ') || 'none'} topFixHints=${summary.topFixHints.map((item) => `${item.targetId}=${item.count}`).join(', ') || 'none'} topJobs=${summary.topJobs.map((item) => `${item.jobId}=${item.count}`).join(', ') || 'none'} topSkillCandidates=${summary.topSkillCandidates.map((item) => `${item.skillId}${item.failureClass ? `/${item.failureClass}` : item.scope ? `/${item.scope}` : ''}=${item.count}`).join(', ') || 'none'} topInsightSignals=${summary.topInsightSignals.map((item) => `${item.signalId}=${item.count}`).join(', ') || 'none'}`,
     ...(selectedRecords.length > 0 ? selectedRecords.map((record) => formatHistoryLine(record)) : ['- (none)']),
   ];
   io.log(lines.join('\n') + '\n');

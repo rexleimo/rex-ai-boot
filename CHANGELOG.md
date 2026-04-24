@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-04-24
+
+- feat(harness): surface dispatch insights in team HUD
+
 ## [1.2.0] - 2026-04-24
 
 - feat: add Privacy Shield for wrapped coding agent sessions
