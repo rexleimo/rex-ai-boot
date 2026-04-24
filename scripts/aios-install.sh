@@ -138,6 +138,23 @@ for rel in "${preserve_paths[@]}"; do
   fi
 done
 
+root_package_json="$AIOS_INSTALL_DIR/package.json"
+root_tsx_bin="$AIOS_INSTALL_DIR/node_modules/.bin/tsx"
+if [[ -f "$root_package_json" ]]; then
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "Missing required command: npm" >&2
+    exit 1
+  fi
+  if [[ ! -x "$root_tsx_bin" ]]; then
+    echo "+ install AIOS runtime deps: (cd $AIOS_INSTALL_DIR && npm install --include=dev)"
+    (cd "$AIOS_INSTALL_DIR" && npm install --include=dev)
+  else
+    echo "[ok] AIOS runtime deps ready: $AIOS_INSTALL_DIR"
+  fi
+else
+  echo "[warn] missing root package.json; TUI dependencies may be unavailable: $root_package_json" >&2
+fi
+
 shell_installer="$AIOS_INSTALL_DIR/scripts/install-contextdb-shell.sh"
 if [[ -f "$shell_installer" ]]; then
   echo "+ install shell integration (zsh): $shell_installer --mode $AIOS_WRAP_MODE --force"

@@ -86,6 +86,28 @@ try {
     }
   }
 
+  $rootPackageJson = Join-Path $InstallDir "package.json"
+  $rootTsxBin = Join-Path $InstallDir "node_modules/.bin/tsx.cmd"
+  if (Test-Path -LiteralPath $rootPackageJson) {
+    if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+      throw "Missing required command: npm"
+    }
+    if (-not (Test-Path -LiteralPath $rootTsxBin)) {
+      Write-Host "+ install AIOS runtime deps: npm install --include=dev"
+      Push-Location $InstallDir
+      try {
+        & npm install --include=dev
+      }
+      finally {
+        Pop-Location
+      }
+    } else {
+      Write-Host ("[ok] AIOS runtime deps ready: {0}" -f $InstallDir)
+    }
+  } else {
+    Write-Host ("[warn] missing root package.json; TUI dependencies may be unavailable: {0}" -f $rootPackageJson)
+  }
+
   $shellInstaller = Join-Path $InstallDir "scripts/install-contextdb-shell.ps1"
   if (Test-Path -LiteralPath $shellInstaller) {
     Write-Host "+ install PowerShell integration: $shellInstaller -Mode $WrapMode -Force"

@@ -35,6 +35,8 @@ async function seedFixtureRepo(rootDir, {
   await writeFixtureFile(rootDir, 'AGENTS.md', '# fixture\n');
   await writeFixtureFile(rootDir, 'CHANGELOG.md', '## [1.2.3] - 2026-03-17\n');
   await writeFixtureFile(rootDir, 'VERSION', '1.2.3\n');
+  await writeFixtureFile(rootDir, 'package.json', '{"name":"fixture-aios","type":"module","dependencies":{"ink":"^4.4.1"},"devDependencies":{"tsx":"^4.21.0"}}\n');
+  await writeFixtureFile(rootDir, 'package-lock.json', '{"name":"fixture-aios","lockfileVersion":3,"packages":{}}\n');
   await writeFixtureFile(rootDir, 'README.md', '# README\n');
   await writeFixtureFile(rootDir, 'README-zh.md', '# README-ZH\n');
   await writeFixtureFile(rootDir, 'skills-lock.json', '{}\n');
@@ -112,6 +114,25 @@ test('package-release.sh emits stable assets that include native, skill, and age
     run('test', ['-f', path.join(extractDir, 'rex-cli', 'client-sources', 'native-base', 'gemini', 'project', 'AIOS.md')]),
     'rex-cli.tar.gz did not include client-sources/native-base/gemini/project/AIOS.md'
   );
+  assertOk(
+    run('test', ['-f', path.join(extractDir, 'rex-cli', 'package.json')]),
+    'rex-cli.tar.gz did not include root package.json for direct release installs'
+  );
+  assertOk(
+    run('test', ['-f', path.join(extractDir, 'rex-cli', 'package-lock.json')]),
+    'rex-cli.tar.gz did not include root package-lock.json for direct release installs'
+  );
+});
+
+test('one-liner installers bootstrap root runtime dependencies for direct release installs', async () => {
+  const workspaceRoot = process.cwd();
+  const installSh = await readFile(path.join(workspaceRoot, 'scripts', 'aios-install.sh'), 'utf8');
+  const installPs1 = await readFile(path.join(workspaceRoot, 'scripts', 'aios-install.ps1'), 'utf8');
+
+  assert.match(installSh, /npm install --include=dev/);
+  assert.match(installSh, /node_modules\/\.bin\/tsx/);
+  assert.match(installPs1, /npm install --include=dev/);
+  assert.match(installPs1, /node_modules\/\.bin\/tsx\.cmd/);
 });
 
 test('release-preflight.sh validates matching tag, VERSION, changelog, and native/skills sync state', async () => {

@@ -26,6 +26,8 @@ try {
     "AGENTS.md",
     "CHANGELOG.md",
     "VERSION",
+    "package.json",
+    "package-lock.json",
     "README.md",
     "README-zh.md",
     "skills-lock.json",
