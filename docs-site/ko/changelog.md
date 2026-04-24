@@ -15,6 +15,7 @@ description: 릴리스 이력, 업그레이드 안내, 관련 문서 링크.
 ## 최근 버전
 
 - `main` (미릴리스):
+  - **래핑된 coding agent 용 Privacy Shield** (2026-04-24): ContextDB shell 대화형 CLI 시작 시 Privacy Guard 상태, 사용자 지정 모델 중계 엔드포인트 감지, `aios privacy read --file <path>` 안전 읽기 경로를 보여주는 컬러 프라이버시 패널을 출력; 자동 프롬프트도 LLM 개인정보 지시는 권고적이며 검증 가능한 보호는 deterministic AIOS gate 에서 수행된다고 명시
   - **ContextDB Shell 시작 최적화** (2026-04-22): `ctx()` 가 `npm run -s contextdb` 대신 컴파일된 `mcp-server/dist/contextdb/cli.js` 를 우선 사용하여 호출당 오버헤드를 ~0.3s 에서 ~0.06s 로 감소; one-shot 에이전트 실행을 ~2.2s 에서 ~0.5s 로 단축(약 78% 빨라짐); shell-bridge 의 `detectRunner` 가 `tsx` 를 더 이상 필요로 하지 않음; 설치 시 `dist/` 가 없으면 자동 빌드하고 빌드 실패 시 npm-run 모드로 우아하게 폴패
   - **기본 core skills 업데이트** (2026-04-19): `awesome-design-md`, `frontend-design`, `cap-commit-push` 를 기본 core skills 로 승격
   - **ContextDB 레이지 로드** (2026-04-18 ~ 2026-04-19): 대화형 세션이 기본적으로 레이지 컨텍스트 로드 (`CTXDB_LAZY_LOAD=on`) 를 사용; 에이전트가 전체 컨텍스트 팩 주입 대신 퍼싸드 프롬프트로 메모리를 자체 발견; [레이지 로드 문서](contextdb.md#lazy-load) 및 다국어 블로그 게시글 추가

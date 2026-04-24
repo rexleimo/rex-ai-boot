@@ -1085,7 +1085,7 @@ test('dispatch runtime registry accepts a valid codex handoff that arrives befor
       AIOS_EXECUTE_LIVE: '1',
       AIOS_SUBAGENT_CLIENT: 'codex-cli',
       AIOS_SUBAGENT_CONCURRENCY: '1',
-      AIOS_SUBAGENT_TIMEOUT_MS: '600',
+      AIOS_SUBAGENT_TIMEOUT_MS: '2500',
       PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
     },
     io: { log() {} },

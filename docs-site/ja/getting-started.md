@@ -186,6 +186,24 @@ node scripts/check-skills-sync.mjs
     aios privacy ollama-on
     ```
 
+ContextDB shell がラップした対話型 `codex` / `claude` / `gemini` / `opencode` 起動では、Privacy Shield パネルを表示し、Privacy Guard 状態、モデルエンドポイント/中継サービス検出、機密ファイルの扱いを示します。
+
+=== "macOS / Linux"
+
+    ```bash
+    CTXDB_PRIVACY_BANNER=0 codex      # パネルを一時的に非表示
+    CTXDB_PRIVACY_COLOR=0 codex       # パネルは残して ANSI 色を無効化
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell
+    $env:CTXDB_PRIVACY_BANNER = "0"; codex
+    $env:CTXDB_PRIVACY_COLOR = "0"; codex
+    ```
+
+Privacy Shield は agent にプライバシールールを促しますが、LLM の指示遵守は助言的なものです。検証可能な保護は、context、MCP 出力、ログ、checkpoint がマシン外へ出る前の deterministic な AIOS gate で行います。
+
 ## 1) Browser MCP をインストール
 
 === "macOS / Linux"

@@ -15,6 +15,7 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
 ## Recent Versions
 
 - `main` (Unreleased):
+  - **Privacy Shield for wrapped coding agents** (2026-04-24): interactive ContextDB shell launches now print a colored privacy panel with Privacy Guard status, custom relay/model endpoint detection, and the safe `aios privacy read --file <path>` path; auto prompts now clarify that LLM privacy instructions are advisory while deterministic AIOS gates provide verifiable enforcement
   - **Workspace-aware routed startup + project Node selection** (2026-04-23): routed `ctx-agent` startup now preserves the active git workspace even when launched from a non-AIOS repo; `mcp-server` package scripts run through `scripts/with-project-node.mjs` so `.nvmrc` / Node 22 is honored consistently, reducing `better-sqlite3` ABI drift and surfacing a clear error when Node 22 is unavailable
   - **ContextDB Shell startup optimization** (2026-04-22): `ctx()` now prefers compiled `mcp-server/dist/contextdb/cli.js` over `npm run -s contextdb`, cutting per-call overhead from ~0.3s to ~0.06s; one-shot agent launch improved from ~2.2s to ~0.5s (~78% faster); shell-bridge `detectRunner` no longer requires `tsx`; install flow auto-builds `dist/` when missing and gracefully falls back to npm-run mode on build failure
   - **Default core skills update** (2026-04-19): `awesome-design-md`, `frontend-design`, and `cap-commit-push` promoted to default core skills

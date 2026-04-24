@@ -9,6 +9,8 @@
 # - CTXDB_WRAP_MODE: all|repo-only|opt-in|off (default: repo-only, read by bridge)
 # - CTXDB_MARKER_FILE: marker filename for opt-in mode (default: .contextdb-enable, read by bridge)
 # - CTXDB_AUTO_CREATE_MARKER: auto-create marker in opt-in mode (default: on, read by bridge)
+# - CTXDB_PRIVACY_BANNER: show/hide interactive Privacy Shield banner (default: on, read by bridge)
+# - CTXDB_PRIVACY_COLOR: enable/disable banner ANSI color (default: on unless NO_COLOR is set, read by bridge)
 
 typeset -g CTXDB_LAST_WORKSPACE=""
 

@@ -15,6 +15,7 @@ description: 版本历史、升级说明与文档变更入口。
 ## 最近版本
 
 - `main`（未发布）：
+  - **包装式 coding agent 的 Privacy Shield**（2026-04-24）：ContextDB shell 启动交互式 CLI 时会打印彩色隐私面板，展示 Privacy Guard 状态、自定义模型中转端点检测，以及 `aios privacy read --file <path>` 安全读取路径；自动提示词也明确 LLM 隐私规则只是提示约束，可验证保护来自确定性的 AIOS gate
   - **按工作区路由启动 + 项目级 Node 选择**（2026-04-23）：`ctx-agent` 的路由启动现在会保留当前 git 工作区，即使它是从非 AIOS 仓库触发；`mcp-server` 的 npm scripts 统一经由 `scripts/with-project-node.mjs` 运行，持续遵循 `.nvmrc` / Node 22，降低 `better-sqlite3` ABI 漂移，并在本机缺少 Node 22 时给出明确报错
   - **ContextDB Shell 启动优化**（2026-04-22）：`ctx()` 优先使用编译后的 `mcp-server/dist/contextdb/cli.js`，单次调用开销从 ~0.3s 降至 ~0.06s；one-shot 代理启动从 ~2.2s 优化到 ~0.5s（快约 78%）；shell-bridge 的 `detectRunner` 不再依赖 `tsx`；安装时如缺少 `dist/` 自动触发 build，build 失败则优雅回退到 npm-run 模式
   - **默认核心技能更新**（2026-04-19）：`awesome-design-md`、`frontend-design`、`cap-commit-push` 提升为默认核心技能

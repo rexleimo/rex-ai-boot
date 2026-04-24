@@ -645,6 +645,18 @@ aios privacy ollama-on
 # 等价于 hybrid 模式 + qwen3.5:4b
 ```
 
+启动 `codex` / `claude` / `gemini` / `opencode` 这类被 ContextDB shell 包装的交互式 CLI 时，AIOS 会在 stderr 打印彩色 Privacy Shield 面板，展示 Privacy Guard 状态、是否检测到自定义模型中转端点，以及敏感文件读取入口。
+
+```bash
+# 不想显示启动面板时可临时关闭
+CTXDB_PRIVACY_BANNER=0 codex
+
+# 无 ANSI 颜色环境可关闭颜色
+CTXDB_PRIVACY_COLOR=0 codex
+```
+
+注意：大模型对隐私规则的遵循只能作为提示词约束，不能被证明为严格执行。真正可验证的保护必须发生在 AIOS wrapper、Privacy Guard、ContextDB 打包、MCP 工具和日志/检查点写入这些确定性关口。
+
 如需临时关闭：
 
 ```bash

@@ -150,6 +150,24 @@ node scripts/check-skills-sync.mjs
     aios privacy ollama-on
     ```
 
+启动被 ContextDB shell 包装的交互式 `codex` / `claude` / `gemini` / `opencode` 时，会打印 Privacy Shield 面板，提示当前 Privacy Guard、模型端点/中转站和敏感文件读取策略。
+
+=== "macOS / Linux"
+
+    ```bash
+    CTXDB_PRIVACY_BANNER=0 codex      # 临时隐藏面板
+    CTXDB_PRIVACY_COLOR=0 codex       # 保留面板但关闭 ANSI 颜色
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell
+    $env:CTXDB_PRIVACY_BANNER = "0"; codex
+    $env:CTXDB_PRIVACY_COLOR = "0"; codex
+    ```
+
+说明：Privacy Shield 会提醒 agent 遵守隐私规则，但无法数学证明大模型在生成过程中严格遵循提示词。可验证的保护来自 wrapper、Privacy Guard、ContextDB 打包、MCP 工具和日志/检查点写入前的确定性检查。
+
 按需选择组件示例：
 
 提示：如果你通过一条命令安装，仓库会在 `~/.rexcil/rex-cli`。

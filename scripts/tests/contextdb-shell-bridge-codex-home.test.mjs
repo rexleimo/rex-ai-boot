@@ -290,6 +290,9 @@ test('wrapped interactive codex runs inject route auto prompt by default', async
   assert.equal(result.status, 0);
   const autoPrompt = parseRunnerAutoPrompt(result.stdout);
   assert.match(autoPrompt, /Routing policy: default to single-route execution\./u);
+  assert.match(autoPrompt, /Privacy boundary: LLM instructions are advisory/u);
+  assert.match(autoPrompt, /Use `aios privacy read --file <path>` for sensitive files/u);
+  assert.match(autoPrompt, /Do not claim strict privacy compliance unless AIOS gates verified it/u);
   assert.match(autoPrompt, /Do NOT spawn built-in explorer\/worker subagents just to scan a codebase/u);
   assert.match(autoPrompt, /post a heartbeat every 30s and stop waiting after 120s/u);
   assert.match(
@@ -300,6 +303,70 @@ test('wrapped interactive codex runs inject route auto prompt by default', async
     autoPrompt,
     new RegExp(`node ${escapeRegExp(CTX_AGENT_CLI)} --agent codex-cli --workspace ${escapeRegExp(cwd)} --project ${escapeRegExp(path.basename(cwd))} --route subagent --route-execute live --team-provider codex --team-workers 3 --blueprint feature --prompt "<task>" --no-bootstrap`, 'u')
   );
+});
+
+test('wrapped interactive runs print privacy banner to stderr', async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), 'aios-bridge-privacy-banner-'));
+  const fakeBin = await createFakeCodexCommand();
+  const fakeRunner = await createFakeRunner();
+
+  const result = runBridge({
+    cwd,
+    pathPrefix: fakeBin,
+    args: [],
+    env: {
+      CTXDB_RUNNER: fakeRunner,
+      CTXDB_WRAP_MODE: 'all',
+    },
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stderr, /AIOS Privacy Shield/u);
+  assert.match(result.stderr, /Privacy Guard/u);
+  assert.match(result.stderr, /Model compliance/u);
+});
+
+test('privacy banner reports custom relay host without credentials or path', async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), 'aios-bridge-privacy-relay-'));
+  const fakeBin = await createFakeCodexCommand();
+  const fakeRunner = await createFakeRunner();
+
+  const result = runBridge({
+    cwd,
+    pathPrefix: fakeBin,
+    args: [],
+    env: {
+      CTXDB_RUNNER: fakeRunner,
+      CTXDB_WRAP_MODE: 'all',
+      OPENAI_BASE_URL: 'https://user:secret@relay.example.com/v1/private?token=abc',
+    },
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stderr, /relay\.example\.com/u);
+  assert.doesNotMatch(result.stderr, /user:secret/u);
+  assert.doesNotMatch(result.stderr, /\/v1\/private/u);
+  assert.doesNotMatch(result.stderr, /token=abc/u);
+});
+
+test('privacy banner can be disabled via CTXDB_PRIVACY_BANNER', async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), 'aios-bridge-privacy-banner-off-'));
+  const fakeBin = await createFakeCodexCommand();
+  const fakeRunner = await createFakeRunner();
+
+  const result = runBridge({
+    cwd,
+    pathPrefix: fakeBin,
+    args: [],
+    env: {
+      CTXDB_RUNNER: fakeRunner,
+      CTXDB_WRAP_MODE: 'all',
+      CTXDB_PRIVACY_BANNER: '0',
+    },
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.doesNotMatch(result.stderr, /AIOS Privacy Shield/u);
 });
 
 test('wrapped interactive codex runs can disable route auto prompt injection via env', async () => {

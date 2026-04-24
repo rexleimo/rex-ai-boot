@@ -150,6 +150,24 @@ Optional local model path (Ollama + `qwen3.5:4b`):
     aios privacy ollama-on
     ```
 
+Interactive `codex` / `claude` / `gemini` / `opencode` launches wrapped by ContextDB shell now print a Privacy Shield panel with Privacy Guard status, model endpoint/relay detection, and sensitive-file handling guidance.
+
+=== "macOS / Linux"
+
+    ```bash
+    CTXDB_PRIVACY_BANNER=0 codex      # hide the panel for one command
+    CTXDB_PRIVACY_COLOR=0 codex       # keep the panel, disable ANSI color
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell
+    $env:CTXDB_PRIVACY_BANNER = "0"; codex
+    $env:CTXDB_PRIVACY_COLOR = "0"; codex
+    ```
+
+Privacy Shield reminds agents to follow privacy rules, but LLM instructions are advisory. Verifiable enforcement comes from deterministic AIOS gates before context, MCP output, logs, or checkpoints leave the machine.
+
 Component selection examples:
 
 Tip: if you installed via the one-liner, the repo lives at `~/.rexcil/rex-cli`.

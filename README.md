@@ -676,6 +676,18 @@ aios privacy ollama-on
 # equivalent mode: hybrid with qwen3.5:4b on local ollama
 ```
 
+When ContextDB shell wraps an interactive `codex` / `claude` / `gemini` / `opencode` launch, AIOS prints a colored Privacy Shield panel to stderr. It summarizes Privacy Guard state, custom relay/model endpoint detection, and the safe read path for sensitive files.
+
+```bash
+# hide the startup panel for one command
+CTXDB_PRIVACY_BANNER=0 codex
+
+# keep the panel but disable ANSI color
+CTXDB_PRIVACY_COLOR=0 codex
+```
+
+Note: LLM privacy instructions are advisory and cannot prove strict compliance during generation. Verifiable protection must happen in deterministic AIOS gates: wrappers, Privacy Guard, ContextDB packing, MCP tools, and log/checkpoint writers.
+
 If you must disable temporarily:
 
 ```bash

@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-04-24
+
+- feat: add Privacy Shield for wrapped coding agent sessions
+
 ## [1.1.1] - 2026-04-23
 
 - fix routed team/subagent startup in external workspaces
