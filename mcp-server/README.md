@@ -180,6 +180,10 @@ npm run contextdb -- checkpoint --session <session_id> --summary "Auth wall foun
 npm run contextdb -- context:pack --session <session_id> --out memory/context-db/exports/<session_id>-context.md
 npm run contextdb -- context:pack --session <session_id> --limit 60 --token-budget 1200 --token-strategy balanced --out memory/context-db/exports/<session_id>-context.md
 npm run contextdb -- search --query "auth race" --project rex-cli
+npm run contextdb -- search --query "auth race" --scope all --explain
+npm run contextdb -- hygiene:status
+npm run contextdb -- hygiene:prune-noise --dry-run
+npm run contextdb -- hygiene:compact --dry-run
 npm run contextdb -- timeline --session <session_id> --limit 30
 npm run contextdb -- event:get --id <session_id>#<seq>
 npm run contextdb -- index:sync --force --stats --jsonl-out memory/context-db/exports/index-sync-stats.jsonl
@@ -187,6 +191,8 @@ npm run contextdb -- index:rebuild
 ```
 
 `context:pack --token-strategy` supports `legacy|balanced|aggressive` (`balanced` is the default when `--token-budget` is set).
+
+`search --explain` adds retrieval mode, query tokens, matched tokens, score parts, and suppression reasons to each result. `hygiene:*` commands expose ContextDB maintenance checks; mutation-oriented hygiene operations require `--dry-run` in this conservative first version.
 
 `index:sync` is an incremental sidecar refresh command (fast path).  
 Use `--stats` for detailed counters (`scanned/upserted` sessions/events/checkpoints), and `--jsonl-out` to append each run to a JSONL history file for trend analysis.

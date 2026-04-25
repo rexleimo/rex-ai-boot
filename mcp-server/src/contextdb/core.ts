@@ -17,6 +17,7 @@ import {
   upsertSessionRow,
 } from './sqlite.js';
 import { semanticRerank } from './semantic.js';
+import { buildSearchExplain, type ContextDbSearchExplain } from './explain.js';
 
 export type SessionStatus = 'running' | 'blocked' | 'done';
 export type EventRole = 'system' | 'user' | 'assistant' | 'tool';
@@ -1725,10 +1726,11 @@ export interface SearchEventsInput {
   refs?: string[];
   limit?: number;
   semantic?: boolean;
+  explain?: boolean;
 }
 
 export interface SearchEventsOutput {
-  results: IndexedEvent[];
+  results: Array<IndexedEvent & { explain?: ContextDbSearchExplain }>;
 }
 
 export interface SearchCheckpointsInput {
@@ -1739,17 +1741,18 @@ export interface SearchCheckpointsInput {
   statuses?: SessionStatus[];
   limit?: number;
   semantic?: boolean;
+  explain?: boolean;
 }
 
 export interface SearchCheckpointsOutput {
-  results: IndexedCheckpoint[];
+  results: Array<IndexedCheckpoint & { explain?: ContextDbSearchExplain }>;
 }
 
 export type SearchScope = 'events' | 'checkpoints' | 'all';
 
 export type SearchMemoryResult =
-  | ({ itemType: 'event' } & IndexedEvent)
-  | ({ itemType: 'checkpoint' } & IndexedCheckpoint);
+  | ({ itemType: 'event' } & IndexedEvent & { explain?: ContextDbSearchExplain })
+  | ({ itemType: 'checkpoint' } & IndexedCheckpoint & { explain?: ContextDbSearchExplain });
 
 export interface SearchMemoryInput {
   workspaceRoot: string;
@@ -1762,6 +1765,7 @@ export interface SearchMemoryInput {
   statuses?: SessionStatus[];
   limit?: number;
   semantic?: boolean;
+  explain?: boolean;
   scope?: SearchScope;
 }
 
@@ -2399,21 +2403,33 @@ export async function searchEvents(input: SearchEventsInput): Promise<SearchEven
     }
   }
 
-  const results: IndexedEvent[] = selectedRows.map((row) => ({
-    eventId: row.eventId,
-    sessionId: row.sessionId,
-    seq: row.seq,
-    ts: row.ts,
-    tsEpoch: row.tsEpoch,
-    project: row.project,
-    agent: row.agent,
-    role: row.role as EventRole,
-    kind: row.kind,
-    text: row.text,
-    refs: row.refs,
-    textHash: row.textHash,
-    signatureHash: row.signatureHash,
-  }));
+  const retrievalMode = semanticRequested ? 'semantic' : 'lexical';
+  const results: Array<IndexedEvent & { explain?: ContextDbSearchExplain }> = selectedRows.map((row) => {
+    const indexed: IndexedEvent & { explain?: ContextDbSearchExplain } = {
+      eventId: row.eventId,
+      sessionId: row.sessionId,
+      seq: row.seq,
+      ts: row.ts,
+      tsEpoch: row.tsEpoch,
+      project: row.project,
+      agent: row.agent,
+      role: row.role as EventRole,
+      kind: row.kind,
+      text: row.text,
+      refs: row.refs,
+      textHash: row.textHash,
+      signatureHash: row.signatureHash,
+    };
+    if (input.explain === true) {
+      indexed.explain = buildSearchExplain({
+        query,
+        text: `${row.kind} ${row.text} ${row.refs.join(' ')}`,
+        retrievalMode,
+        semanticScore: semanticRequested ? 1 : 0,
+      });
+    }
+    return indexed;
+  });
   return { results };
 }
 
@@ -2472,20 +2488,32 @@ export async function searchCheckpoints(input: SearchCheckpointsInput): Promise<
     }
   }
 
-  const results: IndexedCheckpoint[] = selectedRows.map((row) => ({
-    checkpointId: row.checkpointId,
-    sessionId: row.sessionId,
-    seq: row.seq,
-    ts: row.ts,
-    tsEpoch: row.tsEpoch,
-    project: row.project,
-    agent: row.agent,
-    status: row.status as SessionStatus,
-    summary: row.summary,
-    nextActions: row.nextActions,
-    artifacts: row.artifacts,
-    telemetry: row.telemetry,
-  }));
+  const retrievalMode = semanticRequested ? 'semantic' : 'lexical';
+  const results: Array<IndexedCheckpoint & { explain?: ContextDbSearchExplain }> = selectedRows.map((row) => {
+    const indexed: IndexedCheckpoint & { explain?: ContextDbSearchExplain } = {
+      checkpointId: row.checkpointId,
+      sessionId: row.sessionId,
+      seq: row.seq,
+      ts: row.ts,
+      tsEpoch: row.tsEpoch,
+      project: row.project,
+      agent: row.agent,
+      status: row.status as SessionStatus,
+      summary: row.summary,
+      nextActions: row.nextActions,
+      artifacts: row.artifacts,
+      telemetry: row.telemetry,
+    };
+    if (input.explain === true) {
+      indexed.explain = buildSearchExplain({
+        query,
+        text: `${row.status} ${row.summary} ${row.nextActions.join(' ')} ${row.artifacts.join(' ')} ${row.telemetry?.failureCategory ?? ''}`,
+        retrievalMode,
+        semanticScore: semanticRequested ? 1 : 0,
+      });
+    }
+    return indexed;
+  });
   return { results };
 }
 
@@ -2505,6 +2533,7 @@ export async function searchMemory(input: SearchMemoryInput): Promise<SearchMemo
       refs: input.refs,
       limit: scope === 'all' ? Math.max(limit * 2, 50) : limit,
       semantic: input.semantic,
+      explain: input.explain,
     });
     results.push(...events.results.map((item) => ({ itemType: 'event' as const, ...item })));
   }
@@ -2518,6 +2547,7 @@ export async function searchMemory(input: SearchMemoryInput): Promise<SearchMemo
       statuses: input.statuses,
       limit: scope === 'all' ? Math.max(limit * 2, 50) : limit,
       semantic: input.semantic,
+      explain: input.explain,
     });
     results.push(...checkpoints.results.map((item) => ({ itemType: 'checkpoint' as const, ...item })));
   }
