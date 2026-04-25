@@ -1,8 +1,20 @@
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
+import { readContinuitySummary } from './continuity.mjs';
 
 export const FACADE_FILENAME = '.facade.json';
 export const DEFAULT_TTL_SECONDS = 3600;
+
+async function overlayContinuity(workspaceRoot, facade) {
+  const continuity = await readContinuitySummary({ workspaceRoot, sessionId: facade?.sessionId });
+  if (!continuity) return facade;
+  return {
+    ...facade,
+    continuitySummary: continuity.summary,
+    continuityNextActions: continuity.nextActions,
+    continuityUpdatedAt: continuity.updatedAt,
+  };
+}
 
 export async function loadFacade(workspaceRoot) {
   const facadePath = path.join(workspaceRoot, 'memory', 'context-db', FACADE_FILENAME);
@@ -17,7 +29,7 @@ export async function loadFacade(workspaceRoot) {
     if (Date.now() - generatedAt > ttlMs) {
       return { ok: false, facade: null, reason: 'expired' };
     }
-    return { ok: true, facade };
+    return { ok: true, facade: await overlayContinuity(workspaceRoot, facade) };
   } catch {
     return { ok: false, facade: null, reason: 'missing' };
   }
@@ -72,6 +84,8 @@ export async function generateFacadeFromSession(workspaceRoot, agent, project) {
     // use defaults
   }
 
+  const continuity = await readContinuitySummary({ workspaceRoot, sessionId: latestSessionId });
+
   return {
     version: 1,
     generatedAt: new Date().toISOString(),
@@ -83,6 +97,9 @@ export async function generateFacadeFromSession(workspaceRoot, agent, project) {
     keyRefs: meta.lastCheckpoint?.refs || [],
     contextPacketPath: `memory/context-db/exports/latest-${agent}-context.md`,
     hasStalePack: false,
+    continuitySummary: continuity?.summary || '',
+    continuityNextActions: continuity?.nextActions || [],
+    continuityUpdatedAt: continuity?.updatedAt || '',
   };
 }
 

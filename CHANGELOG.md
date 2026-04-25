@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-04-25
+
+- feat(contextdb): add compact continuity summaries
+
 ## [1.3.1] - 2026-04-24
 
 - fix(release): bootstrap direct installer dependencies

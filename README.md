@@ -729,6 +729,12 @@ scripts/ctx-agent.sh --agent codex-cli --project RexCLI --prompt "Continue from 
 In one-shot mode, all 5 steps run automatically:
 `init -> session:new/latest -> event:add -> checkpoint -> context:pack`
 
+One-shot checkpoints also refresh compact continuity artifacts at
+`memory/context-db/sessions/<session_id>/continuity-summary.md` and
+`memory/context-db/sessions/<session_id>/continuity.json`. Future context packets and
+lazy startup prompts include this continuity summary so a new/cleared CLI can resume
+without rereading the full event history first.
+
 ## ContextDB Layout (L0/L1/L2)
 
 ```text
@@ -741,6 +747,8 @@ memory/context-db/
   sessions/<session_id>/
     meta.json
     l0-summary.md
+    continuity-summary.md
+    continuity.json
     l1-checkpoints.jsonl
     l2-events.jsonl
     state.json

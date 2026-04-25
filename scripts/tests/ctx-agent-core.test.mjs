@@ -426,6 +426,25 @@ test('ctx-agent one-shot writes turn envelope metadata for prompt/response event
     assert.equal(responseEvent.turn?.outcome, 'success');
     assert.equal(responseEvent.turn?.parentTurnId, promptEvent.turn?.turnId);
     assert.match(String(responseEvent.turn?.turnId || ''), /:response$/);
+
+    const continuityPath = path.join(workspaceRoot, 'memory', 'context-db', 'sessions', sessionId, 'continuity.json');
+    const continuitySummaryPath = path.join(workspaceRoot, 'memory', 'context-db', 'sessions', sessionId, 'continuity-summary.md');
+    const continuity = JSON.parse(await readFile(continuityPath, 'utf8'));
+    const continuitySummary = await readFile(continuitySummaryPath, 'utf8');
+    assert.equal(continuity.schemaVersion, 1);
+    assert.equal(continuity.sessionId, sessionId);
+    assert.match(continuity.intent, /turn envelope smoke/);
+    assert.match(continuity.summary, /one-shot run completed/);
+    assert.deepEqual(continuity.nextActions, ['Review response', 'Continue with next prompt']);
+    assert.match(continuitySummary, /# Continuity Summary/);
+    assert.match(continuitySummary, /turn envelope smoke/);
+
+    const contextPacket = await readFile(
+      path.join(workspaceRoot, 'memory', 'context-db', 'exports', `${sessionId}-context.md`),
+      'utf8'
+    );
+    assert.match(contextPacket, /## Continuity Summary/);
+    assert.match(contextPacket, /Continue with next prompt/);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
   }

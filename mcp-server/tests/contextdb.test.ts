@@ -435,11 +435,29 @@ test('appendEvent and writeCheckpoint persist l2/l1 context', async () => {
     session.sessionId,
     'l0-summary.md'
   );
+  const continuitySummaryPath = path.join(
+    workspace,
+    'memory',
+    'context-db',
+    'sessions',
+    session.sessionId,
+    'continuity-summary.md'
+  );
+  const continuityJsonPath = path.join(
+    workspace,
+    'memory',
+    'context-db',
+    'sessions',
+    session.sessionId,
+    'continuity.json'
+  );
 
-  const [eventsRaw, checkpointsRaw, summaryRaw] = await Promise.all([
+  const [eventsRaw, checkpointsRaw, summaryRaw, continuitySummaryRaw, continuityJsonRaw] = await Promise.all([
     fs.readFile(eventsPath, 'utf8'),
     fs.readFile(checkpointsPath, 'utf8'),
     fs.readFile(summaryPath, 'utf8'),
+    fs.readFile(continuitySummaryPath, 'utf8'),
+    fs.readFile(continuityJsonPath, 'utf8'),
   ]);
 
   const eventLines = eventsRaw.trim().split('\n');
@@ -448,6 +466,13 @@ test('appendEvent and writeCheckpoint persist l2/l1 context', async () => {
   assert.equal(eventLines.length, 2);
   assert.equal(checkpointLines.length, 1);
   assert.match(summaryRaw, /Auth gate is present/);
+  assert.match(continuitySummaryRaw, /# Continuity Summary/);
+  assert.match(continuitySummaryRaw, /Auth gate is present/);
+  const continuityJson = JSON.parse(continuityJsonRaw) as { schemaVersion?: number; sessionId?: string; summary?: string; nextActions?: string[] };
+  assert.equal(continuityJson.schemaVersion, 1);
+  assert.equal(continuityJson.sessionId, session.sessionId);
+  assert.match(String(continuityJson.summary || ''), /Auth gate is present/);
+  assert.deepEqual(continuityJson.nextActions, ['Wait for human login', 'Resume snapshot and publish draft']);
 });
 
 test('writeCheckpoint normalizes telemetry and mirrors it to sidecar indexes', async () => {
@@ -562,6 +587,27 @@ test('buildContextPacket composes markdown for agent handoff', async () => {
     status: 'running',
   });
 
+  await fs.writeFile(
+    path.join(
+      workspace,
+      'memory',
+      'context-db',
+      'sessions',
+      session.sessionId,
+      'continuity.json'
+    ),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      sessionId: session.sessionId,
+      intent: 'Unique sidecar intent for packet injection',
+      summary: 'Sidecar-only compact resume summary.',
+      touchedFiles: ['sidecar-only.ts'],
+      nextActions: ['Sidecar-only resume action'],
+      updatedAt: '2026-04-25T00:00:00.000Z',
+    }, null, 2)}\n`,
+    'utf8'
+  );
+
   const packet = await buildContextPacket({
     workspaceRoot: workspace,
     sessionId: session.sessionId,
@@ -570,7 +616,57 @@ test('buildContextPacket composes markdown for agent handoff', async () => {
 
   assert.match(packet.markdown, /Context Packet/);
   assert.match(packet.markdown, /filesystem-only context DB MVP/);
+  assert.match(packet.markdown, /## Continuity Summary/);
+  assert.match(packet.markdown, /Unique sidecar intent for packet injection/);
+  assert.match(packet.markdown, /Sidecar-only compact resume summary/);
+  assert.match(packet.markdown, /Sidecar-only resume action/);
+  assert.match(packet.markdown, /Create CLI commands/);
   assert.match(packet.markdown, /Analyze OpenViking/);
+});
+
+test('buildContextPacket tolerates missing or corrupt continuity sidecar', async () => {
+  const workspace = await makeWorkspace();
+  const session = await createSession({
+    workspaceRoot: workspace,
+    agent: 'claude-code',
+    project: 'rex-cli',
+    goal: 'Continuity sidecar tolerance',
+  });
+
+  await writeCheckpoint({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    summary: 'Checkpoint should remain packable.',
+    nextActions: ['Keep building packet'],
+    status: 'running',
+  });
+
+  const continuityJsonPath = path.join(
+    workspace,
+    'memory',
+    'context-db',
+    'sessions',
+    session.sessionId,
+    'continuity.json'
+  );
+
+  await fs.rm(continuityJsonPath, { force: true });
+  const missingPacket = await buildContextPacket({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    eventLimit: 5,
+  });
+  assert.match(missingPacket.markdown, /No continuity summary yet/);
+  assert.match(missingPacket.markdown, /Checkpoint should remain packable/);
+
+  await fs.writeFile(continuityJsonPath, '{not-json', 'utf8');
+  const corruptPacket = await buildContextPacket({
+    workspaceRoot: workspace,
+    sessionId: session.sessionId,
+    eventLimit: 5,
+  });
+  assert.match(corruptPacket.markdown, /No continuity summary yet/);
+  assert.match(corruptPacket.markdown, /Checkpoint should remain packable/);
 });
 
 test('buildContextPacket tolerates legacy events missing text', async () => {

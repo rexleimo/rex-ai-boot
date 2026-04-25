@@ -252,3 +252,9 @@ scripts/ctx-agent.sh --agent codex-cli --project rex-cli --prompt "根据现有�
 
 For full automation, use one-shot mode (`--prompt`) so the script performs all five steps automatically:
 `init -> session:new/latest -> event:add -> checkpoint -> context:pack`.
+
+Each checkpoint now also maintains compact continuity files under
+`memory/context-db/sessions/<session_id>/continuity-summary.md` and
+`memory/context-db/sessions/<session_id>/continuity.json`. `context:pack` includes
+the latest continuity summary, and `ctx-agent` lazy startup surfaces it through the
+facade prompt for fast resume after `/new`, `/clear`, or a fresh CLI launch.
