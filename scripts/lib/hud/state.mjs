@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { buildHindsightEval } from '../harness/hindsight-eval.mjs';
 import { getHarnessTarget } from '../harness/targets.mjs';
+import { buildTeamWatchdogState } from '../lifecycle/watchdog.mjs';
 
 export const HUD_PROVIDER_AGENT_MAP = Object.freeze({
   codex: 'codex-cli',
@@ -1132,10 +1133,20 @@ function buildSuggestedCommands({ sessionId, provider, latestDispatch, latestSki
   return normalizeStringArray(commands);
 }
 
-export async function readHudState({ rootDir, sessionId = '', provider = '', fast = false, skillCandidateLimit = 0 } = {}) {
+export async function readHudState({
+  rootDir,
+  sessionId = '',
+  provider = '',
+  fast = false,
+  skillCandidateLimit = 0,
+  watchdog = false,
+  nowMs = null,
+} = {}) {
   const selection = await selectHudSessionId({ rootDir, sessionId, provider });
   const generatedAt = nowIso();
   const fastMode = fast === true;
+  const includeWatchdog = watchdog === true;
+  const watchdogNowMs = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
   const resolvedSkillCandidateLimit = Number.isFinite(skillCandidateLimit)
     ? Math.max(0, Math.floor(skillCandidateLimit))
     : 0;
@@ -1154,6 +1165,7 @@ export async function readHudState({ rootDir, sessionId = '', provider = '', fas
       latestQualityGate: null,
       suggestedCommands: [],
       warnings: ['No ContextDB sessions found in this repo.'],
+      ...(includeWatchdog ? { watchdog: null } : {}),
     };
   }
 
@@ -1212,6 +1224,12 @@ export async function readHudState({ rootDir, sessionId = '', provider = '', fas
       provider: providerInferred,
     }
     : null;
+  const watchdogState = includeWatchdog
+    ? await buildTeamWatchdogState(
+      { sessionId: effectiveSelection.sessionId, provider: providerInferred },
+      { rootDir, nowMs: watchdogNowMs }
+    )
+    : null;
 
   if (fastMode) {
     return {
@@ -1229,6 +1247,7 @@ export async function readHudState({ rootDir, sessionId = '', provider = '', fas
       dispatchFixHint: null,
       suggestedCommands: [],
       warnings,
+      ...(includeWatchdog ? { watchdog: watchdogState } : {}),
     };
   }
 
@@ -1278,6 +1297,7 @@ export async function readHudState({ rootDir, sessionId = '', provider = '', fas
     dispatchFixHint,
     suggestedCommands,
     warnings,
+    ...(includeWatchdog ? { watchdog: watchdogState } : {}),
   };
 }
 

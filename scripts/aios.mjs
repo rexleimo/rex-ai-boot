@@ -259,6 +259,14 @@ async function main() {
       }
       return;
     }
+    if (parsed.options.subcommand === 'watchdog') {
+      const { runTeamWatchdog } = await import('./lib/lifecycle/watchdog.mjs');
+      const result = await runTeamWatchdog(parsed.options, { rootDir });
+      if (result.exitCode !== 0) {
+        process.exitCode = result.exitCode;
+      }
+      return;
+    }
     if (parsed.options.subcommand === 'skill-candidates') {
       if (parsed.options.action === 'list') {
         const { runTeamSkillCandidatesList } = await import('./lib/lifecycle/team-ops.mjs');
