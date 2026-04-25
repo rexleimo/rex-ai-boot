@@ -11,6 +11,7 @@ import {
 import { buildWatchMeta } from '../hud/watch-meta.mjs';
 import { resolveWatchCadence } from '../hud/watch-cadence.mjs';
 import { createThrottledWatchRender, watchRenderLoop } from '../hud/watch.mjs';
+import { buildTeamWatchdogState } from './watchdog.mjs';
 
 const FAST_WATCH_DATA_REFRESH_MS = 1000;
 const DEFAULT_SKILL_CANDIDATE_LIMIT = 6;
@@ -382,6 +383,7 @@ export async function runTeamStatus(
   let watch = rawOptions.watch === true;
   const fast = rawOptions.fast === true;
   const json = rawOptions.json === true;
+  const includeWatchdog = rawOptions.watchdog === true;
   const watchCadence = resolveWatchCadence(rawOptions.intervalMs, { fallbackMs: 1000 });
   const intervalMs = watchCadence.renderIntervalMs;
   let fastWatchMinimal = fast && watch && !json && preset === 'minimal';
@@ -438,8 +440,16 @@ export async function runTeamStatus(
       provider,
       fast: fastWatchMinimal,
       skillCandidateLimit,
+      watchdog: includeWatchdog,
+      nowMs: Number(nowFn()),
     });
     const filteredState = filterSkillCandidateState(state, { draftId });
+    if (includeWatchdog && !filteredState.watchdog) {
+      filteredState.watchdog = await buildTeamWatchdogState(
+        { sessionId: filteredState.selection?.sessionId || sessionId, provider },
+        { rootDir, nowFn }
+      );
+    }
     if (json) {
       if (exportSkillCandidatePatchTemplate) {
         io.log('[warn] team status --export-skill-candidate-patch-template is ignored when --json is set.');
@@ -470,6 +480,9 @@ export async function runTeamStatus(
     const outputBlocks = skillCandidateView === 'detail'
       ? [skillCandidateText]
       : [hudText, skillCandidateText];
+    if (includeWatchdog && filteredState.watchdog) {
+      outputBlocks.push(`Watchdog: decision=${filteredState.watchdog.decision} reason=${filteredState.watchdog.reason}`);
+    }
 
     if (exportSkillCandidatePatchTemplate) {
       const artifact = await persistSkillCandidatePatchTemplateArtifact({
@@ -505,6 +518,8 @@ export async function runTeamStatus(
       provider,
       fast: fastWatchMinimal,
       skillCandidateLimit,
+      watchdog: includeWatchdog,
+      nowMs,
     });
     const filteredState = filterSkillCandidateState(state, { draftId });
     const stalledSignal = stallTracker?.observe(filteredState, { nowMs }) || null;

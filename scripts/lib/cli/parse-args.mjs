@@ -281,6 +281,19 @@ function createDefaultTeamStatusOptions() {
     draftId: '',
     json: false,
     intervalMs: 1000,
+    watchdog: false,
+  };
+}
+
+function createDefaultTeamWatchdogOptions() {
+  return {
+    subcommand: 'watchdog',
+    provider: 'codex',
+    clientId: TEAM_PROVIDER_CLIENT_MAP.codex,
+    sessionId: '',
+    resumeSessionId: '',
+    workers: 2,
+    json: false,
   };
 }
 
@@ -374,6 +387,9 @@ function parseTeamStatusArgs(argv) {
       case '--json':
         options.json = true;
         break;
+      case '--watchdog':
+        options.watchdog = true;
+        break;
       case '--interval-ms':
         options.intervalMs = parseWatchInterval(takeValue(rest, index, '--interval-ms'), '--interval-ms');
         index += 1;
@@ -397,6 +413,64 @@ function parseTeamStatusArgs(argv) {
     options.fast = true;
   }
 
+  return {
+    mode: help ? 'help' : 'command',
+    help,
+    command: 'team',
+    options,
+  };
+}
+
+function parseTeamWatchdogArgs(argv) {
+  const rest = argv.slice(2);
+  const options = createDefaultTeamWatchdogOptions();
+  let help = false;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const arg = rest[index];
+    if (arg === '--') continue;
+    if (arg === '-h' || arg === '--help') {
+      help = true;
+      continue;
+    }
+    if (!arg.startsWith('-')) {
+      if (!options.sessionId) {
+        options.sessionId = String(arg || '').trim();
+        continue;
+      }
+      throw new Error(`Unexpected argument: ${arg}`);
+    }
+
+    switch (arg) {
+      case '--provider':
+        options.provider = normalizeTeamProvider(takeValue(rest, index, '--provider'));
+        index += 1;
+        break;
+      case '--session':
+        options.sessionId = takeValue(rest, index, '--session');
+        index += 1;
+        break;
+      case '--resume':
+        options.resumeSessionId = takeValue(rest, index, '--resume');
+        index += 1;
+        break;
+      case '--workers':
+        options.workers = parsePositiveInteger(takeValue(rest, index, '--workers'), '--workers');
+        index += 1;
+        break;
+      case '--json':
+        options.json = true;
+        break;
+      default:
+        throw new Error(`Unknown option: ${arg}`);
+    }
+  }
+
+  options.provider = normalizeTeamProvider(options.provider);
+  options.clientId = TEAM_PROVIDER_CLIENT_MAP[options.provider];
+  if (!options.sessionId && options.resumeSessionId) {
+    options.sessionId = options.resumeSessionId;
+  }
   return {
     mode: help ? 'help' : 'command',
     help,
@@ -614,6 +688,9 @@ function parseTeamArgs(argv) {
   }
   if (subcommand === 'history') {
     return parseTeamHistoryArgs(argv);
+  }
+  if (subcommand === 'watchdog') {
+    return parseTeamWatchdogArgs(argv);
   }
   if (subcommand === 'skill-candidates') {
     return parseTeamSkillCandidatesArgs(argv);

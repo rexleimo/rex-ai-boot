@@ -160,6 +160,7 @@ Options:
       return `Usage:
   node scripts/aios.mjs team [<workers:provider>] [task] [options]
   node scripts/aios.mjs team status [options]
+  node scripts/aios.mjs team watchdog [options]
   node scripts/aios.mjs team history [options]
   node scripts/aios.mjs team skill-candidates [list|export] [options]
 
@@ -169,6 +170,7 @@ Examples:
   node scripts/aios.mjs team --resume <id> --retry-blocked --provider codex --workers 2
   node scripts/aios.mjs team --provider gemini --workers 2 --task "Refactor Y" --dry-run
   node scripts/aios.mjs team status --provider codex --watch
+  node scripts/aios.mjs team watchdog --session <id> --json
   node scripts/aios.mjs team status --session <id> --show-skill-candidates detail --export-skill-candidate-patch-template
   node scripts/aios.mjs team history --provider claude --limit 10
   node scripts/aios.mjs team skill-candidates list --session <id> --draft-id <targetId> --json
@@ -192,6 +194,7 @@ Options:
   --live                        Force live execution (default)
   --watch                       (team status) Refresh display on an interval (TTY-only)
   --json                        (team status/history/skill-candidates list|export) Output structured JSON instead of text
+  --watchdog                    (team status) Include watchdog recovery decision in JSON/text state
   --concurrency <n>             (team history) Process sessions concurrently (default: 4)
   --fast                        (team history) Skip dispatch hindsight evaluation for faster scans
   --show-skill-candidates [inline|detail] (team status) Show skill-candidate artifact rows (default mode: inline; "detail" prints candidate view directly)
