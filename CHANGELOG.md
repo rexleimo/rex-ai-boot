@@ -6,6 +6,14 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-04-25
+
+- feat(aios): consolidate merged feature work
+- feat(competitors): add watchlist roadmap and updater script
+- feat(team): add watchdog recovery command and status integration
+- feat(contextdb): add search explanations and hygiene dry-run tools
+- fix(contextdb): ignore stale generated ContextDB CLI during context packet refresh
+
 ## [1.5.0] - 2026-04-25
 
 - feat(orchestrate): add plan ownership preflight gates
