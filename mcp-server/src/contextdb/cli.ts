@@ -19,6 +19,7 @@ import {
   type EventTurnEnvelope,
   writeCheckpoint,
 } from './core.js';
+import { compactContextDb, hygieneStatus, pruneNoise } from './hygiene.js';
 
 type Options = Record<string, string | boolean>;
 
@@ -33,8 +34,11 @@ function usage(): string {
     '  contextdb event:add --session <id> --role <user|assistant|tool|system> --text <text> [--kind <kind>] [--refs a,b] [--turn-id <id>] [--parent-turn-id <id>] [--turn-type main|side|system-maintenance|verification] [--environment <label>] [--work-item-refs a,b] [--next-state-refs a,b] [--hindsight-status pending|evaluated|na|failed] [--outcome success|correction|retry-needed|ambiguous|unknown]',
     '  contextdb checkpoint --session <id> --summary <text> [--status running|blocked|done] [--next a|b] [--artifacts a|b] [--verify-result unknown|passed|failed|partial] [--retry-count n] [--failure-category <label>] [--elapsed-ms n] [--cost-usd n]',
     '  contextdb context:pack --session <id> [--limit 30] [--token-budget 1200] [--token-strategy legacy|balanced|aggressive] [--recall smart|tail] [--kinds prompt,response,error] [--refs a,b] [--no-dedupe] [--out memory/context-db/exports/<id>.md] [--stdout]',
-    '  contextdb search [--query <text>] [--project <name>] [--session <id>] [--scope events|checkpoints|all] [--role <role>] [--kinds a,b] [--refs a,b] [--statuses running,blocked,done] [--limit 20] [--semantic]',
+    '  contextdb search [--query <text>] [--project <name>] [--session <id>] [--scope events|checkpoints|all] [--role <role>] [--kinds a,b] [--refs a,b] [--statuses running,blocked,done] [--limit 20] [--semantic] [--explain]',
     '  contextdb recall:sessions [--query <text>] [--project <name>] [--session <id>] [--exclude-session <id>] [--limit 3] [--highlight-limit 3] [--explain-score]',
+    '  contextdb hygiene:status [--workspace <path>]',
+    '  contextdb hygiene:prune-noise [--workspace <path>] [--dry-run]',
+    '  contextdb hygiene:compact [--workspace <path>] [--dry-run]',
     '  contextdb timeline [--project <name> | --session <id>] [--limit 50]',
     '  contextdb event:get --id <sessionId>#<seq>',
     '  contextdb index:sync [--workspace <path>] [--force] [--stats] [--jsonl-out <path>]',
@@ -253,6 +257,7 @@ async function main(): Promise<void> {
       const project = typeof options.project === 'string' ? options.project : undefined;
       const sessionId = typeof options.session === 'string' ? options.session : undefined;
       const semantic = options.semantic === true;
+      const explain = options.explain === true;
 
       const result = scope === 'checkpoints'
         ? await searchCheckpoints({
@@ -263,6 +268,7 @@ async function main(): Promise<void> {
           statuses: getOptionalCsv(options, 'statuses') as Array<'running' | 'blocked' | 'done'>,
           limit: resolvedLimit,
           semantic,
+          explain,
         })
         : scope === 'all'
           ? await searchMemory({
@@ -276,6 +282,7 @@ async function main(): Promise<void> {
             statuses: getOptionalCsv(options, 'statuses') as Array<'running' | 'blocked' | 'done'>,
             limit: resolvedLimit,
             semantic,
+            explain,
             scope: 'all',
           })
           : await searchEvents({
@@ -288,6 +295,7 @@ async function main(): Promise<void> {
             refs: getOptionalCsv(options, 'refs'),
             limit: resolvedLimit,
             semantic,
+            explain,
           });
       console.log(JSON.stringify(result, null, 2));
       return;
@@ -308,6 +316,24 @@ async function main(): Promise<void> {
         highlightLimit: Number.isFinite(highlightLimit as number) ? (highlightLimit as number) : undefined,
         explainScore: options['explain-score'] === true,
       });
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    case 'hygiene:status': {
+      const result = await hygieneStatus({ workspaceRoot });
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    case 'hygiene:prune-noise': {
+      const result = await pruneNoise({ workspaceRoot, dryRun: options['dry-run'] === true });
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    case 'hygiene:compact': {
+      const result = await compactContextDb({ workspaceRoot, dryRun: options['dry-run'] === true });
       console.log(JSON.stringify(result, null, 2));
       return;
     }

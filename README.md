@@ -782,7 +782,13 @@ npm run contextdb -- checkpoint --session <id> --summary "blocked by auth" --sta
 npm run contextdb -- context:pack --session <id> --out memory/context-db/exports/<id>-context.md
 npm run contextdb -- index:rebuild
 npm run contextdb -- search --query "auth race" --project RexCLI --kinds response --refs auth.ts
+npm run contextdb -- search --query "auth race" --scope all --explain
+npm run contextdb -- hygiene:status
+npm run contextdb -- hygiene:prune-noise --dry-run
+npm run contextdb -- hygiene:compact --dry-run
 ```
+
+`search --explain` annotates each hit with retrieval mode, query tokens, matched tokens, score parts, and suppression reasons. Hygiene commands are conservative operator checks: `status` reports row/export/noise counts, while `prune-noise` and `compact` currently require `--dry-run` so they cannot mutate memory files accidentally.
 
 Optional semantic rerank (P2):
 
