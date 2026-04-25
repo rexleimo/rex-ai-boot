@@ -2,7 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { getCommandSpawnSpec } from './lib/platform/process.mjs';
 import { loadFacade, generateFacadeFromSession } from './lib/contextdb/facade.mjs';
 import { promises as fs } from 'node:fs';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureBootstrapTask, isBootstrapEnabled } from './ctx-bootstrap.mjs';
@@ -993,14 +993,44 @@ function validateOpts(opts) {
 }
 
 const COMPILED_CONTEXTDB_CLI = path.join(MCP_DIR, 'dist', 'contextdb', 'cli.js');
-const HAS_COMPILED_CLI = existsSync(COMPILED_CONTEXTDB_CLI);
+const CONTEXTDB_SOURCE_DIR = path.join(MCP_DIR, 'src', 'contextdb');
+
+function newestSourceMtimeMs(dirPath) {
+  let newest = 0;
+  for (const entry of readdirSync(dirPath, { withFileTypes: true })) {
+    const entryPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      newest = Math.max(newest, newestSourceMtimeMs(entryPath));
+      continue;
+    }
+    if (entry.isFile() && entry.name.endsWith('.ts')) {
+      newest = Math.max(newest, statSync(entryPath).mtimeMs);
+    }
+  }
+  return newest;
+}
+
+function shouldUseCompiledContextDbCli() {
+  if (!existsSync(COMPILED_CONTEXTDB_CLI)) return false;
+
+  try {
+    const compiledMtime = statSync(COMPILED_CONTEXTDB_CLI).mtimeMs;
+    const sourceMtime = newestSourceMtimeMs(CONTEXTDB_SOURCE_DIR);
+    // Avoid stale generated dist output after feature-branch merges; fall back to tsx source.
+    return compiledMtime + 1000 >= sourceMtime;
+  } catch {
+    return false;
+  }
+}
+
+const USE_COMPILED_CONTEXTDB_CLI = shouldUseCompiledContextDbCli();
 
 let nativeRepairAttempted = false;
 
 function ctx(workspaceRoot, subcommand, args) {
   // Prefer compiled CLI to avoid npm + tsx overhead (~0.3s -> ~0.06s per call)
   let firstResult;
-  if (HAS_COMPILED_CLI) {
+  if (USE_COMPILED_CONTEXTDB_CLI) {
     firstResult = runCommand(process.execPath, [COMPILED_CONTEXTDB_CLI, subcommand, '--workspace', workspaceRoot, ...args], {
       cwd: MCP_DIR,
     });
@@ -1037,7 +1067,7 @@ function ctx(workspaceRoot, subcommand, args) {
   }
 
   let retryResult;
-  if (HAS_COMPILED_CLI) {
+  if (USE_COMPILED_CONTEXTDB_CLI) {
     retryResult = runCommand(process.execPath, [COMPILED_CONTEXTDB_CLI, subcommand, '--workspace', workspaceRoot, ...args], {
       cwd: MCP_DIR,
     });
