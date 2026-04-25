@@ -55,6 +55,13 @@ if [[ "$ALLOW_DIRTY" != "true" && -n "$(git -C "$ROOT_DIR" status --short)" ]]; 
   exit 1
 fi
 
+node "$ROOT_DIR/scripts/materialize-release-local-outputs.mjs" >/dev/null
+
+if [[ "$ALLOW_DIRTY" != "true" && -n "$(git -C "$ROOT_DIR" status --short)" ]]; then
+  echo "git worktree changed while preparing local release outputs; review changes before release" >&2
+  exit 1
+fi
+
 bash "$ROOT_DIR/scripts/release-preflight.sh" --tag "$TAG" >/dev/null
 
 echo "Version: $VERSION"

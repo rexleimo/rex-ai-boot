@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-04-25
+
+- fix(release): restore GitHub release pipeline and simplify Chinese onboarding docs
+
 ## [1.6.0] - 2026-04-25
 
 - feat(aios): consolidate merged feature work

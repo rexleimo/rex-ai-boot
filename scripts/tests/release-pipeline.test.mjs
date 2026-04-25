@@ -172,3 +172,31 @@ test('release-stable.sh dry-run prints the exact tag from VERSION', () => {
   assert.match(result.stdout, /Tag:\s+v\d+\.\d+\.\d+/);
   assert.match(result.stdout, /git tag v\d+\.\d+\.\d+/);
 });
+
+test('materialize-release-local-outputs creates ignored Claude settings without clobbering user keys', async () => {
+  const rootDir = await makeTemp('rex-release-local-outputs-');
+  const workspaceRoot = process.cwd();
+
+  await writeFixtureFile(rootDir, 'client-sources/native-base/claude/project/settings.local.json', JSON.stringify({
+    hooks: {
+      SessionStart: ['node scripts/aios.mjs doctor --native'],
+    },
+  }, null, 2));
+  await writeFixtureFile(rootDir, '.claude/settings.local.json', JSON.stringify({
+    permissions: {
+      allow: ['Bash(git:*)'],
+    },
+  }, null, 2));
+  await writeFixtureFile(
+    rootDir,
+    'scripts/materialize-release-local-outputs.mjs',
+    await readFile(path.join(workspaceRoot, 'scripts', 'materialize-release-local-outputs.mjs'), 'utf8')
+  );
+
+  const result = run('node', ['scripts/materialize-release-local-outputs.mjs'], { cwd: rootDir });
+
+  assertOk(result);
+  const settings = JSON.parse(await readFile(path.join(rootDir, '.claude/settings.local.json'), 'utf8'));
+  assert.deepEqual(settings.permissions.allow, ['Bash(git:*)']);
+  assert.deepEqual(settings.aiosNative.hooks.SessionStart, ['node scripts/aios.mjs doctor --native']);
+});

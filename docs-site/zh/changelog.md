@@ -12,6 +12,12 @@ description: 版本历史、升级说明与文档变更入口。
 - GitHub 变更文件：[CHANGELOG.md](https://github.com/rexleimo/rex-cli/blob/main/CHANGELOG.md)
 - GitHub Releases：[releases](https://github.com/rexleimo/rex-cli/releases)
 
+## 最新稳定版
+
+- `1.6.1`（2026-04-25）：
+  - 修复 GitHub Release workflow 在干净 Linux checkout 中因 generated skills/native 输出漂移导致的预检失败。
+  - 简化中文首页、快速开始、按场景用法和多 Agent 实战入口，让新用户先按任务找到命令。
+
 ## 最近版本
 
 - `main`（未发布）：

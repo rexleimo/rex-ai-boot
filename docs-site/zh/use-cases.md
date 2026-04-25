@@ -1,68 +1,124 @@
 ---
-title: CLI 工作流
-description: 交互模式与 one-shot 模式的推荐用法。
+title: 按场景找命令
+description: 不先背概念，直接按“我想做什么”选择 RexCLI 命令。
 ---
 
-# CLI 工作流
+# 按场景找命令
 
-## 快速答案（AI 搜索）
+这页只回答一个问题：**我现在应该敲哪条命令？**
 
-日常开发优先用交互模式自动续跑；需要一次命令完成完整闭环时使用 one-shot 模式。
-
-想看更具体的"能做什么 + 怎么做"示例，请查看[官方案例库](case-library.md)。
-
-## 模式 A：交互式续跑
-
-直接运行原命令，自动执行：
-
-`init -> session:latest/new -> context:pack -> 启动 CLI`
+## 我想安装并检查环境
 
 ```bash
+aios
+```
+
+进入 TUI 后按顺序执行：
+
+1. **Setup**：安装 shell 包装、skills、browser 等组件。
+2. **Doctor**：检查 Node、MCP、skills、native 配置。
+3. **Update**：以后升级也优先从这里走。
+
+命令行方式：
+
+```bash
+aios setup --components all --mode opt-in --client all
+aios doctor --native --verbose
+```
+
+## 我想让 agent 记住当前项目
+
+```bash
+cd /path/to/project
+touch .contextdb-enable
 codex
-claude
-gemini
 ```
 
-适用于日常开发，自动注入启动上下文。
+之后在同一项目里运行 `codex`、`claude`、`gemini`，都会接入同一个 ContextDB。
 
-## 模式 B：One-shot 自动闭环
-
-一次命令跑完 5 步：
-
-`init -> session:latest/new -> event:add -> checkpoint -> context:pack`
+## 我想跨 CLI 接力
 
 ```bash
-scripts/ctx-agent.sh --agent claude-code --prompt "总结错误并提出下一步"
-scripts/ctx-agent.sh --agent gemini-cli --prompt "根据 checkpoint 继续实现"
-scripts/ctx-agent.sh --agent codex-cli --prompt "运行测试并更新任务状态"
+claude   # 先分析
+codex    # 再实现
+gemini   # 最后复查或对比
 ```
 
-## 跨 CLI 接力
+只要都在同一个项目目录里，ContextDB 会保存事件和 checkpoint，降低“换工具就丢上下文”的概率。
 
-常见链路：
+## 我想开多 Agent
 
-1. 用 Claude 分析。
-2. 用 Codex 实现。
-3. 用 Gemini 验证/对比。
-
-因为三者都读写同一个项目 ContextDB，接力保持连贯。
-
-## 透传命令
-
-管理命令不会被包装，原生运行，例如：
+适合：模块独立、任务可以拆、你能接受 token 成本。
 
 ```bash
-codex mcp
-claude doctor
-gemini extensions
+aios team 3:codex "实现 X，完成前运行测试并总结改动"
+aios team status --provider codex --watch
 ```
 
-## 常见问答
+不适合：需求还模糊、单点 bug、多个 worker 会改同一个文件。此时先用普通 `codex`。
 
-### 什么时候用 one-shot？
+## 我想看进度和历史
 
-当你需要单命令完成"记录事件 + 写 checkpoint + 导出上下文"并保留审计链路时。
+```bash
+aios hud --provider codex
+aios team status --provider codex --watch
+aios team history --provider codex --limit 20
+```
 
-### 一个任务里可以切换多个 CLI 吗？
+如果只想快速看最近失败：
 
-可以。只要在同一项目上下文下运行，跨 CLI 接力不会丢状态。
+```bash
+aios team history --provider codex --quality-failed-only
+```
+
+## 我想让任务有质量门禁
+
+```bash
+aios quality-gate pre-pr --profile strict
+```
+
+适合提交 PR 前或大改后跑一遍。它会把 ContextDB、native/sync、release health 等检查纳入门禁。
+
+## 我想让 RexCLI 分阶段编排
+
+先预览，不调用模型：
+
+```bash
+aios orchestrate feature --task "Ship X" --dispatch local --execute dry-run
+```
+
+确认要 live 执行时再显式打开：
+
+```bash
+export AIOS_EXECUTE_LIVE=1
+export AIOS_SUBAGENT_CLIENT=codex-cli
+aios orchestrate --session <session-id> --dispatch local --execute live
+```
+
+新用户优先用 `aios team ...`。`orchestrate live` 更适合已经理解 session、plan、preflight 的维护者。
+
+## 我想排查浏览器自动化
+
+```bash
+aios internal browser doctor --fix
+aios internal browser cdp-status
+```
+
+如果页面操作失败，先看 [故障排查](troubleshooting.md)，不要直接重装全部组件。
+
+## 我想保护密钥和配置
+
+```bash
+aios privacy read --file .env
+```
+
+不要把 `.env`、cookies、token、浏览器 profile 原样贴给模型。RexCLI 的 Privacy Guard 会尽量在读取前脱敏。
+
+## 选择口诀
+
+- **日常开发**：`codex` / `claude` / `gemini`
+- **安装更新**：`aios`
+- **多 Agent**：`aios team 3:codex "任务"`
+- **看进度**：`aios team status --watch`
+- **交付前检查**：`aios quality-gate pre-pr --profile strict`
+- **浏览器问题**：`aios internal browser doctor --fix`

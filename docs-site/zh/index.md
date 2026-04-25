@@ -1,74 +1,41 @@
 ---
 title: 概览
-description: 面向 Codex/Claude/Gemini/OpenCode 的 AI 记忆系统文档，覆盖 Hermes 引擎工作流、Agent Team 与自动化子代理规划。
+description: 先按任务找到命令，再深入 ContextDB、Agent Team、浏览器自动化和技能系统。
 ---
 
 # RexCLI
 
-> 不换工具，不改习惯。给你正在用的 CLI 加一层能力。
+> 不换工具，不改习惯。给你正在用的 `codex` / `claude` / `gemini` 加一层记忆、协作和验证能力。
 
-[在 GitHub 上 Star](https://github.com/rexleimo/rex-cli?utm_source=cli_rexai_top&utm_medium=docs&utm_campaign=english_growth&utm_content=home_hero_star){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="github_star" }
-[快速开始](getting-started.md){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="quick_start" }
-[对比工作流](cli-comparison.md){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="compare_workflows" }
-[Superpowers](superpowers.md){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="superpowers" }
+[3 分钟快速开始](getting-started.md){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="quick_start" }
+[多 Agent 怎么用](team-ops.md){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="team_ops" }
+[按场景找命令](use-cases.md){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="use_cases" }
+[GitHub](https://github.com/rexleimo/rex-cli?utm_source=cli_rexai_top&utm_medium=docs&utm_campaign=zh_onboarding&utm_content=home_hero_star){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="github_star" }
 
-项目地址：<https://github.com/rexleimo/rex-cli>
+## 先选你要做什么
 
-## 快速答案
+| 你现在想做 | 先看 | 最短命令 |
+|---|---|---|
+| 只想装好并打开 TUI | [快速开始](getting-started.md) | `aios` |
+| 让 agent 记住项目上下文 | [ContextDB](contextdb.md) | `touch .contextdb-enable && codex` |
+| 多个 agent 一起做任务 | [多 Agent 实战](team-ops.md) | `aios team 3:codex "实现 X 并跑测试"` |
+| 看任务跑到哪了 | [HUD 指南](hud-guide.md) | `aios team status --provider codex --watch` |
+| 浏览器自动化出问题 | [故障排查](troubleshooting.md) | `aios internal browser doctor --fix` |
 
-RexCLI 是一层 **AI 记忆系统 + 编排层**，服务于 coding agent。  
-如果你的目标是：
+## RexCLI 到底是什么
 
-- **记忆系统** 的跨会话上下文（`ContextDB`）
-- 类 **Hermes 引擎** 的自动化工作流与执行控制
-- **Agent Team** 多智能体协作交付
-- **自动化规划子代理** 与预检门控
+RexCLI 不是新的 coding agent。它是一个本地优先的能力层：
 
-那么这套文档就是为这类场景准备的。
+1. **记忆层 ContextDB**：把事件、checkpoint、上下文包保存在当前项目里，重启终端后还能续上。
+2. **工作流层 Superpowers**：把需求拆成计划、按证据调试、完成前做验证。
+3. **协作层 Agent Team**：把明确可拆分的任务交给多个 CLI worker，并用 HUD 追踪状态。
+4. **工具层 Browser MCP + Privacy Guard**：让 agent 可以安全使用浏览器、读取敏感配置前先脱敏。
 
-## 关键词到功能映射
+一句话：你还是运行 `codex`、`claude`、`gemini`，RexCLI 负责让它们更有记忆、更会协作、更少瞎猜。
 
-- `AI 记忆系统` -> [ContextDB](contextdb.md)
-- `记忆系统` -> [案例 - 跨 CLI 接力](case-cross-cli-handoff.md)
-- `Hermes 引擎` -> [CLI 工作流](use-cases.md)
-- `Agent Team` -> [Agent Team & HUD](team-ops.md)
-- `自动化规划子代理` -> [架构](architecture.md)
+## 新用户推荐路径
 
-## 高级设计技能：页面制作
-
-如果用户需求只有一句模糊描述，也可以稳定产出高质量 UI：
-
-- 使用 [高级设计技能](advanced-design-skills.md) 先通过 `DESIGN.md` 锁定风格，再用 `frontend-design` 实现页面
-- 用 `Patch/Restyle/Flow` 三种模式收敛模糊输入
-- 对产品团队，建议把文档里的系统提示词设为默认
-
-## 最新特性
-
-- [高级设计技能页面制作：把模糊提示词变成可生产 UI](/blog/zh/advanced-design-skills-page-building/)
-- [AIOS RL 训练系统：从合成 BUG 修复到多环境联合学习](/blog/rl-training-system/)
-- [ContextDB 检索升级：默认走 FTS5/BM25](/blog/contextdb-fts-bm25-search/)
-- [Windows 启动稳定性更新](/blog/windows-cli-startup-stability/)
-- [Orchestrate Live：Subagent Runtime](/blog/orchestrate-live/)
-
-## 这是什么？
-
-RexCLI 是一个薄薄的能力层，装在你现有的 CLI 智能体上面。它不替代你的 `codex`、`claude`、`gemini` 或 `opencode`，只是让它们用起来更顺手。
-
-四个核心能力：
-
-1. **记忆跨端共享** - 关闭终端再打开，上次的项目上下文还在，多设备同一项目共享同一记忆。
-2. **浏览器自动化** - 用 MCP 控制 Chrome，不用手动点鼠标。
-3. **Superpowers 智能规划** - 自动拆解需求、并发分发任务、自动验证结果。并发档位选择请看[路由 + 并发配置指南](route-concurrency-profiles.md)（`3+3`/`4+4`/调试模式）。
-4. **隐私保护** - 读取配置前自动脱敏，避免密钥进到提示词里。
-
-## 给谁用的？
-
-- 你已经在用 `codex`、`claude`、`gemini` 或 `opencode`
-- 希望工作流能跨终端重启
-- 需要浏览器自动化但不想换工具
-- 想要自动化技能来强制最佳实践
-
-## 怎么开始
+### 第一天：先跑通
 
 ```bash
 curl -fsSL https://github.com/rexleimo/rex-cli/releases/latest/download/aios-install.sh | bash
@@ -76,37 +43,38 @@ source ~/.zshrc
 aios
 ```
 
-上面这条命令是稳定版安装路径。如果你要使用未发布的 `main` 分支行为，请改走 [快速开始](getting-started.md) 里的开发用 `git clone` 路径。
+在 TUI 里选择 **Setup**，完成后跑 **Doctor**。
 
-先运行 `aios` 打开全屏安装 TUI，选择 **Setup**，安装完成后再跑一次 **Doctor**。
-Windows PowerShell 命令请看 [快速开始](getting-started.md)。
+### 第二步：在项目里启用记忆
 
-## 包含什么
+```bash
+cd /path/to/your/project
+touch .contextdb-enable
+codex
+```
 
-| 功能 | 作用 |
-|---|---|
-| ContextDB | 跨会话持久化记忆 |
-| Playwright MCP | 浏览器自动化 |
-| Superpowers | 智能规划（自动拆解、并发分发、自动验证）+ 路由/并发档位（默认 `3+3`） |
-| Privacy Guard | 自动脱敏敏感信息 |
+以后在这个项目里启动 `codex` / `claude` / `gemini`，RexCLI 会自动接上项目上下文。
 
-## FAQ
+### 第三步：遇到可拆任务再用多 Agent
 
-### RexCLI 算面向 coding agent 的记忆系统吗？
-是。`ContextDB` 会在同一仓库内跨会话持久化与回灌上下文，并可在不同 CLI agent 之间共享。
+```bash
+aios team 3:codex "把登录模块重构掉，并在完成前运行相关测试"
+aios team status --provider codex --watch
+```
 
-### 能做 Hermes 风格的编排工作流吗？
-可以。通过 `team` 与 `orchestrate` 可以实现分阶段规划、执行路由和验证门禁。
+如果任务还不清楚，先用普通交互式 `codex` 让它分析；只有明确能拆分时再开 `team`。
 
-### 支持自动化子代理规划吗？
-支持。RexCLI 提供 `single/subagent/team` 的路由判定和执行门控。
+## 常见误区
 
-## 继续阅读
+- **不是所有任务都要多 Agent**：单文件修复、小 bug、需求还不清楚时，先单 agent。
+- **不是所有变量都要配置**：新用户先用 `aios` TUI，别一上来记环境变量。
+- **不是只看功能列表**：先按“我要做什么”找命令，再去看模块参考。
+- **不要忽略 Doctor**：安装、浏览器、skills、native 配置问题，先跑诊断再改。
 
-- [Superpowers](superpowers.md) - 让 CLI 更聪明的自动化技能
-- [快速开始](getting-started.md)
-- [Raw CLI vs RexCLI](cli-comparison.md)
-- [案例集](case-library.md)
-- [架构](architecture.md)
-- [ContextDB](contextdb.md)
-- [更新日志](changelog.md)
+## 下一步阅读
+
+- [快速开始](getting-started.md)：安装、Setup、Doctor、第一次运行。
+- [按场景找命令](use-cases.md)：按“我想做什么”查入口。
+- [多 Agent 实战](team-ops.md)：什么时候开团队、怎么监控、怎么收尾。
+- [ContextDB](contextdb.md)：理解记忆如何跨会话持久化。
+- [故障排查](troubleshooting.md)：安装、浏览器、live 执行失败时先看这里。

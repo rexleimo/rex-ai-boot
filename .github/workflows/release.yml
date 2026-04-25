@@ -40,6 +40,10 @@ jobs:
           npm run typecheck
           npm run build
 
+      - name: Materialize ignored local release outputs
+        run: |
+          node scripts/materialize-release-local-outputs.mjs
+
       - name: Release preflight
         run: |
           bash scripts/release-preflight.sh --tag "${GITHUB_REF_NAME}"

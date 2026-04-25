@@ -1,205 +1,187 @@
 ---
-title: Agent Team & HUD
-description: 使用 HUD 仪表板和 Team Ops 状态跟踪监控和管理多 agent 协作。
+title: 多 Agent 实战
+description: 什么时候使用 Agent Team，怎么启动、监控、收尾，以及什么时候不要用。
 ---
 
-# Agent Team 与 HUD
+# 多 Agent 实战
 
-AIOS 提供 **Team Operations (Team Ops)** — 一套用于监控和管理跨 Codex CLI、Claude Code 和 Gemini CLI 会话的多 agent 协作工具。
+Agent Team 不是“越多越好”。它适合**能拆分、边界清楚、允许并行**的任务。
 
-## 概述
-
-Team Ops 让你能够查看：
-- **实时会话状态** 通过 HUD (Heads-Up Display)
-- **历史会话分析** 带有 quality-gate 跟踪
-- **技能改进机会** 通过 skill candidates
-- **Dispatch 事后分析** 用于调试失败运行
-
-## 快速开始
-
-### 查看当前会话状态
+如果你只想记一条命令：
 
 ```bash
-# 当前会话的最小 HUD
-aios hud
-
-# 完整详情和 watch 模式
-aios hud --watch --preset full
-
-# 指定 provider 和会话
-aios hud --provider codex --session <session-id>
+aios team 3:codex "实现 X，完成前运行测试并总结改动"
+aios team status --provider codex --watch
 ```
 
-### Team Status 与 History
+## 什么时候该用 team
+
+适合用：
+
+- 一个需求能拆成前端、后端、测试、文档等相对独立部分。
+- 你已经知道验收标准，比如“测试必须通过”“文档要更新”。
+- 你愿意为并行执行支付更多 token 和等待成本。
+- 你需要 HUD/历史记录来追踪多个 worker。
+
+不适合用：
+
+- 需求还没想清楚，只是在探索方向。
+- 小 bug、单文件修复、一次性命令。
+- 多个 worker 大概率会改同一个文件。
+- 你正在调试一个需要稳定复现的问题。
+
+不确定时，先用普通交互式：
 
 ```bash
-# 实时监控 team 状态
+codex
+```
+
+## 10 分钟跑通流程
+
+### 1) 写清楚任务
+
+好的任务描述要包含三件事：目标、边界、验收。
+
+```bash
+aios team 3:codex "优化登录页表单错误提示；不要改认证 API；完成前运行相关测试并更新中文文档"
+```
+
+### 2) 开始监控
+
+```bash
+aios team status --provider codex --watch
+```
+
+常用轻量模式：
+
+```bash
+aios team status --provider codex --watch --preset minimal --fast
+```
+
+### 3) 看历史和失败
+
+```bash
+aios team history --provider codex --limit 20
+aios team history --provider codex --quality-failed-only
+```
+
+### 4) 收尾前做质量门禁
+
+```bash
+aios quality-gate pre-pr --profile strict
+```
+
+如果 quality gate 失败，先看失败分类，不要直接再次开更多 worker。
+
+## worker 数怎么选
+
+| 档位 | 命令 | 适合场景 |
+|---|---|---|
+| 稳定 | `aios team 2:codex "任务"` | 文件可能有交叉、第一次跑 |
+| 推荐 | `aios team 3:codex "任务"` | 大多数日常功能 |
+| 高吞吐 | `aios team 4:codex "任务"` | 模块很独立、测试足够清楚 |
+
+如果出现冲突、重复修改、等待过久，先降并发，不要继续加 worker。
+
+## provider 怎么选
+
+```bash
+aios team 3:codex "任务"
+aios team 2:claude "任务"
+aios team 2:gemini "任务" --dry-run
+```
+
+建议：
+
+- 日常实现优先 `codex`。
+- 需要长文分析或方案对比时可以试 `claude`。
+- 不确定命令效果时先加 `--dry-run`。
+
+## resume 和重试
+
+如果某次运行中断，先看历史：
+
+```bash
+aios team history --provider codex --limit 5
+```
+
+然后只重试 blocked job：
+
+```bash
+aios team --resume <session-id> --retry-blocked --provider codex --workers 2
+```
+
+不要在不了解失败原因时直接重新开一个更大的 team。
+
+## HUD 看什么
+
+```bash
+aios hud --provider codex
+aios hud --watch --preset focused
+aios hud --session <session-id> --json
+```
+
+重点看：
+
+- 当前 session 是否还活着。
+- dispatch jobs 是否 blocked。
+- quality-gate 是否失败。
+- 是否有可用的 skill candidate 建议。
+
+## skill candidates 什么时候看
+
+失败复盘时再看，不是新手第一步。
+
+```bash
+aios team status --show-skill-candidates
+aios team skill-candidates list --session <session-id>
+aios team skill-candidates export --session <session-id> --output ./candidate.patch.md
+```
+
+应用前必须人工审查补丁，尤其是会改 skills、hooks、MCP 配置的建议。
+
+## team 和 orchestrate 的区别
+
+| 能力 | 更适合 |
+|---|---|
+| `aios team ...` | 想快速开多个 worker 做一个任务 |
+| `aios orchestrate ... --execute dry-run` | 想先看阶段 DAG 和门禁 |
+| `aios orchestrate ... --execute live` | 维护者需要严格分阶段执行 |
+
+新用户优先用 `team`。`orchestrate live` 需要显式 opt-in：
+
+```bash
+export AIOS_EXECUTE_LIVE=1
+export AIOS_SUBAGENT_CLIENT=codex-cli
+aios orchestrate --session <session-id> --dispatch local --execute live
+```
+
+## 常用命令速查
+
+```bash
+# 启动团队
+aios team 3:codex "Ship X"
+
+# 监控当前状态
 aios team status --provider codex --watch
 
-# 查看会话历史（最近 20 次运行）
+# 最近历史
 aios team history --provider codex --limit 20
+
+# 只看失败
+aios team history --provider codex --quality-failed-only
+
+# 当前会话 HUD
+aios hud --provider codex
+
+# 重试 blocked jobs
+aios team --resume <session-id> --retry-blocked --provider codex --workers 2
 ```
-
-## 核心组件
-
-### HUD (Heads-Up Display)
-
-HUD 为单个会话提供实时仪表板：
-- 当前任务目标
-- Dispatch 状态（已执行、阻塞、待处理的作业）
-- Quality-gate 结果
-- Skill candidate 可用性
-- Hindsight 分析（失败模式、回归）
-
-**HUD Presets:**
-| Preset | 使用场景 |
-|--------|----------|
-| `minimal` | 长时间 watch 会话 |
-| `compact` | 终端友好的摘要 |
-| `focused` (默认) | 平衡详情 |
-| `full` | 完整诊断 |
-
-### Team Status
-
-显示 provider 所有最近会话的聚合状态：
-- 活跃 vs 完成会话
-- 成功/失败率
-- Quality-gate 摘要
-- 顶部 skill candidates
-
-### Team History
-
-过去会话的历史分析：
-- Dispatch 结果
-- Quality-gate 失败分类
-- Hindsight 模式（重复失败、回归）
-- Fix hints 和推荐
-
-## Skill Candidates
-
-**Skill Candidates** 是从失败会话中提取的自动化改进建议：
-
-1. 会话未通过 quality-gate
-2. Learn-eval 分析失败模式
-3. 生成 skill patch draft
-4. 你审查并应用补丁
-
-### 查看 Skill Candidates
-
-```bash
-# 显示当前会话的 candidates
-aios team status --show-skill-candidates
-
-# HUD 带 skill candidate 详情视图
-aios hud --show-skill-candidates --skill-candidate-view detail
-
-# 列出特定会话的 candidates
-aios team skill-candidates list --session-id <session-id>
-```
-
-### 导出和应用补丁
-
-```bash
-# 导出补丁模板到 artifact 文件
-aios team status --export-skill-candidate-patch-template
-
-# 使用自定义输出路径导出
-aios team skill-candidates export --output-path ./my-patch.md
-
-# 应用 skill candidate 补丁
-aios skill-candidate apply <candidate-id>
-```
-
-### 按 Draft ID 过滤
-
-```bash
-# 按 draft ID 过滤 skill candidates
-aios team status --show-skill-candidates --draft-id <draft-id>
-
-# HUD 带 draft 过滤
-aios hud --show-skill-candidates --draft-id <draft-id>
-```
-
-## Quality-Gate 过滤器
-
-按 quality-gate 结果过滤历史：
-
-```bash
-# 仅显示失败会话
-aios team history --quality-failed-only
-
-# 按特定分类过滤
-aios team history --quality-category clarity
-aios team history --quality-category sample.latency-watch
-
-# 按分类前缀过滤（匹配任意）
-aios team history --quality-category-prefix clarity,sample
-
-# 按前缀过滤（匹配所有）
-aios team history --quality-category-prefixes clarity,dispatch --prefix-mode all
-```
-
-## 命令参考
-
-### `aios hud`
-
-| 选项 | 默认值 | 描述 |
-|--------|---------|-------------|
-| `--session-id` | current | 目标会话 ID |
-| `--provider` | codex | Provider (codex/claude/gemini) |
-| `--preset` | focused | HUD preset (minimal/compact/focused/full) |
-| `--watch` | false | 持续监控 |
-| `--fast` | false | 快速模式（减少数据获取） |
-| `--show-skill-candidates` | false | 显示 skill candidate 详情 |
-| `--skill-candidate-limit` | 6 | 最多显示 candidates 数量 (1-20) |
-| `--skill-candidate-view` | inline | 视图模式 (inline/detail) |
-| `--export-skill-candidate-patch-template` | false | 导出补丁 artifact |
-| `--draft-id` | - | 按 draft ID 过滤 |
-| `--json` | false | 输出为 JSON |
-| `--interval-ms` | 1000 | Watch 刷新间隔 |
-
-### `aios team status`
-
-| 选项 | 默认值 | 描述 |
-|--------|---------|-------------|
-| `--session-id` | current | 目标会话 ID |
-| `--provider` | codex | Provider (codex/claude/gemini) |
-| `--preset` | focused | HUD preset |
-| `--watch` | false | 持续监控 |
-| `--fast` | false | 快速模式 |
-| `--show-skill-candidates` | false | 显示 skill candidates |
-| `--skill-candidate-limit` | 6 | 最多 candidates 数量 (1-20) |
-| `--export-skill-candidate-patch-template` | false | 导出补丁 artifact |
-| `--draft-id` | - | 按 draft ID 过滤 |
-| `--json` | false | 输出为 JSON |
-
-### `aios team history`
-
-| 选项 | 默认值 | 描述 |
-|--------|---------|-------------|
-| `--provider` | codex | Provider (codex/claude/gemini) |
-| `--limit` | 10 | 最多显示会话数 |
-| `--concurrency` | 4 | 并行会话读取 |
-| `--fast` | false | 跳过 hindsight 详情 |
-| `--quality-failed-only` | false | 仅显示失败会话 |
-| `--quality-category` | - | 按分类过滤 |
-| `--quality-category-prefix` | - | 按前缀过滤 |
-| `--quality-category-prefixes` | - | 多个前缀 |
-| `--quality-category-prefix-mode` | any | 匹配模式 (any/all) |
-| `--draft-id` | - | 按 draft ID 过滤 |
-| `--since` | - | 按日期过滤 (ISO) |
-| `--status` | - | 按状态过滤 |
-| `--json` | false | 输出为 JSON |
-
-### `aios team skill-candidates`
-
-| 子命令 | 描述 |
-|------------|-------------|
-| `list` | 列出会话的 skill candidates |
-| `export` | 导出补丁模板 artifact |
 
 ## 相关文档
 
-- [HUD 指南](hud-guide.md) - HUD 详细使用和自定义
-- [Skill Candidates](skill-candidates.md) - 理解和应用技能补丁
-- [ContextDB](contextdb.md) - 会话存储和记忆系统
+- [按场景找命令](use-cases.md)
+- [HUD 指南](hud-guide.md)
+- [Skill Candidates](skill-candidates.md)
+- [路由与并发档位](route-concurrency-profiles.md)
+- [故障排查](troubleshooting.md)
