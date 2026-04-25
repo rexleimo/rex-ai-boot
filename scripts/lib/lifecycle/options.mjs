@@ -242,6 +242,7 @@ export function createDefaultOrchestrateOptions() {
     blueprint: '',
     taskTitle: '',
     contextSummary: '',
+    planPath: '',
     sessionId: '',
     limit: 10,
     recommendationId: '',

@@ -227,6 +227,28 @@ async function createFakeCodexCommand(
   return binDir;
 }
 
+
+async function writePlanFile(rootDir, relPath = 'docs/plans/preflight-ready.md', markdown = '') {
+  const content = markdown || `# Preflight Ready Plan
+
+## Progress
+- Ready for dispatch.
+
+## Decision Log
+- Use explicit plan and ownership readiness gates.
+
+## Acceptance
+- Dry-run reports readiness.
+
+## Next Actions
+- Run orchestrate preflight.
+`;
+  const absPath = path.join(rootDir, relPath);
+  await fs.mkdir(path.dirname(absPath), { recursive: true });
+  await fs.writeFile(absPath, content, 'utf8');
+  return relPath;
+}
+
 async function writeSession(rootDir, sessionId, metaOverrides = {}, checkpoints = []) {
   const sessionDir = path.join(rootDir, 'memory', 'context-db', 'sessions', sessionId);
   await fs.mkdir(sessionDir, { recursive: true });
@@ -404,10 +426,20 @@ test('parseArgs accepts local live execute mode for orchestrate', () => {
   assert.equal(result.options.executionMode, 'live');
 });
 
-test('parseArgs accepts orchestrate preflight mode', () => {
-  const result = parseArgs(['orchestrate', 'feature', '--dispatch', 'local', '--preflight', 'auto']);
+test('parseArgs accepts orchestrate preflight mode and plan path', () => {
+  const result = parseArgs([
+    'orchestrate',
+    'feature',
+    '--dispatch',
+    'local',
+    '--preflight',
+    'auto',
+    '--plan',
+    'docs/plans/feature.md',
+  ]);
   assert.equal(result.command, 'orchestrate');
   assert.equal(result.options.preflightMode, 'auto');
+  assert.equal(result.options.planPath, 'docs/plans/feature.md');
 });
 
 test('getOrchestratorBlueprint expands role cards', () => {
@@ -1778,6 +1810,111 @@ test('planOrchestrate includes dry-run execute mode in preview', () => {
 test('planOrchestrate includes live execute mode in preview', () => {
   const plan = planOrchestrate({ sessionId: 'security-stable', dispatchMode: 'local', executionMode: 'live' });
   assert.match(plan.preview, /--execute live/);
+});
+
+
+test('runOrchestrate preflight auto reports ready plan and ownership evidence', async () => {
+  const rootDir = await makeRootDir();
+  const planPath = await writePlanFile(rootDir);
+  await writeSession(rootDir, 'preflight-readiness-ready', {
+    updatedAt: '2026-04-25T02:00:00.000Z',
+    goal: 'Update scripts/ctx-agent-core.mjs safely',
+  });
+
+  const logs = [];
+  const result = await runOrchestrate(
+    {
+      sessionId: 'preflight-readiness-ready',
+      dispatchMode: 'local',
+      executionMode: 'dry-run',
+      preflightMode: 'auto',
+      planPath,
+      contextSummary: '- Update scripts/ctx-agent-core.mjs safely',
+      format: 'json',
+    },
+    {
+      rootDir,
+      io: { log: (line) => logs.push(line) },
+      preflightAdapters: {
+        releaseStatus: async () => ({ ok: true, exitCode: 0, health: { metrics: { samples: 1 }, reasons: [] } }),
+      },
+    }
+  );
+  const report = JSON.parse(logs.join('\n'));
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(report.readiness.verdict, 'ready');
+  assert.deepEqual(report.readiness.blockedReasons, []);
+  assert.equal(report.readiness.evidence.some((item) => item.type === 'file' && item.path === planPath), true);
+  assert.equal(report.readiness.evidence.some((item) => /phase\.implement/.test(item.summary)), true);
+});
+
+test('runOrchestrate preflight auto reports blockers during dry-run without throwing', async () => {
+  const rootDir = await makeRootDir();
+  await writeSession(rootDir, 'preflight-readiness-blocked', {
+    updatedAt: '2026-04-25T02:05:00.000Z',
+    goal: 'Implement unscoped risky change',
+  });
+
+  const logs = [];
+  const result = await runOrchestrate(
+    {
+      sessionId: 'preflight-readiness-blocked',
+      dispatchMode: 'local',
+      executionMode: 'dry-run',
+      preflightMode: 'auto',
+      planPath: 'docs/plans/missing.md',
+      format: 'json',
+    },
+    {
+      rootDir,
+      io: { log: (line) => logs.push(line) },
+      preflightAdapters: {
+        releaseStatus: async () => ({ ok: true, exitCode: 0, health: { metrics: { samples: 1 }, reasons: [] } }),
+      },
+    }
+  );
+  const report = JSON.parse(logs.join('\n'));
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(report.readiness.verdict, 'blocked');
+  assert.equal(report.readiness.blockedReasons.includes('missing_plan_artifact'), true);
+  assert.equal(report.readiness.evidence.some((item) => item.type === 'ownership'), true);
+  assert.equal(report.dispatchRun.mode, 'dry-run');
+});
+
+test('runOrchestrate preflight auto blocks live execution when readiness is blocked', async () => {
+  const rootDir = await makeRootDir();
+  await writeSession(rootDir, 'preflight-readiness-live-blocked', {
+    updatedAt: '2026-04-25T02:10:00.000Z',
+    goal: 'Implement live risky change',
+  });
+
+  const logs = [];
+  const result = await runOrchestrate(
+    {
+      sessionId: 'preflight-readiness-live-blocked',
+      dispatchMode: 'local',
+      executionMode: 'live',
+      preflightMode: 'auto',
+      planPath: 'docs/plans/missing.md',
+      contextSummary: '- Update scripts/ctx-agent-core.mjs safely',
+      format: 'json',
+    },
+    {
+      rootDir,
+      io: { log: (line) => logs.push(line) },
+      preflightAdapters: {
+        releaseStatus: async () => ({ ok: true, exitCode: 0, health: { metrics: { samples: 1 }, reasons: [] } }),
+      },
+    }
+  );
+  const report = JSON.parse(logs.join('\n'));
+
+  assert.equal(result.exitCode, 1);
+  assert.equal(report.kind, 'guardrail.preflight-readiness');
+  assert.equal(report.readiness.verdict, 'blocked');
+  assert.equal(report.readiness.blockedReasons.includes('missing_plan_artifact'), true);
 });
 
 test('runOrchestrate defaults to local dry-run execution when dispatch/execute are omitted', async () => {
@@ -3361,6 +3498,28 @@ test('renderOrchestrationReport includes dispatch policy summary', () => {
   assert.match(report, /status=blocked/);
   assert.match(report, /parallelism=serial-only/);
   assert.match(report, /runbook\.dispatch-merge-triage/);
+});
+
+test('renderOrchestrationReport includes readiness summary', () => {
+  const report = renderOrchestrationReport({
+    blueprint: 'feature',
+    taskTitle: 'Ship readiness gates',
+    readiness: {
+      verdict: 'blocked',
+      blockedReasons: ['missing_plan_artifact'],
+      warnings: ['Missing plan heading: Acceptance'],
+      nextActions: ['Create docs/plans/example.md'],
+      evidence: [
+        { type: 'ownership', path: 'scripts/', summary: 'job phase.implement owns scripts/.' },
+      ],
+    },
+  });
+
+  assert.match(report, /Readiness:/);
+  assert.match(report, /verdict=blocked/);
+  assert.match(report, /missing_plan_artifact/);
+  assert.match(report, /Create docs\/plans\/example\.md/);
+  assert.match(report, /phase\.implement owns scripts/);
 });
 
 test('renderOrchestrationReport includes executor capability manifest summary', () => {

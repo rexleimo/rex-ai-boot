@@ -89,6 +89,16 @@ export interface Checkpoint {
   telemetry?: CheckpointTelemetry;
 }
 
+export interface ContinuitySummary {
+  schemaVersion: 1;
+  sessionId: string;
+  intent: string;
+  summary: string;
+  touchedFiles: string[];
+  nextActions: string[];
+  updatedAt: string;
+}
+
 interface SessionPaths {
   dir: string;
   meta: string;
@@ -96,6 +106,8 @@ interface SessionPaths {
   checkpoints: string;
   events: string;
   state: string;
+  continuitySummary: string;
+  continuityJson: string;
 }
 
 const DB_RELATIVE_PATH = path.join('memory', 'context-db');
@@ -1040,6 +1052,8 @@ function getSessionPaths(workspaceRoot: string, sessionId: string): SessionPaths
     checkpoints: path.join(dir, 'l1-checkpoints.jsonl'),
     events: path.join(dir, 'l2-events.jsonl'),
     state: path.join(dir, 'state.json'),
+    continuitySummary: path.join(dir, 'continuity-summary.md'),
+    continuityJson: path.join(dir, 'continuity.json'),
   };
 }
 
@@ -1119,6 +1133,96 @@ function formatSummaryMarkdown(meta: SessionMeta, checkpoint: Checkpoint): strin
     artifacts,
     '',
   ].join('\n');
+}
+
+function normalizeContinuityList(values: string[]): string[] {
+  return Array.from(new Set(values.map((item) => item.trim()).filter((item) => item.length > 0)));
+}
+
+function buildContinuitySummary(meta: SessionMeta, checkpoint: Checkpoint): ContinuitySummary {
+  return {
+    schemaVersion: 1,
+    sessionId: meta.sessionId,
+    intent: meta.goal || 'continue current session',
+    summary: checkpoint.summary || 'No checkpoint summary recorded yet.',
+    touchedFiles: normalizeContinuityList(checkpoint.artifacts),
+    nextActions: normalizeContinuityList(checkpoint.nextActions),
+    updatedAt: checkpoint.ts,
+  };
+}
+
+function formatContinuityMarkdown(continuity: ContinuitySummary): string {
+  const touchedFiles = continuity.touchedFiles.length > 0
+    ? continuity.touchedFiles.map((item) => `- ${item}`).join('\n')
+    : '- (none recorded)';
+  const nextActions = continuity.nextActions.length > 0
+    ? continuity.nextActions.map((item) => `- ${item}`).join('\n')
+    : '- (none recorded)';
+
+  return [
+    '# Continuity Summary',
+    '',
+    `- Session: ${continuity.sessionId}`,
+    `- Intent: ${continuity.intent}`,
+    `- Updated: ${continuity.updatedAt}`,
+    '',
+    '## Current State',
+    continuity.summary,
+    '',
+    '## Touched Files',
+    touchedFiles,
+    '',
+    '## Next Actions',
+    nextActions,
+    '',
+  ].join('\n');
+}
+
+function formatContinuityPacketBlock(continuity: ContinuitySummary | null): string {
+  if (!continuity) return 'No continuity summary yet.';
+  const touchedFiles = continuity.touchedFiles.length > 0
+    ? continuity.touchedFiles.map((item) => `- ${item}`).join('\n')
+    : '- (none recorded)';
+  const nextActions = continuity.nextActions.length > 0
+    ? continuity.nextActions.map((item) => `- ${item}`).join('\n')
+    : '- (none recorded)';
+  return [
+    `- Intent: ${continuity.intent}`,
+    `- Updated: ${continuity.updatedAt}`,
+    '',
+    continuity.summary,
+    '',
+    'Touched Files:',
+    touchedFiles,
+    '',
+    'Next Actions:',
+    nextActions,
+  ].join('\n');
+}
+
+function normalizeContinuitySummary(raw: unknown): ContinuitySummary | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  const sessionId = typeof value.sessionId === 'string' ? value.sessionId.trim() : '';
+  const summary = typeof value.summary === 'string' ? value.summary.trim() : '';
+  if (!sessionId || !summary) return null;
+  return {
+    schemaVersion: 1,
+    sessionId,
+    intent: typeof value.intent === 'string' && value.intent.trim() ? value.intent.trim() : 'continue current session',
+    summary,
+    touchedFiles: normalizeContinuityList(Array.isArray(value.touchedFiles) ? value.touchedFiles.map((item) => String(item)) : []),
+    nextActions: normalizeContinuityList(Array.isArray(value.nextActions) ? value.nextActions.map((item) => String(item)) : []),
+    updatedAt: typeof value.updatedAt === 'string' && value.updatedAt.trim() ? value.updatedAt.trim() : nowIso(),
+  };
+}
+
+async function readContinuitySummary(paths: SessionPaths): Promise<ContinuitySummary | null> {
+  try {
+    return normalizeContinuitySummary(await readJson<unknown>(paths.continuityJson));
+  } catch {
+    return null;
+  }
 }
 
 export function resolveWorkspaceRoot(cwd: string = process.cwd()): string {
@@ -1372,7 +1476,12 @@ export async function writeCheckpoint(input: WriteCheckpointInput): Promise<Chec
       ...prev,
       status,
     }));
-    await writeAtomicFile(paths.summary, formatSummaryMarkdown(meta, checkpoint));
+    const continuity = buildContinuitySummary(meta, checkpoint);
+    await Promise.all([
+      writeAtomicFile(paths.summary, formatSummaryMarkdown(meta, checkpoint)),
+      writeAtomicFile(paths.continuitySummary, formatContinuityMarkdown(continuity)),
+      writeJson(paths.continuityJson, continuity),
+    ]);
 
     state.lastCheckpointAt = checkpoint.ts;
     state.lastCheckpointSeq = nextSeq;
@@ -1482,11 +1591,12 @@ export async function buildContextPacket(input: BuildPacketInput): Promise<Build
     ? Math.floor(input.tokenBudget)
     : null;
 
-  const [meta, summaryRaw, checkpoints, events] = await Promise.all([
+  const [meta, summaryRaw, checkpoints, events, continuity] = await Promise.all([
     readJson<SessionMeta>(paths.meta),
     fs.readFile(paths.summary, 'utf8'),
     readJsonLines<Checkpoint>(paths.checkpoints),
     readJsonLines<ContextEvent>(paths.events),
+    readContinuitySummary(paths),
   ]);
 
   const latestCheckpoint = checkpoints[checkpoints.length - 1] ?? null;
@@ -1687,6 +1797,9 @@ export async function buildContextPacket(input: BuildPacketInput): Promise<Build
     '',
     '## L0 Summary',
     summaryRaw.trim(),
+    '',
+    '## Continuity Summary',
+    formatContinuityPacketBlock(continuity),
     '',
     '## L1 Snapshot',
     checkpointBlock,

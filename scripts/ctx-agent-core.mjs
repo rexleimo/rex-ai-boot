@@ -15,6 +15,7 @@ import {
   workspaceMemoryStatePath,
 } from './lib/memo/workspace-memory.mjs';
 import { scanWorkspaceMemoryContent } from './lib/memo/safety.mjs';
+import { extractTouchedFilesFromText, writeContinuitySummary } from './lib/contextdb/continuity.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,6 +54,7 @@ Options:
   --blueprint <name>  Orchestrate blueprint for routed subagent: feature|bugfix|refactor|security (default: feature)
   --no-bootstrap      Disable automatic first-task bootstrap for this run
   --no-checkpoint     Disable automatic checkpoint write in one-shot mode
+  --continuity-summary Write compact continuity artifacts after one-shot checkpoint (default)
   --dry-run           Skip remote model call, write synthetic response for pipeline testing
   --max-log-chars <n> Max characters stored in event logs (default: 8000)
   -h, --help          Show this help`);
@@ -713,12 +715,20 @@ export function buildFacadePrompt(facade, agent) {
     return `This project uses ContextDB for session memory. No prior sessions found. Full history will be available at memory/context-db/exports/latest-${agent}-context.md.`;
   }
   const refs = facade.keyRefs?.length ? `refs: ${facade.keyRefs.join(', ')}` : '';
-  return [
+  const lines = [
     `This project uses ContextDB for session memory.`,
     `Latest session: ${facade.goal} (status: ${facade.status}${refs ? ', ' + refs : ''}).`,
     `Full history at: ${facade.contextPacketPath}.`,
     `Load it when you need prior context.`,
-  ].join(' ');
+  ];
+  const continuitySummary = String(facade.continuitySummary || '').trim();
+  if (continuitySummary) {
+    const nextActions = Array.isArray(facade.continuityNextActions) && facade.continuityNextActions.length > 0
+      ? ` Next actions: ${facade.continuityNextActions.join('; ')}.`
+      : '';
+    lines.push(`Continuity Summary: ${continuitySummary}.${nextActions}`);
+  }
+  return lines.join(' ');
 }
 
 function normalizeFacadePathForCompare(value = '') {
@@ -876,6 +886,7 @@ function parseArgs(argv) {
     blueprint: 'feature',
     autoBootstrap: true,
     autoCheckpoint: true,
+    continuitySummary: true,
     dryRun: false,
     maxLogChars: '8000',
     extraArgs: [],
@@ -928,6 +939,12 @@ function parseArgs(argv) {
         break;
       case '--no-checkpoint':
         opts.autoCheckpoint = false;
+        break;
+      case '--continuity-summary':
+        opts.continuitySummary = true;
+        break;
+      case '--no-continuity-summary':
+        opts.continuitySummary = false;
         break;
       case '--dry-run':
         opts.dryRun = true;
@@ -1719,6 +1736,22 @@ Task: ${routedPrompt}`;
         checkpointArgs.push('--failure-category', failureCategory);
       }
       ctx(opts.workspaceRoot, 'checkpoint', checkpointArgs);
+
+      if (opts.continuitySummary) {
+        try {
+          await writeContinuitySummary({
+            workspaceRoot: opts.workspaceRoot,
+            sessionId: opts.sessionId,
+            intent: routedPrompt,
+            summary,
+            touchedFiles: extractTouchedFilesFromText({ workspaceRoot: opts.workspaceRoot }, opts.prompt, output),
+            nextActions: nextActions.split('|'),
+          });
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          console.warn(`[warn] continuity summary skipped: ${reason}`);
+        }
+      }
     }
 
     try {

@@ -161,6 +161,20 @@ aios orchestrate --session <session-id> --format json
 aios orchestrate --session <session-id> --preflight auto --format json
 ```
 
+Plan + ownership preflight gates for `orchestrate` and `team`:
+
+- Use `--preflight auto` together with `--plan docs/plans/<topic>.md` to preview plan/ownership checks without executing live work.
+- Dry runs report blockers so you can fix the plan or ownership metadata first.
+- Live execution blocks on those blockers unless you add `--force`.
+- Plan files should include `Progress`, `Decision Log`, `Acceptance`, and `Next Actions`; editable jobs should resolve to stable `ownedPathPrefixes` such as `scripts/` or `mcp-server/`.
+
+Examples:
+
+```bash
+node scripts/aios.mjs orchestrate --session <session-id> --preflight auto --plan docs/plans/<topic>.md --execute dry-run --format json
+node scripts/aios.mjs team --session <session-id> --preflight auto --plan docs/plans/<topic>.md --dry-run --format json
+```
+
 One-click Team runtime (recommended):
 
 ```bash
@@ -729,6 +743,12 @@ scripts/ctx-agent.sh --agent codex-cli --project RexCLI --prompt "Continue from 
 In one-shot mode, all 5 steps run automatically:
 `init -> session:new/latest -> event:add -> checkpoint -> context:pack`
 
+One-shot checkpoints also refresh compact continuity artifacts at
+`memory/context-db/sessions/<session_id>/continuity-summary.md` and
+`memory/context-db/sessions/<session_id>/continuity.json`. Future context packets and
+lazy startup prompts include this continuity summary so a new/cleared CLI can resume
+without rereading the full event history first.
+
 ## ContextDB Layout (L0/L1/L2)
 
 ```text
@@ -741,6 +761,8 @@ memory/context-db/
   sessions/<session_id>/
     meta.json
     l0-summary.md
+    continuity-summary.md
+    continuity.json
     l1-checkpoints.jsonl
     l2-events.jsonl
     state.json

@@ -21,12 +21,16 @@ test('lazy load helpers: buildFacadePrompt with session', async () => {
     status: 'running',
     keyRefs: ['a.mjs', 'b.mjs'],
     contextPacketPath: 'memory/context-db/exports/latest-claude-code-context.md',
+    continuitySummary: 'Continue from the latest checkpoint.',
+    continuityNextActions: ['run focused tests'],
   };
   const prompt = buildFacadePrompt(facade, 'claude-code');
   assert.ok(prompt.includes('ContextDB'));
   assert.ok(prompt.includes('test goal'));
   assert.ok(prompt.includes('a.mjs'));
   assert.ok(prompt.includes('latest-claude-code-context.md'));
+  assert.ok(prompt.includes('Continuity Summary'));
+  assert.ok(prompt.includes('run focused tests'));
 });
 
 test('lazy load helpers: buildFacadePrompt without session', async () => {
