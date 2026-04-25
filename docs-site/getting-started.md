@@ -1,32 +1,35 @@
 ---
 title: Quick Start
-description: One setup flow for macOS, Linux, and Windows with OS tabs.
+description: The shortest path from installation to first use: install, open the TUI, run Doctor, then start an agent inside a project.
 ---
 
 # Quick Start
 
-This page combines macOS, Linux, and Windows setup into one flow. Use the OS tabs when commands differ.
+Goal: **install RexCLI, open the TUI, run Doctor once, and start an agent in a project in about 3 minutes.**
 
-## Quick Answer (AI Search)
+If you do not know every RexCLI feature yet, that is fine. Follow this page first, then continue to [Find Commands By Scenario](use-cases.md).
 
-`RexCLI` lets you keep using `codex`, `claude`, and `gemini` directly while adding project-scoped ContextDB memory and unified browser MCP setup.
-
-## Prerequisites
+## What You Need
 
 - Node.js **22 LTS** and `npm`
-- At least one CLI installed: `codex`, `claude`, or `gemini`
-- A project/workspace directory where you want project-scoped ContextDB memory
+- At least one coding CLI: `codex`, `claude`, or `gemini`
+- A project directory where you want to work
 
-## 0) Install (recommended)
+Check Node:
 
-This repo installs to `~/.rexcil/rex-cli`. The unified entry is `aios`:
+```bash
+node -v
+npm -v
+```
 
-- `aios` (no args) opens the interactive full-screen TUI
-- `aios doctor|update|privacy ...` keeps working as before
+If Node is not 22, switch first:
 
-### Option C: One-liner installer (GitHub Releases)
+```bash
+nvm install 22
+nvm use 22
+```
 
-This is the stable installation path and depends on published GitHub Release assets.
+## 1) Install The Stable Release
 
 === "macOS / Linux"
 
@@ -36,7 +39,9 @@ This is the stable installation path and depends on published GitHub Release ass
     aios
     ```
 
-=== "Windows (PowerShell)"
+    If you use bash instead of zsh, replace `source ~/.zshrc` with `source ~/.bashrc`.
+
+=== "Windows PowerShell"
 
     ```powershell
     irm https://github.com/rexleimo/rex-cli/releases/latest/download/aios-install.ps1 | iex
@@ -44,9 +49,169 @@ This is the stable installation path and depends on published GitHub Release ass
     aios
     ```
 
-### Option A: git clone (dev-friendly)
+After installation, the default directory is `~/.rexcil/rex-cli`, and the unified entry point is `aios`.
 
-Use this only when you explicitly want unreleased `main` branch behavior. This is the supported development install path, not the stable release path.
+!!! tip "When should I use git clone?"
+    Use `git clone` only if you explicitly want unreleased `main` branch behavior. Stable users should prefer the GitHub Releases installer.
+
+## 2) Finish Setup And Doctor In The TUI
+
+Run:
+
+```bash
+aios
+```
+
+Recommended order:
+
+1. Choose **Setup**.
+2. Select `all`, or the minimal set `shell,skills,superpowers`.
+3. After installation, choose **Doctor**.
+4. Start using RexCLI after Doctor shows no critical errors.
+
+<figure class="rex-visual">
+  <img src="assets/visual-tui-setup-doctor.svg" alt="Illustration of choosing Setup first and Doctor second in the aios TUI">
+  <figcaption>Illustration: after the TUI opens, run Setup first, then Doctor. When critical errors are 0, go into your project and start `codex` / `claude` / `gemini`.</figcaption>
+</figure>
+
+If you changed shell wrappers, reload the current shell:
+
+=== "macOS / Linux"
+
+    ```bash
+    source ~/.zshrc
+    ```
+
+=== "Windows PowerShell"
+
+    ```powershell
+    . $PROFILE
+    ```
+
+## 3) Enable Memory In A Project
+
+Enter your project directory:
+
+=== "macOS / Linux"
+
+    ```bash
+    cd /path/to/your/project
+    touch .contextdb-enable
+    codex
+    ```
+
+=== "Windows PowerShell"
+
+    ```powershell
+    cd C:\path	o\your\project
+    New-Item -ItemType File -Path .contextdb-enable -Force
+    codex
+    ```
+
+You can also replace the last line with:
+
+```bash
+claude
+gemini
+```
+
+As long as they run in the same project directory, they read and write the same ContextDB.
+
+## 4) Confirm It Works The First Time
+
+Run inside the project:
+
+=== "macOS / Linux"
+
+    ```bash
+    aios doctor --native --verbose
+    ls -la memory/context-db
+    ```
+
+=== "Windows PowerShell"
+
+    ```powershell
+    aios doctor --native --verbose
+    Get-ChildItem -Path memory/context-db -ErrorAction SilentlyContinue
+    ```
+
+If you see directories such as `sessions/`, `index/`, or `exports/`, ContextDB has started recording.
+
+If the directory does not exist yet, start `codex` / `claude` / `gemini` once normally and let RexCLI initialize it automatically. You do not need to reinstall immediately.
+
+If it still does not appear, run:
+
+```bash
+aios doctor --native --fix
+```
+
+## 5) The 6 Most Used Commands
+
+| Scenario | Command |
+|---|---|
+| Open the TUI | `aios` |
+| Start Codex with memory | `codex` |
+| View current session status | `aios hud --provider codex` |
+| Run a multi-agent task | `aios team 3:codex "Implement X and run tests before finishing"` |
+| Watch team progress | `aios team status --provider codex --watch` |
+| Pre-submit quality check | `aios quality-gate pre-pr --profile strict` |
+
+## 6) Shortest Agent Team Usage
+
+Use this only when the task can be split into relatively independent parts:
+
+```bash
+aios team 3:codex "Implement the user settings page, add tests, and update docs"
+aios team status --provider codex --watch
+```
+
+If you are fixing a small bug or do not know how to split the work yet, start normally:
+
+```bash
+codex
+```
+
+See [Agent Team](team-ops.md) for more decision rules.
+
+## 7) Browser Automation Troubleshooting
+
+RexCLI uses a CDP/browser-use path for browser automation by default. For browser-related issues, start with:
+
+```bash
+aios internal browser doctor --fix
+aios internal browser cdp-status
+```
+
+For complex pages, ask the agent to read page text/DOM first, then use screenshots as fallback. Do not start by blindly clicking buttons.
+
+## 8) Privacy-Safe Reads
+
+Do not paste `.env`, tokens, cookies, or cloud config directly into a model. Use:
+
+```bash
+aios privacy read --file <path>
+```
+
+When RexCLI-wrapped `codex` / `claude` / `gemini` starts, the Privacy Shield panel shows the current privacy protection status.
+
+## 9) Update And Uninstall
+
+Prefer the TUI:
+
+```bash
+aios
+```
+
+Or use commands:
+
+```bash
+aios update --components all --client all
+aios uninstall --components shell,skills,native
+```
+
+## 10) Development Install Path
+
+Maintainers or users testing unreleased features can use:
 
 === "macOS / Linux"
 
@@ -56,435 +221,52 @@ Use this only when you explicitly want unreleased `main` branch behavior. This i
     scripts/aios.sh
     ```
 
-=== "Windows (PowerShell)"
+=== "Windows PowerShell"
 
     ```powershell
-    git clone https://github.com/rexleimo/rex-cli.git $HOME\.rexcil\rex-cli
-    cd $HOME\.rexcil\rex-cli
-    powershell -ExecutionPolicy Bypass -File .\scripts\aios.ps1
+    git clone https://github.com/rexleimo/rex-cli.git $HOME\.rexcilex-cli
+    cd $HOME\.rexcilex-cli
+    powershell -ExecutionPolicy Bypass -File .\scriptsios.ps1
     ```
 
-### Option B: Download from GitHub Releases (offline-friendly)
-
-Download `rex-cli.tar.gz` (macOS/Linux) or `rex-cli.zip` (Windows) from Releases and extract to `~/.rexcil/`.
-Then run `scripts/aios.sh` / `scripts/aios.ps1`.
-
-### TUI Welcome Banner
-
-When you start the TUI with `aios`, you'll see a cyan ASCII art banner:
-
-```
-  ╔══════════════════════════════════════════╗
-  ║   ██████╗ ██╗  ██╗██╗██████╗  ██████╗    ║
-  ║   ██╔══██╗██║ ██╔╝██║██╔══██╗██╔════╝    ║
-  ║   ██████╔╝█████╔╝ ██║██████╔╝██║         ║
-  ║   ██╔══██╗██╔═██╗ ██║██╔══██╗██║         ║
-  ║   ██║  ██║██║  ██╗██║██║  ██║╚██████╗    ║
-  ║   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝ ╚═════╝    ║
-  ║          Hello, Rex CLI!                 ║
-  ╚══════════════════════════════════════════╝
-```
-
-This confirms the TUI is ready and shows the repository location below the banner.
-
-### Recommended: finish setup in the TUI
-
-After install, use the TUI as the main onboarding path for this release:
-
-1. Run `aios`
-2. Select **Setup**
-3. Choose your component set:
-   - `all` for the full stack
-   - `shell,skills,superpowers` for shared memory + skills first
-   - `browser` for Browser MCP only
-4. If you enable **Skills**, the picker now helps distinguish states:
-   - setup/update mark already-installed skills with `(installed)`
-   - uninstall shows only installed skills, supports scrolling, and offers **Select all** / **Clear all**
-   - installs default to portable `copy` mode; use `--install-mode link` only when you intentionally want a local-dev link back to this repo
-5. When setup finishes, run **Doctor** in the same TUI
-6. Reload your shell if you installed shell wrappers:
-   - macOS / Linux: `source ~/.zshrc`
-   - Windows PowerShell: `. $PROFILE`
-
-### Repo contributors: skills now come from `skill-sources/`
-
-If you are editing this repo itself rather than just installing it:
-
-- canonical skill source files live under `skill-sources/`
-- repo-local `.codex/skills`, `.claude/skills`, `.agents/skills`, `.gemini/skills`, and `.opencode/skills` are generated compatibility outputs
-- regenerate them with:
-
-```bash
-node scripts/sync-skills.mjs
-node scripts/check-skills-sync.mjs
-```
-
-### 0.1 Privacy Guard Strict Read (enabled by default)
-
-Shell setup now initializes Privacy Guard config at `~/.rexcil/privacy-guard.json` and enables strict redaction policy by default.
-For config or secret-like files, use the strict read path:
-
-=== "macOS / Linux"
-
-    ```bash
-    aios privacy read --file <path>
-    ```
-
-=== "Windows (PowerShell)"
-
-    ```powershell
-    aios privacy read --file <path>
-    ```
-
-Optional local model path (Ollama + `qwen3.5:4b`):
-
-=== "macOS / Linux"
-
-    ```bash
-    aios privacy ollama-on
-    ```
-
-=== "Windows (PowerShell)"
-
-    ```powershell
-    aios privacy ollama-on
-    ```
-
-Interactive `codex` / `claude` / `gemini` / `opencode` launches wrapped by ContextDB shell now print a Privacy Shield panel with Privacy Guard status, model endpoint/relay detection, and sensitive-file handling guidance.
-
-=== "macOS / Linux"
-
-    ```bash
-    CTXDB_PRIVACY_BANNER=0 codex      # hide the panel for one command
-    CTXDB_PRIVACY_COLOR=0 codex       # keep the panel, disable ANSI color
-    ```
-
-=== "Windows (PowerShell)"
-
-    ```powershell
-    $env:CTXDB_PRIVACY_BANNER = "0"; codex
-    $env:CTXDB_PRIVACY_COLOR = "0"; codex
-    ```
-
-Privacy Shield reminds agents to follow privacy rules, but LLM instructions are advisory. Verifiable enforcement comes from deterministic AIOS gates before context, MCP output, logs, or checkpoints leave the machine.
-
-Component selection examples:
-
-Tip: if you installed via the one-liner, the repo lives at `~/.rexcil/rex-cli`.
-Run the scripts from that directory, or just run `aios` and pick **Setup** in the TUI.
-
-=== "macOS / Linux"
-
-    ```bash
-    # only shell wrappers + skills
-    scripts/setup-all.sh --components shell,skills --mode opt-in
-
-    # only browser MCP
-    scripts/setup-all.sh --components browser
-    ```
-
-=== "Windows (PowerShell)"
-
-    ```powershell
-    powershell -ExecutionPolicy Bypass -File .\scripts\setup-all.ps1 -Components shell,skills -Mode opt-in
-    powershell -ExecutionPolicy Bypass -File .\scripts\setup-all.ps1 -Components browser
-    ```
-
-One-command update/uninstall:
-
-=== "macOS / Linux"
-
-    ```bash
-    scripts/update-all.sh --components all --mode opt-in
-    scripts/uninstall-all.sh --components shell,skills
-    ```
-
-=== "Windows (PowerShell)"
-
-    ```powershell
-    powershell -ExecutionPolicy Bypass -File .\scripts\update-all.ps1 -Components all -Mode opt-in
-    powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-all.ps1 -Components shell,skills
-    ```
-
-If you prefer component-by-component setup, continue with steps 1-8 below.
-
-## 1) Install Browser MCP
-
-=== "macOS / Linux"
-
-    ```bash
-    scripts/install-browser-mcp.sh
-    scripts/doctor-browser-mcp.sh
-    ```
-
-=== "Windows (PowerShell)"
-
-    ```powershell
-    powershell -ExecutionPolicy Bypass -File .\scripts\install-browser-mcp.ps1
-    powershell -ExecutionPolicy Bypass -File .\scripts\doctor-browser-mcp.ps1
-    ```
-
-## 2) Build ContextDB CLI
-
-```bash
-cd mcp-server
-npm install
-npm run build
-```
-
-Notes:
-
-- `mcp-server` package scripts now resolve the project runtime from `.nvmrc` automatically and are expected to run on Node 22 LTS.
-- If you see `Unable to resolve a Node runtime matching .nvmrc=22`, install Node 22 first (for example `nvm install 22 && nvm use 22`) and rerun the command.
-
-## 3) Install command wrappers (recommended)
-
-=== "macOS / Linux (zsh)"
-
-    ```bash
-    scripts/install-contextdb-shell.sh --mode opt-in
-    scripts/doctor-contextdb-shell.sh
-    source ~/.zshrc
-    ```
-
-=== "Windows (PowerShell)"
-
-    ```powershell
-    powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-shell.ps1 -Mode opt-in
-    powershell -ExecutionPolicy Bypass -File .\scripts\doctor-contextdb-shell.ps1
-    . $PROFILE
-    ```
-
-## 4) Enable current project
-
-=== "macOS / Linux"
-
-    ```bash
-    touch .contextdb-enable
-    ```
-
-=== "Windows (PowerShell)"
-
-    ```powershell
-    New-Item -ItemType File -Path .contextdb-enable -Force
-    ```
-
-## 5) Start working
-
-```bash
-cd /path/to/your/project
-codex
-# or
-claude
-# or
-gemini
-```
-
-## 5.1) Optional: operator tools (quality gate + learn-eval + orchestrate)
-
-Repo health gate (includes ContextDB regression checks):
-
-```bash
-aios quality-gate pre-pr --profile strict
-```
-
-Analyze the latest session telemetry:
-
-```bash
-aios learn-eval --limit 10
-```
-
-Build a local orchestration skeleton (no model calls):
-
-```bash
-aios orchestrate --session <session-id> --preflight auto --format json
-```
-
-Execute live via CLI subagents (token cost, opt-in):
-
-```bash
-export AIOS_EXECUTE_LIVE=1
-export AIOS_SUBAGENT_CLIENT=codex-cli  # required (codex-only live runtime)
-aios orchestrate --session <session-id> --dispatch local --execute live --format json
-```
-
-Tip (codex-cli): Codex CLI v0.114+ supports `codex exec` structured outputs (`--output-schema`, `--output-last-message`, stdin). AIOS uses them when available and falls back to stdout parsing on older versions.
-
-Optional controls:
-
-- `AIOS_SUBAGENT_CONCURRENCY` (default: `3`)
-- `AIOS_SUBAGENT_TIMEOUT_MS` (default: `600000`)
-
-### 5.1.1) Route + concurrency profile (recommended)
-
-If you want parallel work but do not want to memorize many env vars, use this compact profile:
-
-Need a standalone reference page? See [Route & Concurrency Profiles](route-concurrency-profiles.md).
-
-```bash
-export CTXDB_INTERACTIVE_AUTO_ROUTE=1
-export CTXDB_CODEX_DISABLE_MCP=1
-export CTXDB_TEAM_WORKERS=3
-export AIOS_SUBAGENT_CONCURRENCY=3
-```
-
-What each variable controls:
-
-- `CTXDB_INTERACTIVE_AUTO_ROUTE`: whether interactive wrapper injects auto-route policy (`single/subagent/team`)
-- `CTXDB_CODEX_DISABLE_MCP`: whether wrapped `codex` skips MCP startup (use `1` to avoid MCP cold-start stalls)
-- `CTXDB_TEAM_WORKERS`: parallel worker count for `aios team ...`
-- `AIOS_SUBAGENT_CONCURRENCY`: parallel executor count for `aios orchestrate --execute live`
-
-Recommended presets:
-
-- Balanced default (recommended): `3 + 3`
-- Higher throughput: `4 + 4`
-- Debug stability mode: `1 + 1`
-
-## 5.2) Optional: HUD and Team Ops visibility
-
-View session status with HUD:
-
-```bash
-aios hud --provider codex
-aios hud --watch --preset full
-aios hud --session <session-id> --json
-```
-
-Team Ops status and history:
-
-```bash
-aios team status --provider codex --watch
-aios team history --provider codex --limit 20
-```
-
-Skill-candidate detail view (2026-04-09+):
-
-```bash
-# Show skill candidates with default limit (6 in normal mode, 3 in fast-watch minimal)
-aios team status --show-skill-candidates
-
-# Configure candidate limit (1-20)
-aios team status --show-skill-candidates --skill-candidate-limit 10
-
-# Fast-watch mode auto-uses minimal limit (3 candidates)
-aios team status --watch --fast
-
-# HUD also supports skill-candidate view
-aios hud --show-skill-candidates --skill-candidate-limit 5
-```
-
-Quality-gate category filters (2026-04-08+):
-
-```bash
-# Show only quality-gate failed sessions
-aios team history --quality-failed-only
-
-# Filter by quality category prefix
-aios team history --quality-category clarity
-aios team history --quality-category sample.latency-watch
-```
-
-Dispatch hindsight and draft recommendations (2026-04-07+):
-
-```bash
-# Learn-eval shows draft skill-candidate patches
-aios learn-eval --limit 10
-
-# HUD suggests skill-candidate apply commands when available
-aios hud --session <session-id>
-```
-
-## 6) Verify data created
-
-=== "macOS / Linux"
-
-    ```bash
-    ls memory/context-db
-    ```
-
-=== "Windows (PowerShell)"
-
-    ```powershell
-    Get-ChildItem memory/context-db
-    ```
-
-You should see `sessions/`, `index/`, and `exports/`.
-
-## 7) Update / Uninstall wrappers
-
-=== "macOS / Linux (zsh)"
-
-    ```bash
-    scripts/update-contextdb-shell.sh --mode opt-in
-    scripts/uninstall-contextdb-shell.sh
-    ```
-
-=== "Windows (PowerShell)"
-
-    ```powershell
-    powershell -ExecutionPolicy Bypass -File .\scripts\update-contextdb-shell.ps1 -Mode opt-in
-    powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-contextdb-shell.ps1
-    ```
-
-## 8) Optional: install project skills globally
-
-Use this only when you want this repo's skills available in other projects.
-`--client all` installs for `codex`, `claude`, `gemini`, and `opencode`.
-
-=== "macOS / Linux"
-
-    ```bash
-    scripts/install-contextdb-skills.sh --client all
-    scripts/doctor-contextdb-skills.sh --client all
-    ```
-
-=== "Windows (PowerShell)"
-
-    ```powershell
-    powershell -ExecutionPolicy Bypass -File .\scripts\install-contextdb-skills.ps1 -Client all
-    powershell -ExecutionPolicy Bypass -File .\scripts\doctor-contextdb-skills.ps1 -Client all
-    ```
-
-Skill lifecycle:
-
-=== "macOS / Linux"
-
-    ```bash
-    scripts/update-contextdb-skills.sh --client all
-    scripts/uninstall-contextdb-skills.sh --client all
-    ```
-
-=== "Windows (PowerShell)"
-
-    ```powershell
-    powershell -ExecutionPolicy Bypass -File .\scripts\update-contextdb-skills.ps1 -Client all
-    powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-contextdb-skills.ps1 -Client all
-    ```
+Development install is not the same as stable release. Most users should use the one-liner in step 1.
 
 ## FAQ
 
-### Does this replace native CLI clients?
+### Does RexCLI replace native CLIs?
 
-No. You still run native commands. The wrapper only injects context and keeps compatibility.
+No. You still run `codex`, `claude`, and `gemini`. RexCLI adds memory, skills, diagnostics, and orchestration around them.
 
-### How do I avoid cross-project memory contamination?
+### Why create `.contextdb-enable`?
 
-Use `CTXDB_WRAP_MODE=opt-in` and create `.contextdb-enable` only in the projects you want.
+It is an opt-in switch so RexCLI does not record context in every directory. Create it only in repositories where you want project memory.
 
-### Does wrapper install also install skills?
+### Do I need to learn ContextDB / Superpowers / Team Ops first?
 
-No. Wrappers and skills are separate on purpose. Use step 8 when you want global skills.
+No. New users only need three things at first: `aios` for setup and diagnostics, `.contextdb-enable` for project memory, and `codex` for normal work.
 
-### Why do I see `CODEX_HOME points to ".codex"`?
+### How many agents should I start with?
 
-`CODEX_HOME` was set to a relative path. Use an absolute path:
+Start with `3`:
+
+```bash
+aios team 3:codex "task"
+```
+
+If conflicts increase, reduce to `2`; if the task is very independent, consider `4`.
+
+### What if `CODEX_HOME points to ".codex"`?
+
+It means `CODEX_HOME` is relative. Change it to an absolute path:
 
 ```bash
 export CODEX_HOME="$HOME/.codex"
 mkdir -p "$CODEX_HOME"
 ```
 
-### Which command should I run first if browser tools fail?
+### What should I read next?
 
-Run `doctor-browser-mcp` first (`scripts/doctor-browser-mcp.sh` or `doctor-browser-mcp.ps1`).
+- [Find Commands By Scenario](use-cases.md)
+- [Agent Team](team-ops.md)
+- [ContextDB](contextdb.md)
+- [Troubleshooting](troubleshooting.md)

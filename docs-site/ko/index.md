@@ -1,71 +1,46 @@
 ---
 title: 개요
-description: Codex/Claude/Gemini/OpenCode용 AI 기억 시스템 문서. Hermes 워크플로, Agent Team, 자동 subagent 계획을 다룹니다.
+description: 먼저 하고 싶은 작업에서 명령을 고르고, 그다음 ContextDB, Agent Team, 브라우저 자동화, skills 로 들어갑니다.
 ---
 
 # RexCLI
 
-> 지금 쓰고 있는 CLI 그대로. `codex` / `claude` / `gemini` / `opencode` 위에 하나 더 얹어줌.
+> 지금 쓰는 습관은 그대로 두고, 이미 사용하는 `codex` / `claude` / `gemini` 에 기억, 협업, 검증을 더합니다.
 
-[GitHub에서 Star](https://github.com/rexleimo/rex-cli?utm_source=cli_rexai_top&utm_medium=docs&utm_campaign=english_growth&utm_content=home_hero_star){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="github_star" }
-[빠른 시작](getting-started.md){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="quick_start" }
-[워크플로 비교](cli-comparison.md){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="compare_workflows" }
-[Superpowers](superpowers.md){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="superpowers" }
+[3분 빠른 시작](getting-started.md){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="quick_start" }
+[Agent Team 사용법](team-ops.md){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="team_ops" }
+[시나리오별 명령 찾기](use-cases.md){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="use_cases" }
+[GitHub](https://github.com/rexleimo/rex-cli?utm_source=cli_rexai_top&utm_medium=docs&utm_campaign=ko_onboarding&utm_content=home_hero_star){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="github_star" }
 
-프로젝트 URL: <https://github.com/rexleimo/rex-cli>
+<figure class="rex-visual">
+  <img src="../assets/visual-new-user-path.svg" alt="RexCLI 초보자 3단계: Doctor 실행, 프로젝트 기억 켜기, 필요할 때 Agent Team 사용">
+  <figcaption>처음에는 가장 짧은 경로만 따라가세요. 설치 후 Doctor 를 실행하고, 프로젝트 기억을 켠 다음, 작업이 명확히 분리될 때만 Agent Team 을 사용합니다.</figcaption>
+</figure>
 
-## 빠른 답변
+## 먼저 하고 싶은 일을 고르세요
 
-RexCLI는 coding agent를 위한 **AI 기억 시스템 + 오케스트레이션 레이어**입니다.  
-다음 요구를 바로 처리할 수 있습니다:
+| 지금 하고 싶은 일 | 먼저 볼 문서 | 가장 짧은 명령 |
+|---|---|---|
+| 설치하고 TUI 열기 | [빠른 시작](getting-started.md) | `aios` |
+| agent 가 프로젝트 맥락을 기억하게 하기 | [ContextDB](contextdb.md) | `touch .contextdb-enable && codex` |
+| 여러 agent 로 함께 작업하기 | [Agent Team](team-ops.md) | `aios team 3:codex "X 구현 후 테스트 실행"` |
+| 진행 상황 보기 | [HUD 가이드](hud-guide.md) | `aios team status --provider codex --watch` |
+| 브라우저 자동화 진단하기 | [문제 해결](troubleshooting.md) | `aios internal browser doctor --fix` |
 
-- **기억 시스템** 기반의 세션 간 컨텍스트 유지 (`ContextDB`)
-- **Hermes 엔진 스타일 워크플로** 자동화와 실행 제어
-- **Agent Team** 멀티 에이전트 협업
-- **자동 subagent 계획** + preflight/merge gate
+## RexCLI 는 무엇인가요
 
-## 키워드 -> 기능 매핑
+RexCLI 는 새로운 coding agent 가 아닙니다. 로컬 우선의 기능 레이어입니다.
 
-- `기억 시스템` -> [ContextDB](contextdb.md)
-- `Hermes 엔진` -> [CLI 워크플로](use-cases.md)
-- `Agent Team` -> [Agent Team & HUD](team-ops.md)
-- `자동 subagent 계획` -> [아키텍처](architecture.md)
+1. **기억 레이어 ContextDB**: 이벤트, checkpoint, context pack 을 현재 프로젝트에 저장해 터미널을 다시 열어도 이어서 작업할 수 있습니다.
+2. **워크플로 레이어 Superpowers**: 요구를 계획으로 나누고, 증거 기반으로 디버깅하고, 완료 전에 검증합니다.
+3. **협업 레이어 Agent Team**: 명확히 분리 가능한 작업을 여러 CLI worker 에게 맡기고 HUD 로 상태를 추적합니다.
+4. **도구 레이어 Browser MCP + Privacy Guard**: agent 가 브라우저를 사용할 수 있게 하고, 민감한 설정은 공유 전에 마스킹합니다.
 
-## 고급 디자인 스킬: 페이지 제작
+즉, 여전히 `codex`, `claude`, `gemini` 를 실행합니다. RexCLI 는 이 도구들이 더 잘 기억하고, 더 잘 협업하고, 덜 추측하게 만듭니다.
 
-모호한 요청에서도 일관된 고품질 UI를 만들려면:
+## 새 사용자를 위한 추천 경로
 
-- [고급 디자인 스킬](advanced-design-skills.md)에서 `DESIGN.md`를 먼저 고정하고 `frontend-design`으로 구현
-- `Patch/Restyle/Flow` 3모드로 요구를 수렴
-- 제품 기본값으로 가이드의 시스템 프롬프트를 적용
-
-## 최신 기능
-
-- [고급 디자인 스킬 페이지 제작: 모호한 프롬프트를 실전 UI로](/blog/ko/advanced-design-skills-page-building/)
-- [AIOS RL Training System](/blog/rl-training-system/)
-- [ContextDB Search Upgrade: FTS5/BM25 by Default](/blog/contextdb-fts-bm25-search/)
-- [Windows CLI Startup Stability Update](/blog/windows-cli-startup-stability/)
-- [Orchestrate Live: Subagent Runtime](/blog/orchestrate-live/)
-
-## 뭐하는 건데?
-
-RexCLI는 지금 쓰고 있는 CLI 에이전트 위에 얇은能力 레이어를 덮는 거야. `codex`, `claude`, `gemini`, `opencode`를 대체하는 게 아니라, 더 쓰기 좋게 만들어주는 거지.
-
-4가지 기능:
-
-1. **기억이 세션跨걸림** - 터미널 껐다 켜도 이전 프로젝트 맥락이 그대로 있어. 동일 프로젝트는 여러 디바이스에서 기억 공유.
-2. **브라우저 자동화** - MCP로 Chrome控制的 수 있어.
-3. **Superpowers 智能 계획** - 요구사항 자동 분해, 병렬 태스크分发, 자동 검증. 병렬 설정은 [라우팅/병렬 프로필](route-concurrency-profiles.md) (`3+3` / `4+4` / debug) 참고.
-4. **프라이버시 가드** - 설정 파일 읽을 때 자동으로 시크릿 마스킹.
-
-## 누가 쓰면 좋을까?
-
-- 이미 `codex`, `claude`, `gemini`, `opencode` 중 하나라도 쓰고 있음
-- 터미널 재시작해도 워크플로 이어갔으면 좋겠음
-- 브라우저 자동화 필요한데 도구 바꾸고 싶지 않음
-- 베스트 프랙티스를 강제하는 자동화 스킬이 필요함
-
-## 빠르게 시작
+### 첫날: 먼저 실행하기
 
 ```bash
 curl -fsSL https://github.com/rexleimo/rex-cli/releases/latest/download/aios-install.sh | bash
@@ -73,37 +48,38 @@ source ~/.zshrc
 aios
 ```
 
-위 명령은 stable release 설치 경로입니다. 미출시 `main` 동작을 쓰고 싶다면 [빠른 시작](getting-started.md)의 개발용 `git clone` 경로를 사용하세요.
+TUI 에서 **Setup** 을 선택한 뒤 **Doctor** 를 실행하세요.
 
-먼저 `aios`를 실행해 전체 화면 TUI를 열고 **Setup**을 선택한 뒤, 마지막에 **Doctor**를 실행하세요.
-Windows PowerShell 절차는 [빠른 시작](getting-started.md)에 있습니다.
+### Step 2: 프로젝트에서 기억 켜기
 
-## 들어있는 거
+```bash
+cd /path/to/your/project
+touch .contextdb-enable
+codex
+```
 
-| 기능 | 하는 일 |
-|---|---|
-| ContextDB | 세션 간 영구 기억 |
-| Playwright MCP | 브라우저 자동화 |
-| Superpowers | 자동 계획(자동 분해, 병렬 분배, 자동 검증) + 라우팅/병렬 프로필(기본 `3+3`) |
-| Privacy Guard | 민감정보 자동 마스킹 |
+이후 같은 프로젝트에서 `codex` / `claude` / `gemini` 를 시작하면 RexCLI 가 같은 프로젝트 컨텍스트에 연결합니다.
 
-## FAQ
+### Step 3: 분리 가능한 작업에만 Agent Team 사용
 
-### RexCLI는 coding agent용 기억 시스템인가요?
-네. `ContextDB`가 같은 저장소에서 세션 간 문맥을 보존하고 CLI 간 핸드오프를 지원합니다.
+```bash
+aios team 3:codex "로그인 모듈을 리팩터링하고 완료 전에 관련 테스트 실행"
+aios team status --provider codex --watch
+```
 
-### Hermes 스타일 오케스트레이션을 할 수 있나요?
-네. `team`과 `orchestrate`로 단계 실행, 라우팅, 검증 게이트를 구성할 수 있습니다.
+작업이 아직 불명확하다면 일반 인터랙티브 `codex` 로 먼저 분석하세요. 명확히 나눌 수 있을 때만 `team` 을 사용합니다.
 
-### subagent 자동 계획을 지원하나요?
-네. `single/subagent/team` 라우팅 판단과 실행 가드레일을 제공합니다.
+## 흔한 오해
 
-## 더 보기
+- **모든 작업에 Agent Team 이 필요한 것은 아닙니다**: 단일 파일 수정, 작은 bug, 불명확한 요구는 단일 agent 로 시작하세요.
+- **첫날 모든 환경 변수를 외울 필요는 없습니다**: 먼저 `aios` TUI 를 사용하세요.
+- **기능 목록부터 보지 마세요**: “지금 무엇을 하고 싶은가”에서 명령을 고르세요.
+- **Doctor 를 건너뛰지 마세요**: install, browser, skills, native 설정을 직접 바꾸기 전에 진단하세요.
 
-- [Superpowers](superpowers.md) - CLI를 더 똑똑하게 만드는 자동화 스킬
-- [빠른 시작](getting-started.md)
-- [Raw CLI vs RexCLI](cli-comparison.md)
-- [사례 집합](case-library.md)
-- [아키텍처](architecture.md)
-- [ContextDB](contextdb.md)
-- [변경 로그](changelog.md)
+## 다음에 읽을 문서
+
+- [빠른 시작](getting-started.md): install, Setup, Doctor, 첫 실행.
+- [시나리오별 명령 찾기](use-cases.md): 작업별 진입점 선택.
+- [Agent Team](team-ops.md): 언제 team 을 쓰고, 어떻게 모니터링하고, 어떻게 마무리할지.
+- [ContextDB](contextdb.md): 기억이 세션을 넘어 유지되는 방식.
+- [문제 해결](troubleshooting.md): install, browser, live 실행 문제.

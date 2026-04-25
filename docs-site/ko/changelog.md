@@ -12,6 +12,20 @@ description: 릴리스 이력, 업그레이드 안내, 관련 문서 링크.
 - GitHub 변경 파일: [CHANGELOG.md](https://github.com/rexleimo/rex-cli/blob/main/CHANGELOG.md)
 - GitHub Releases: [releases](https://github.com/rexleimo/rex-cli/releases)
 
+## 최신 안정 버전
+
+- `1.6.3` (2026-04-25):
+  - 중국어 문서의 시각적 온보딩 구조를 English, 日本語, 한국어 페이지로 동기화.
+  - Overview, Quick Start, 시나리오별 명령, Agent Team 페이지를 같은 초보자 우선 흐름으로 업데이트.
+
+- `1.6.2` (2026-04-25):
+  - 공식 문서에 초보자 경로, TUI Setup/Doctor, ContextDB 기억 루프, Agent Team/HUD 시각 가이드를 추가.
+  - 새 사용자가 고급 ContextDB, Agent Team, orchestration 개념보다 먼저 작업별 명령을 고를 수 있도록 온보딩을 개선.
+
+- `1.6.1` (2026-04-25):
+  - clean Linux checkout 에서 GitHub Release pipeline 이 통과하도록 복구.
+  - 중국어 온보딩 문서를 단순화해 새 사용자가 작업별로 명령을 찾기 쉽게 개선.
+
 ## 최근 버전
 
 - `main` (미릴리스):

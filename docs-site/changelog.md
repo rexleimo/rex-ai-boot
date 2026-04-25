@@ -12,6 +12,20 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
 - GitHub changelog file: [CHANGELOG.md](https://github.com/rexleimo/rex-cli/blob/main/CHANGELOG.md)
 - GitHub releases: [releases](https://github.com/rexleimo/rex-cli/releases)
 
+## Latest Stable
+
+- `1.6.3` (2026-04-25):
+  - Syncs the Chinese visual onboarding structure to English, Japanese, and Korean pages.
+  - Rewrites localized Overview, Quick Start, scenario commands, and Agent Team pages around the same beginner-first path.
+
+- `1.6.2` (2026-04-25):
+  - Adds visual onboarding for the official docs: beginner path, TUI Setup/Doctor, ContextDB memory loop, and Agent Team/HUD diagrams.
+  - Reorients onboarding around task-first commands before advanced ContextDB, Agent Team, and orchestration concepts.
+
+- `1.6.1` (2026-04-25):
+  - Restores the GitHub Release pipeline for clean Linux checkouts.
+  - Simplifies Chinese onboarding docs so new users can find commands by task first.
+
 ## Recent Versions
 
 - `main` (Unreleased):

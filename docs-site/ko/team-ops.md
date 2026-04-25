@@ -1,205 +1,199 @@
 ---
-title: Agent Team & HUD
-description: HUD 대시보드와 Team Ops 상태 추적으로 멀티 에이전트 협업을 모니터링하고 관리하세요.
+title: Agent Team 실전
+description: Agent Team 을 언제 쓰고, 어떻게 시작・모니터링・마무리하며, 언제 쓰지 말아야 하는지.
 ---
 
-# Agent Team 과 HUD
+# Agent Team 실전
 
-AIOS 는 **Team Operations (Team Ops)** 를 제공합니다 — Codex CLI, Claude Code, Gemini CLI 세션 전체의 멀티 에이전트 협업을 모니터링하고 관리하기 위한 도구 세트.
+Agent Team 은 “많을수록 좋은” 기능이 아닙니다. **분리 가능하고, 경계가 명확하며, 병렬 실행해도 안전한** 작업에 적합합니다.
 
-## 개요
-
-Team Ops 를 통해 다음을 확인할 수 있습니다:
-- **실시간 세션 상태** HUD (Heads-Up Display) 를 통해
-- **히스토리 세션 분석** quality-gate 추적과 함께
-- **스킬 개선 기회** skill candidates 를 통해
-- **Dispatch hindsight** 실패한 실행 디버깅용
-
-## 빠른 시작
-
-### 현재 세션 상태 보기
+하나만 기억한다면:
 
 ```bash
-# 현재 세션의 최소 HUD
-aios hud
-
-# 워치 모드와 전체 상세 정보
-aios hud --watch --preset full
-
-# 프로바이더와 세션 지정
-aios hud --provider codex --session <session-id>
+aios team 3:codex "X 구현, 완료 전 테스트 실행, 변경 요약"
+aios team status --provider codex --watch
 ```
 
-### Team Status 와 History
+<figure class="rex-visual">
+  <img src="../assets/visual-agent-team-monitoring.svg" alt="Agent Team 시작 전 체크리스트와 HUD 상태 모니터링 그림">
+  <figcaption>team 을 시작하기 전에 정말 병렬에 적합한지 확인하세요. 모니터링 창은 진행 상황만 보여주며, 닫아도 메인 작업은 중지되지 않습니다.</figcaption>
+</figure>
+
+## team 을 써야 할 때
+
+적합:
+
+- 하나의 요구를 frontend, backend, tests, docs 등 비교적 독립적인 부분으로 나눌 수 있음.
+- “tests must pass”, “docs updated” 같은 acceptance criteria 를 이미 알고 있음.
+- 병렬 실행에 추가 token 과 대기 비용을 지불할 수 있음.
+- 여러 worker 를 HUD/history 로 추적해야 함.
+
+부적합:
+
+- 요구가 아직 불명확하고 방향을 탐색 중.
+- 작은 bug, 단일 파일 수정, 일회성 command.
+- 여러 worker 가 같은 파일을 수정할 가능성이 높음.
+- 안정적 재현이 필요한 debugging 중.
+
+확실하지 않으면 일반 인터랙티브로 시작하세요:
 
 ```bash
-# 팀 상태를 실시간으로 모니터링
+codex
+```
+
+team 시작 전 3가지를 확인하세요:
+
+<div class="rex-checklist">
+  <div class="rex-checklist__item">2개 이상의 독립 모듈로 나눌 수 있음</div>
+  <div class="rex-checklist__item">worker 들이 같은 파일 묶음을 수정하지 않음</div>
+  <div class="rex-checklist__item">acceptance criteria 를 한 문장으로 설명 가능</div>
+</div>
+
+## 10분 실행 흐름
+
+### 1) 작업을 명확히 쓰기
+
+좋은 작업 설명에는 goal, boundary, acceptance criteria 가 들어갑니다.
+
+```bash
+aios team 3:codex "로그인 폼 오류 메시지 개선; auth API 는 변경하지 않음; 완료 전 관련 테스트 실행 및 docs 업데이트"
+```
+
+### 2) 모니터링 시작
+
+```bash
+aios team status --provider codex --watch
+```
+
+가벼운 모드:
+
+```bash
+aios team status --provider codex --watch --preset minimal --fast
+```
+
+### 3) 기록과 실패 보기
+
+```bash
+aios team history --provider codex --limit 20
+aios team history --provider codex --quality-failed-only
+```
+
+### 4) 마무리 전 quality gate
+
+```bash
+aios quality-gate pre-pr --profile strict
+```
+
+quality gate 가 실패하면 먼저 failure category 를 확인하세요. 바로 worker 를 더 늘리지 마세요.
+
+## worker 수 선택
+
+| 레벨 | 명령 | 적합한 상황 |
+|---|---|---|
+| 안정 | `aios team 2:codex "task"` | 첫 실행, 파일 겹침 가능성 있음 |
+| 권장 | `aios team 3:codex "task"` | 대부분의 일상 기능 |
+| 고처리량 | `aios team 4:codex "task"` | 모듈이 독립적이고 테스트가 명확함 |
+
+충돌, 중복 수정, 긴 대기가 보이면 worker 를 더하지 말고 concurrency 를 낮추세요.
+
+## provider 선택
+
+```bash
+aios team 3:codex "task"
+aios team 2:claude "task"
+aios team 2:gemini "task" --dry-run
+```
+
+추천:
+
+- 일상 구현은 `codex` 우선.
+- 긴 분석이나 방안 비교는 `claude` 시도.
+- command 영향이 불확실하면 `--dry-run` 추가.
+
+## resume 과 retry
+
+실행이 중단되면 먼저 history 확인:
+
+```bash
+aios team history --provider codex --limit 5
+```
+
+그다음 blocked jobs 만 retry:
+
+```bash
+aios team --resume <session-id> --retry-blocked --provider codex --workers 2
+```
+
+이전 실패 원인을 이해하기 전에 더 큰 team 을 새로 시작하지 마세요.
+
+## team 과 orchestrate 차이
+
+| 기능 | 더 적합한 용도 |
+|---|---|
+| `aios team ...` | 하나의 작업에 여러 worker 를 빠르게 시작 |
+| `aios orchestrate ... --execute dry-run` | staged DAG 와 gates 를 preview |
+| `aios orchestrate ... --execute live` | 엄격한 단계 실행이 필요한 메인테이너 |
+
+새 사용자는 `team` 을 우선 사용하세요. `orchestrate live` 는 명시적 opt-in 이 필요합니다:
+
+```bash
+export AIOS_EXECUTE_LIVE=1
+export AIOS_SUBAGENT_CLIENT=codex-cli
+aios orchestrate --session <session-id> --dispatch local --execute live
+```
+
+## 자주 쓰는 명령
+
+```bash
+# team 시작
+aios team 3:codex "Ship X"
+
+# 현재 상태 모니터링
 aios team status --provider codex --watch
 
-# 세션 히스토리 보기 (최근 20 회 실행)
+# 최근 기록
 aios team history --provider codex --limit 20
+
+# 실패만 보기
+aios team history --provider codex --quality-failed-only
+
+# 현재 세션 HUD
+aios hud --provider codex
+
+# blocked jobs retry
+aios team --resume <session-id> --retry-blocked --provider codex --workers 2
 ```
 
-## 주요 구성 요소
+## 고급 운영 참고
 
-### HUD (Heads-Up Display)
+아래 명령은 초보자 흐름에 익숙해진 뒤 사용하세요.
 
-HUD 는 단일 세션의 실시간 대시보드를 제공합니다:
-- 현재 작업 목표
-- Dispatch 상태 (ジョブ 실행됨, 블록됨, 보류 중)
-- Quality-gate 결과
-- Skill candidate 가용성
-- Hindsight 분석 (실패 패턴, 회귀)
+### HUD presets
 
-**HUD Presets:**
-| Preset | 사용 사례 |
-|--------|----------|
-| `minimal` | 장기간 워치 세션 |
-| `compact` | 터미널 친화적인 요약 |
-| `focused` (기본값) | 균형 잡힌 상세 정보 |
+| Preset | 용도 |
+|---|---|
+| `minimal` | 긴 watch 세션 |
+| `compact` | 터미널 친화 요약 |
+| `focused` | 균형 잡힌 기본값 |
 | `full` | 전체 진단 |
 
-### Team Status
+### Skill candidates
 
-프로바이더의 모든 최근 세션의 집계 상태를 표시:
-- 활성화 vs 완료 세션
-- 성공/실패율
-- Quality-gate 요약
-- 주요 skill candidates
-
-### Team History
-
-과거 세션의 히스토리 분석:
-- Dispatch 결과
-- 카테고리별 quality-gate 실패
-- Hindsight 패턴 (반복 실패, 회귀)
-- Fix hints 와 권장 사항
-
-## Skill Candidates
-
-**Skill Candidates** 는 실패한 세션에서 추출된 자동화된 개선 제안:
-
-1. 세션이 quality-gate 에 실패
-2. Learn-eval 이 실패 패턴 분석
-3. Skill patch draft 생성
-4. 당신이 검토하고 패치 적용
-
-### Skill Candidates 보기
+Skill candidates 는 실패한 세션에서 추출되는 개선 제안입니다. 온보딩 첫 단계가 아니라 실패 복기 때 확인하세요.
 
 ```bash
-# 현재 세션의 candidates 보기
 aios team status --show-skill-candidates
-
-# skill candidate 상세 뷰와 함께 HUD
-aios hud --show-skill-candidates --skill-candidate-view detail
-
-# 특정 세션의 candidates 리스트
-aios team skill-candidates list --session-id <session-id>
+aios team skill-candidates list --session <session-id>
+aios team skill-candidates export --session <session-id> --output ./candidate.patch.md
 ```
 
-### 패치 내보내기 및 적용
+적용 전에는 반드시 수동으로 패치를 검토하세요. 특히 skills, hooks, MCP 설정을 바꾸는 제안은 더 주의해야 합니다.
 
-```bash
-# 패치 템플릿을 artifact 파일로 내보내기
-aios team status --export-skill-candidate-patch-template
-
-#カスタム 출력 경로로 내보내기
-aios team skill-candidates export --output-path ./my-patch.md
-
-# skill candidate 패치 적용
-aios skill-candidate apply <candidate-id>
-```
-
-### Draft ID 로 필터
-
-```bash
-# draft ID 로 skill candidates 필터
-aios team status --show-skill-candidates --draft-id <draft-id>
-
-# draft 필터와 함께 HUD
-aios hud --show-skill-candidates --draft-id <draft-id>
-```
-
-## Quality-Gate 필터
-
-quality-gate 결과로 히스토리 필터:
-
-```bash
-# 실패한 세션만 표시
-aios team history --quality-failed-only
-
-# 특정 카테고리로 필터
-aios team history --quality-category clarity
-aios team history --quality-category sample.latency-watch
-
-# 카테고리 접두사로 필터 ( cualquiera 일치)
-aios team history --quality-category-prefix clarity,sample
-
-# 접두사로 필터 (모두 일치)
-aios team history --quality-category-prefixes clarity,dispatch --prefix-mode all
-```
-
-## 명령어 참조
-
-### `aios hud`
-
-| 옵션 | 기본값 | 설명 |
-|--------|---------|-------------|
-| `--session-id` | current | 타겟 세션 ID |
-| `--provider` | codex | 프로바이더 (codex/claude/gemini) |
-| `--preset` | focused | HUD preset (minimal/compact/focused/full) |
-| `--watch` | false | 지속적 모니터링 |
-| `--fast` | false | 빠른 모드 (데이터 감소) |
-| `--show-skill-candidates` | false | skill candidate 상세 정보 표시 |
-| `--skill-candidate-limit` | 6 | 표시할 최대 candidates (1-20) |
-| `--skill-candidate-view` | inline | 뷰 모드 (inline/detail) |
-| `--export-skill-candidate-patch-template` | false | 패치 artifact 내보내기 |
-| `--draft-id` | - | draft ID 로 필터 |
-| `--json` | false | JSON 으로 출력 |
-| `--interval-ms` | 1000 | 워치 새로고침 간격 |
-
-### `aios team status`
-
-| 옵션 | 기본값 | 설명 |
-|--------|---------|-------------|
-| `--session-id` | current | 타겟 세션 ID |
-| `--provider` | codex | 프로바이더 (codex/claude/gemini) |
-| `--preset` | focused | HUD preset |
-| `--watch` | false | 지속적 모니터링 |
-| `--fast` | false | 빠른 모드 |
-| `--show-skill-candidates` | false | skill candidates 표시 |
-| `--skill-candidate-limit` | 6 | 최대 candidates (1-20) |
-| `--export-skill-candidate-patch-template` | false | 패치 artifact 내보내기 |
-| `--draft-id` | - | draft ID 로 필터 |
-| `--json` | false | JSON 으로 출력 |
-
-### `aios team history`
-
-| 옵션 | 기본값 | 설명 |
-|--------|---------|-------------|
-| `--provider` | codex | 프로바이더 (codex/claude/gemini) |
-| `--limit` | 10 | 표시할 최대 세션 수 |
-| `--concurrency` | 4 | 병렬 세션 읽기 |
-| `--fast` | false | hindsight 상세 정보 스킵 |
-| `--quality-failed-only` | false | 실패한 세션만 표시 |
-| `--quality-category` | - | 카테고리로 필터 |
-| `--quality-category-prefix` | - | 접두사로 필터 |
-| `--quality-category-prefixes` | - | 여러 접두사 |
-| `--quality-category-prefix-mode` | any | 일치 모드 (any/all) |
-| `--draft-id` | - | draft ID 로 필터 |
-| `--since` | - | 날짜로 필터 (ISO) |
-| `--status` | - | 상태로 필터 |
-| `--json` | false | JSON 으로 출력 |
-
-### `aios team skill-candidates`
-
-| 서브명령 | 설명 |
-|------------|-------------|
-| `list` | 세션의 skill candidates 리스트 |
-| `export` | 패치 템플릿 artifact 내보내기 |
 
 ## 관련 문서
 
-- [HUD 가이드](hud-guide.md) - 자세한 HUD 사용법 및 커스터마이즈
-- [Skill Candidates](skill-candidates.md) - 스킬 패치 이해 및 적용
-- [ContextDB](contextdb.md) - 세션 스토리지 및 메모리 시스템
+- [시나리오별 명령 찾기](use-cases.md)
+- [HUD 가이드](hud-guide.md)
+- [Skill Candidates](skill-candidates.md)
+- [라우팅/병렬 프로필](route-concurrency-profiles.md)
+- [문제 해결](troubleshooting.md)

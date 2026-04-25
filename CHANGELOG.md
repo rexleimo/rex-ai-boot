@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-04-25
+
+- docs(site): sync visual onboarding across locales
+
 ## [1.6.2] - 2026-04-25
 
 - docs(site): add visual onboarding for Chinese docs

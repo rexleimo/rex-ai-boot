@@ -1,72 +1,46 @@
 ---
 title: Overview
-description: AI memory system docs for Codex/Claude/Gemini/OpenCode with Hermes workflow guidance, Agent Team runtime, and automatic subagent planning.
+description: Start from the task you want to solve, then go deeper into ContextDB, Agent Team, browser automation, and skills.
 ---
 
 # RexCLI
 
-> Keep your current CLI workflow. Add OpenClaw-style capabilities on top of `codex`, `claude`, `gemini`, and `opencode`.
+> Keep your current habits. Add memory, collaboration, and verification to the `codex` / `claude` / `gemini` CLIs you already use.
 
-[Star on GitHub](https://github.com/rexleimo/rex-cli?utm_source=cli_rexai_top&utm_medium=docs&utm_campaign=english_growth&utm_content=home_hero_star){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="github_star" }
-[Quick Start](getting-started.md){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="quick_start" }
-[Compare Workflows](cli-comparison.md){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="compare_workflows" }
-[Superpowers](superpowers.md){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="superpowers" }
+[3-Minute Quick Start](getting-started.md){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="quick_start" }
+[How To Use Agent Team](team-ops.md){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="team_ops" }
+[Find Commands By Scenario](use-cases.md){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="use_cases" }
+[GitHub](https://github.com/rexleimo/rex-cli?utm_source=cli_rexai_top&utm_medium=docs&utm_campaign=en_onboarding&utm_content=home_hero_star){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="github_star" }
 
-Project URL: <https://github.com/rexleimo/rex-cli>
+<figure class="rex-visual">
+  <img src="assets/visual-new-user-path.svg" alt="RexCLI beginner path: install and run Doctor, enable project memory, then use Agent Team when needed">
+  <figcaption>New users should take the shortest path first: install, run Doctor, enable project memory, and only start Agent Team when the task is clearly splittable.</figcaption>
+</figure>
 
-## Quick Answer
+## Pick What You Want To Do
 
-RexCLI is an **AI memory system + orchestration layer** for coding agents.  
-Use it when you want:
+| What you want now | Read first | Shortest command |
+|---|---|---|
+| Install and open the TUI | [Quick Start](getting-started.md) | `aios` |
+| Give an agent project memory | [ContextDB](contextdb.md) | `touch .contextdb-enable && codex` |
+| Run multiple agents together | [Agent Team](team-ops.md) | `aios team 3:codex "Implement X and run tests"` |
+| See task progress | [HUD Guide](hud-guide.md) | `aios team status --provider codex --watch` |
+| Diagnose browser automation | [Troubleshooting](troubleshooting.md) | `aios internal browser doctor --fix` |
 
-- **Memory system** behavior across CLI sessions (`ContextDB`)
-- **Hermes engine style workflows** for automation and execution control
-- **Agent Team** collaboration for multi-agent delivery
-- **Automatic subagent planning** with preflight and merge gates
+## What RexCLI Is
 
-## Keyword-to-Feature Map
+RexCLI is not another coding agent. It is a local-first capability layer:
 
-- `AI memory system` -> [ContextDB](contextdb.md)
-- `memory system` -> [Case - Cross-CLI Handoff](case-cross-cli-handoff.md)
-- `Hermes engine workflows` -> [CLI Workflows](use-cases.md)
-- `Agent Team` -> [Agent Team & HUD](team-ops.md)
-- `automatic subagent planning` -> [Architecture](architecture.md)
+1. **Memory layer: ContextDB** - stores events, checkpoints, and context packets inside the current project so work survives terminal restarts.
+2. **Workflow layer: Superpowers** - turns vague requests into plans, debugs with evidence, and verifies before completion.
+3. **Collaboration layer: Agent Team** - sends clearly separable work to multiple CLI workers and tracks them with HUD.
+4. **Tool layer: Browser MCP + Privacy Guard** - lets agents use the browser and redacts sensitive config before sharing.
 
-## Advanced Design Skills for Page Building
+In short: you still run `codex`, `claude`, and `gemini`; RexCLI helps them remember more, coordinate better, and guess less.
 
-Need higher-quality page output from fuzzy prompts?
+## Recommended Path For New Users
 
-- Use [Advanced Design Skills](advanced-design-skills.md) to lock style with `DESIGN.md` and implement with `frontend-design`.
-- Apply the `Patch/Restyle/Flow` pattern to keep delivery predictable.
-- For product teams, ship the built-in system prompt from the guide as your default.
-
-## Latest
-
-- [Advanced Design Skills for Page Building: From Vague Prompts to Production UI](/blog/advanced-design-skills-page-building/)
-- [AIOS RL Training System: Multi-Environment Reinforcement Learning](/blog/rl-training-system/)
-- [ContextDB Search Upgrade: FTS5/BM25 by Default](/blog/contextdb-fts-bm25-search/)
-- [Windows CLI Startup Stability Update](/blog/windows-cli-startup-stability/)
-- [Orchestrate Live: Subagent Runtime](/blog/orchestrate-live/)
-
-## What is this?
-
-RexCLI is a thin layer on top of your existing CLI agents. It doesn't replace them—it makes them work better together.
-
-Four things it adds:
-
-1. **Memory that survives restarts** - Your project context comes back automatically after you close and reopen the terminal, and syncs across devices for the same project.
-2. **Browser automation** - Control Chrome via MCP without manually clicking around.
-3. **Superpowers** - Smart planning: auto-decompose requirements, parallel task distribution, automatic verification. Use the [route + concurrency profile guide](route-concurrency-profiles.md) to choose `3+3` / `4+4` / debug modes.
-4. **Privacy Guard** - Automatically redacts secrets before they leak into prompts or logs.
-
-## Who is this for?
-
-- You already use `codex`, `claude`, `gemini`, or `opencode` regularly
-- You want your workflows to survive terminal restarts
-- You need browser automation without switching tools
-- You want automation skills that enforce best practices
-
-## Quick Start
+### Day 1: Get It Running
 
 ```bash
 curl -fsSL https://github.com/rexleimo/rex-cli/releases/latest/download/aios-install.sh | bash
@@ -74,37 +48,38 @@ source ~/.zshrc
 aios
 ```
 
-The command above is the stable release install path. If you want unreleased `main` behavior, use the dev-friendly `git clone` flow from [Quick Start](getting-started.md) instead.
+In the TUI, choose **Setup**, then run **Doctor**.
 
-Launch `aios` to open the full-screen setup TUI, choose **Setup**, and run **Doctor** before you leave.
-Windows PowerShell commands are listed on the [Quick Start](getting-started.md) page.
+### Step 2: Enable Memory In A Project
 
-## What's Included
+```bash
+cd /path/to/your/project
+touch .contextdb-enable
+codex
+```
 
-| Feature | What it does |
-|---|---|
-| ContextDB | Persistent memory across sessions |
-| Playwright MCP | Browser automation |
-| Superpowers | Smart planning (auto-decompose, parallel dispatch, auto-verify) + route/concurrency profiles (`3+3` default) |
-| Privacy Guard | Redact secrets automatically |
+From then on, when you start `codex` / `claude` / `gemini` in this project, RexCLI connects them to the same project context.
 
-## FAQ
+### Step 3: Use Agent Team Only For Splittable Work
 
-### Is RexCLI a memory system for coding agents?
-Yes. `ContextDB` persists and rehydrates project memory across CLI sessions and across agent clients in the same repository.
+```bash
+aios team 3:codex "Refactor the login module and run related tests before finishing"
+aios team status --provider codex --watch
+```
 
-### Does RexCLI support Hermes-like orchestration workflows?
-Yes. Use `team` and `orchestrate` flows for staged planning, execution routing, and verification gates.
+If the task is still unclear, start with normal interactive `codex` and ask it to analyze first. Use `team` only when the work can be split cleanly.
 
-### Can it auto-plan subagents for multi-step tasks?
-Yes. RexCLI includes route-aware planning (`single/subagent/team`) and execution guardrails.
+## Common Misunderstandings
 
-## Read More
+- **Not every task needs Agent Team**: use one agent for single-file fixes, small bugs, or unclear requirements.
+- **You do not need every environment variable on day one**: start with the `aios` TUI.
+- **Do not start from the feature list**: start from “what do I want to do?” and copy the command.
+- **Do not skip Doctor**: run diagnostics before changing install, browser, skills, or native config by hand.
 
-- [Superpowers](superpowers.md) - Automation skills that make your CLI smarter
-- [Quick Start](getting-started.md)
-- [Raw CLI vs RexCLI](cli-comparison.md)
-- [Case Library](case-library.md)
-- [Architecture](architecture.md)
-- [ContextDB](contextdb.md)
-- [Changelog](changelog.md)
+## Next Reads
+
+- [Quick Start](getting-started.md): install, Setup, Doctor, and first run.
+- [Find Commands By Scenario](use-cases.md): choose the right entry point by task.
+- [Agent Team](team-ops.md): when to use a team, how to monitor it, and how to finish safely.
+- [ContextDB](contextdb.md): how memory persists across sessions.
+- [Troubleshooting](troubleshooting.md): install, browser, and live execution issues.

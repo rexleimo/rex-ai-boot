@@ -1,68 +1,129 @@
 ---
-title: CLI 워크플로
-description: 인터랙티브 모드와 one-shot 모드.
+title: 시나리오별 명령 찾기
+description: 개념을 먼저 외우지 말고, “지금 무엇을 하고 싶은가”에서 RexCLI 명령을 고르세요.
 ---
 
-# CLI 워크플로
+# 시나리오별 명령 찾기
 
-## 빠른 답변 (AI 검색)
+이 페이지는 한 가지 질문에 답합니다: **지금 어떤 명령을 실행해야 하나요?**
 
-일상적 코딩에는 인터랙티브 모드로 자동 재개하고, 결정적 전체 루프 실행에는 one-shot 모드를 사용하세요.
+<figure class="rex-visual">
+  <img src="../assets/visual-contextdb-memory-loop.svg" alt="ContextDB 프로젝트 기억 루프: .contextdb-enable 후 codex, claude, gemini 가 로컬 프로젝트 기억을 공유">
+  <figcaption>대부분의 시나리오는 하나의 핵심을 중심으로 합니다. 프로젝트 루트에서 ContextDB 를 켜면 서로 다른 CLI 가 같은 로컬 컨텍스트에 연결됩니다.</figcaption>
+</figure>
 
-구체적인 시나리오와 명령 수준 예시가 필요하면 [공식 사례 라이브러리](case-library.md)를 참조하세요.
-
-## 모드 A: 인터랙티브 재개 (기본값)
-
-네이티브 명령을 사용합니다. 래퍼가 자동 실행:
-
-`init -> session:latest/new -> context:pack -> CLI 시작`
+## 설치하고 환경을 확인하고 싶어요
 
 ```bash
+aios
+```
+
+TUI 에서 순서대로 실행하세요:
+
+1. **Setup**: shell wrapper, skills, browser 등 구성요소 설치.
+2. **Doctor**: Node, MCP, skills, native 설정 확인.
+3. **Update**: 이후 업그레이드도 여기서 진행.
+
+명령줄 경로:
+
+```bash
+aios setup --components all --mode opt-in --client all
+aios doctor --native --verbose
+```
+
+## agent 가 현재 프로젝트를 기억하게 하고 싶어요
+
+```bash
+cd /path/to/project
+touch .contextdb-enable
 codex
-claude
-gemini
 ```
 
-일상적 개발에 최적이며, 자동 시작 컨텍스트가 주입됩니다.
+이후 같은 프로젝트에서 `codex`, `claude`, `gemini` 를 실행하면 모두 같은 ContextDB 에 연결됩니다.
 
-## 모드 B: One-shot 자동화
-
-한 명령으로 완전한 폐쇄 루프가 필요할 때:
-
-`init -> session:latest/new -> event:add -> checkpoint -> context:pack`
+## CLI 를 바꿔가며 이어받고 싶어요
 
 ```bash
-scripts/ctx-agent.sh --agent claude-code --prompt "에러를 요약하고 다음 스텝을 제안하세요"
-scripts/ctx-agent.sh --agent gemini-cli --prompt "체크포인트에서 구현을 계속하세요"
-scripts/ctx-agent.sh --agent codex-cli --prompt "테스트를 실행하고 태스크 상태를 업데이트하세요"
+claude   # 먼저 분석
+codex    # 다음 구현
+gemini   # 마지막 검토 또는 비교
 ```
 
-## 크로스 CLI 핸드오프
+모두 같은 프로젝트 디렉터리에서 실행하면 ContextDB 가 이벤트와 checkpoint 를 저장해, 도구를 바꿔도 컨텍스트를 잃을 가능성을 줄입니다.
 
-흔한 플로우:
+## Agent Team 을 켜고 싶어요
 
-1. Claude로 분석.
-2. Codex로 구현.
-3. Gemini로 검증/비교.
-
-세 가지 모두 같은 프로젝트 ContextDB를 읽고 쓰므로 핸드오프가 일관되게 유지됩니다.
-
-## 패스스루 명령
-
-관리 명령은 래핑되지 않고 네이티브로 동작합니다:
+적합: 모듈이 독립적이고, 작업을 나눌 수 있으며, token 비용을 감수할 수 있을 때.
 
 ```bash
-codex mcp
-claude doctor
-gemini extensions
+aios team 3:codex "X 구현, 완료 전 테스트 실행, 변경 요약"
+aios team status --provider codex --watch
 ```
 
-## FAQ
+부적합: 요구가 모호함, 단일 bug, 여러 worker 가 같은 파일을 수정할 가능성이 높음. 이때는 일반 `codex` 부터 시작하세요.
 
-### one-shot 모드는 언제 사용해야 하나요?
+## 진행 상황과 기록을 보고 싶어요
 
-감사 가능하고 단계 완료 실행을 단일 명령으로 필요로 할 때 one-shot을 사용하세요.
+```bash
+aios hud --provider codex
+aios team status --provider codex --watch
+aios team history --provider codex --limit 20
+```
 
-### 한 태스크에서 CLI를 전환할 수 있나요?
+최근 실패만 빠르게 보려면:
 
-네. 공유 프로젝트 ContextDB가 태스크 상태를 잃지 않고 크로스 CLI 핸드오프를 가능하게 합니다.
+```bash
+aios team history --provider codex --quality-failed-only
+```
+
+## quality gate 를 실행하고 싶어요
+
+```bash
+aios quality-gate pre-pr --profile strict
+```
+
+PR 전 또는 큰 변경 후 실행하세요. ContextDB, native/sync, release health 확인을 포함합니다.
+
+## RexCLI 에 단계별 orchestration 을 맡기고 싶어요
+
+먼저 model call 없이 preview:
+
+```bash
+aios orchestrate feature --task "Ship X" --dispatch local --execute dry-run
+```
+
+live 실행이 필요할 때만 명시적으로 활성화:
+
+```bash
+export AIOS_EXECUTE_LIVE=1
+export AIOS_SUBAGENT_CLIENT=codex-cli
+aios orchestrate --session <session-id> --dispatch local --execute live
+```
+
+새 사용자는 `aios team ...` 을 우선 사용하세요. `orchestrate live` 는 session, plan, preflight gate 를 이미 이해한 메인테이너에게 더 적합합니다.
+
+## 브라우저 자동화를 진단하고 싶어요
+
+```bash
+aios internal browser doctor --fix
+aios internal browser cdp-status
+```
+
+페이지 작업이 실패하면 전체를 다시 설치하기 전에 [문제 해결](troubleshooting.md)을 확인하세요.
+
+## secrets 와 config 를 보호하고 싶어요
+
+```bash
+aios privacy read --file .env
+```
+
+`.env`, cookies, tokens, browser profiles 를 model 에 그대로 붙여 넣지 마세요. RexCLI Privacy Guard 는 read output 을 공유하기 전에 마스킹하려고 합니다.
+
+## 선택 기준
+
+- **일상 개발**: `codex` / `claude` / `gemini`
+- **설치/업데이트**: `aios`
+- **Agent Team**: `aios team 3:codex "task"`
+- **진행 상황**: `aios team status --watch`
+- **전달 전**: `aios quality-gate pre-pr --profile strict`
+- **브라우저 문제**: `aios internal browser doctor --fix`

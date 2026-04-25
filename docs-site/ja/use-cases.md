@@ -1,68 +1,129 @@
 ---
-title: CLI ワークフロー
-description: 対話モードと one-shot モード。
+title: シナリオ別コマンド
+description: 先に概念を暗記せず、「今何をしたいか」から RexCLI コマンドを選びます。
 ---
 
-# CLI ワークフロー
+# シナリオ別コマンド
 
-## クイックアンサー（AI 検索）
+このページは1つの質問に答えます: **今どのコマンドを実行すればよいか？**
 
-日常開発には対話モードで自動再開、確定的なフルループ実行には one-shot モードを使用します。
+<figure class="rex-visual">
+  <img src="../assets/visual-contextdb-memory-loop.svg" alt="ContextDB のプロジェクト記憶ループ: .contextdb-enable 後に codex、claude、gemini がローカル記憶を共有">
+  <figcaption>多くのシナリオの中心は同じです。プロジェクトルートで ContextDB を有効化すると、異なる CLI が同じローカル文脈へ接続できます。</figcaption>
+</figure>
 
-具体的なシナリオとコマンドレベルの例が必要ですか？[公式ケースライブラリ](case-library.md)を参照してください。
-
-## モード A：対話モード再開（デフォルト）
-
-ネイティブコマンドを使用。ラッパーが自動実行：
-
-`init -> session:latest/new -> context:pack -> CLI 起動`
+## インストールして環境確認したい
 
 ```bash
+aios
+```
+
+TUI で順番に実行:
+
+1. **Setup**: shell wrapper、skills、browser などをインストール。
+2. **Doctor**: Node、MCP、skills、native 設定を確認。
+3. **Update**: 今後のアップグレードもここから実行。
+
+コマンドライン経路:
+
+```bash
+aios setup --components all --mode opt-in --client all
+aios doctor --native --verbose
+```
+
+## agent に現在のプロジェクトを覚えさせたい
+
+```bash
+cd /path/to/project
+touch .contextdb-enable
 codex
-claude
-gemini
 ```
 
-日常開発に最適で、自動起動コンテキストが注入されます。
+以後、同じプロジェクトで `codex`、`claude`、`gemini` を実行すると、すべて同じ ContextDB に接続します。
 
-## モード B：One-shot 自動化
-
-1 コマンドでフルクローズドループが必要な場合：
-
-`init -> session:latest/new -> event:add -> checkpoint -> context:pack`
+## CLI をまたいで引き継ぎたい
 
 ```bash
-scripts/ctx-agent.sh --agent claude-code --prompt "エラーを要約して次のステップを提案"
-scripts/ctx-agent.sh --agent gemini-cli --prompt "チェックポイントから実装を続行"
-scripts/ctx-agent.sh --agent codex-cli --prompt "テストを実行してタスクステータスを更新"
+claude   # 先に分析
+codex    # 次に実装
+gemini   # 最後にレビューまたは比較
 ```
 
-## クロス CLI handoff
+同じプロジェクトディレクトリで実行すれば、ContextDB がイベントと checkpoint を保存し、ツールを切り替えても文脈を失いにくくします。
 
-よくあるフロー：
+## Agent Team を使いたい
 
-1. Claude で分析。
-2. Codex で実装。
-3. Gemini で検証/比較。
-
-三者とも同じプロジェクト ContextDB を読み書きするため、handoff は一貫性を保ちます。
-
-## 透伝コマンド
-
-管理コマンドはラップされずにネイティブで動作します：
+適している: モジュールが独立、タスクが分割可能、token コストを許容できる。
 
 ```bash
-codex mcp
-claude doctor
-gemini extensions
+aios team 3:codex "X を実装し、完了前にテストを実行し、変更を要約"
+aios team status --provider codex --watch
 ```
 
-## FAQ
+適さない: 要件が曖昧、小さな bug、複数 worker が同じファイルを編集しそうな場合。この時は通常の `codex` から始めます。
 
-### one-shot モードはいつ使うべきですか？
+## 進捗と履歴を見たい
 
-監査可能でステージ完了の実行を1コマンドで必要とする場合に one-shot を使用します。
+```bash
+aios hud --provider codex
+aios team status --provider codex --watch
+aios team history --provider codex --limit 20
+```
 
-### 1つのタスクで CLI を切り替えられますか？
+最近の失敗だけを見たい場合:
 
-はい。共有プロジェクト ContextDB により、タスク状態を失うことなくクロス CLI handoff できます。
+```bash
+aios team history --provider codex --quality-failed-only
+```
+
+## quality gate を実行したい
+
+```bash
+aios quality-gate pre-pr --profile strict
+```
+
+PR 前、または大きな変更後に実行します。ContextDB、native/sync、release health などの確認を含みます。
+
+## RexCLI に段階的に orchestration させたい
+
+まず model call なしで preview:
+
+```bash
+aios orchestrate feature --task "Ship X" --dispatch local --execute dry-run
+```
+
+live 実行するときだけ明示的に有効化:
+
+```bash
+export AIOS_EXECUTE_LIVE=1
+export AIOS_SUBAGENT_CLIENT=codex-cli
+aios orchestrate --session <session-id> --dispatch local --execute live
+```
+
+新規ユーザーは `aios team ...` を優先してください。`orchestrate live` は session、plan、preflight gate を理解しているメンテナー向けです。
+
+## ブラウザ自動化を診断したい
+
+```bash
+aios internal browser doctor --fix
+aios internal browser cdp-status
+```
+
+ページ操作に失敗したら、全体を再インストールする前に [トラブルシューティング](troubleshooting.md) を確認してください。
+
+## secrets と config を守りたい
+
+```bash
+aios privacy read --file .env
+```
+
+`.env`、cookies、tokens、browser profiles をそのまま model に貼らないでください。RexCLI Privacy Guard は read output を共有する前にマスクします。
+
+## 選び方の目安
+
+- **日常開発**: `codex` / `claude` / `gemini`
+- **インストール/更新**: `aios`
+- **Agent Team**: `aios team 3:codex "task"`
+- **進捗**: `aios team status --watch`
+- **納品前**: `aios quality-gate pre-pr --profile strict`
+- **ブラウザ問題**: `aios internal browser doctor --fix`

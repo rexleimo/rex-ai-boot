@@ -1,71 +1,46 @@
 ---
 title: 概要
-description: Codex/Claude/Gemini/OpenCode 向けの AI 記憶システム文書。Hermes ワークフロー、Agent Team、subagent 自動計画をカバー。
+description: まずやりたい作業からコマンドを選び、ContextDB、Agent Team、ブラウザ自動化、skills に進みます。
 ---
 
 # RexCLI
 
-> 今のツールを続けながら、`codex` / `claude` / `gemini` / `opencode` に更强的能力を足す。
+> 今の習慣を変えずに、普段使っている `codex` / `claude` / `gemini` に記憶、協調、検証を追加します。
 
-[GitHub で Star](https://github.com/rexleimo/rex-cli?utm_source=cli_rexai_top&utm_medium=docs&utm_campaign=english_growth&utm_content=home_hero_star){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="github_star" }
-[クイックスタート](getting-started.md){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="quick_start" }
-[ワークフロー比較](cli-comparison.md){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="compare_workflows" }
-[Superpowers](superpowers.md){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="superpowers" }
+[3分クイックスタート](getting-started.md){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="quick_start" }
+[Agent Team の使い方](team-ops.md){ .md-button .md-button--primary data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="team_ops" }
+[シナリオ別コマンド](use-cases.md){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="use_cases" }
+[GitHub](https://github.com/rexleimo/rex-cli?utm_source=cli_rexai_top&utm_medium=docs&utm_campaign=ja_onboarding&utm_content=home_hero_star){ .md-button data-rex-track="cta_click" data-rex-location="home_hero" data-rex-target="github_star" }
 
-プロジェクトURL: <https://github.com/rexleimo/rex-cli>
+<figure class="rex-visual">
+  <img src="../assets/visual-new-user-path.svg" alt="RexCLI 初心者の3ステップ: Doctor、プロジェクト記憶、必要時だけ Agent Team">
+  <figcaption>新規ユーザーは最短経路から始めます。インストール後に Doctor を実行し、プロジェクト記憶を有効化し、タスクが明確に分割できる時だけ Agent Team を使います。</figcaption>
+</figure>
 
-## クイックアンサー
+## まず何をしたいか選ぶ
 
-RexCLI は coding agent 向けの **AI 記憶システム + オーケストレーション層** です。  
-次のニーズに対応します:
+| 今やりたいこと | 先に読む | 最短コマンド |
+|---|---|---|
+| インストールして TUI を開く | [クイックスタート](getting-started.md) | `aios` |
+| agent にプロジェクト文脈を覚えさせる | [ContextDB](contextdb.md) | `touch .contextdb-enable && codex` |
+| 複数 agent で作業する | [Agent Team](team-ops.md) | `aios team 3:codex "X を実装し、テストを実行"` |
+| 進捗を見る | [HUD ガイド](hud-guide.md) | `aios team status --provider codex --watch` |
+| ブラウザ自動化を診断する | [トラブルシューティング](troubleshooting.md) | `aios internal browser doctor --fix` |
 
-- **記憶システム** としてのセッション跨ぎコンテキスト保持（`ContextDB`）
-- **Hermes エンジン系ワークフロー** に近い自動化と実行制御
-- **Agent Team** によるマルチエージェント協調
-- **subagent 自動計画** と preflight/merge gate
+## RexCLI とは
 
-## キーワードと機能の対応
+RexCLI は新しい coding agent ではありません。ローカル優先の能力レイヤーです。
 
-- `記憶システム` -> [ContextDB](contextdb.md)
-- `Hermes エンジン` -> [CLI ワークフロー](use-cases.md)
-- `Agent Team` -> [Agent Team & HUD](team-ops.md)
-- `subagent 自動計画` -> [アーキテクチャ](architecture.md)
+1. **記憶レイヤー ContextDB**: イベント、checkpoint、context pack を現在のプロジェクトに保存し、ターミナル再起動後も続きから作業できます。
+2. **ワークフローレイヤー Superpowers**: 要件を計画に分解し、証拠ベースでデバッグし、完了前に検証します。
+3. **協調レイヤー Agent Team**: 明確に分割できるタスクを複数 CLI worker に渡し、HUD で状態を追跡します。
+4. **ツールレイヤー Browser MCP + Privacy Guard**: agent がブラウザを使えるようにし、機密設定は共有前にマスクします。
 
-## 高度デザインスキル: ページ制作
+つまり、あなたは引き続き `codex`、`claude`、`gemini` を実行します。RexCLI はそれらに記憶、協調、検証を足します。
 
-曖昧な依頼でも高品質 UI を安定して作るには:
+## 新規ユーザーの推奨ルート
 
-- [高度デザインスキル](advanced-design-skills.md) で `DESIGN.md` を先に固定し、`frontend-design` で実装
-- `Patch/Restyle/Flow` の3モードで要件を収束
-- プロダクト組み込み時はガイド内のシステムプロンプトを既定化
-
-## 最新機能
-
-- [高度デザインスキルでページ制作: 曖昧プロンプトを本番 UI に変える](/blog/ja/advanced-design-skills-page-building/)
-- [AIOS RL Training System](/blog/rl-training-system/)
-- [ContextDB Search Upgrade: FTS5/BM25 by Default](/blog/contextdb-fts-bm25-search/)
-- [Windows CLI Startup Stability Update](/blog/windows-cli-startup-stability/)
-- [Orchestrate Live: Subagent Runtime](/blog/orchestrate-live/)
-
-## これは何か？
-
-RexCLIは、すでにあるCLIエージェントの上に薄い能力レイヤーを載せるもの。`codex`や`claude`などを替换せず、もっと使いやすくする。
-
-4つのできること：
-
-1. **記憶がセッション跨げる** - ターミナル閉じてまた開いても、前のプロジェクト状況がそのまま。同一プロジェクトなら複数デバイスで記憶共有。
-2. **ブラウザ自動化** - MCP経由でChromeを操作できる。
-3. **Superpowers 智能計画** - 要件自動分解、並列タスク分发、自动検証。並列設定は [ルーティングと並列プロファイル](route-concurrency-profiles.md)（`3+3` / `4+4` / debug）を参照。
-4. **プライバシーガード** - 設定ファイル読み込む時、自動でシークレットをマスク。
-
-## 誰のために？
-
-- すでに `codex` / `claude` / `gemini` / `opencode` のいずれかを使っている
-- ターミナル再起動してもワークフローを続けたい
-- ブラウザ自動化が必要だけどツールを変えたくない
-- ベストプラクティスを強制する自動化スキルがほしい
-
-## クイックスタート
+### 1日目: まず動かす
 
 ```bash
 curl -fsSL https://github.com/rexleimo/rex-cli/releases/latest/download/aios-install.sh | bash
@@ -73,37 +48,38 @@ source ~/.zshrc
 aios
 ```
 
-上のコマンドは stable release 用インストール経路です。未リリースの `main` を使いたい場合は、[クイックスタート](getting-started.md) にある開発用 `git clone` 経路を使ってください。
+TUI で **Setup** を選び、その後 **Doctor** を実行します。
 
-まず `aios` を起動して全画面 TUI を開き、**Setup** を選んで、最後に **Doctor** を実行してください。
-Windows PowerShell の手順は [クイックスタート](getting-started.md) にあります。
+### Step 2: プロジェクトで記憶を有効化
 
-## 入っているもの
+```bash
+cd /path/to/your/project
+touch .contextdb-enable
+codex
+```
 
-| 機能 | 役割 |
-|---|---|
-| ContextDB | セッション跨ぎの永続化記憶 |
-| Playwright MCP | ブラウザ自動化 |
-| Superpowers | 自動計画（自動分解、並列実行、自動検証）+ ルーティング/並列プロファイル（既定 `3+3`） |
-| Privacy Guard | 機密情報を自動マスク |
+以後、このプロジェクトで `codex` / `claude` / `gemini` を起動すると、RexCLI が同じプロジェクト文脈へ接続します。
 
-## FAQ
+### Step 3: 分割できる時だけ Agent Team を使う
 
-### RexCLI は coding agent 向けの記憶システムですか？
-はい。`ContextDB` が同一リポジトリ内でセッションを跨いで文脈を保持し、CLI 間の引き継ぎを支援します。
+```bash
+aios team 3:codex "ログインモジュールをリファクタし、完了前に関連テストを実行"
+aios team status --provider codex --watch
+```
 
-### Hermes 風のオーケストレーションは可能ですか？
-はい。`team` と `orchestrate` で段階実行、ルーティング、検証ゲートを構成できます。
+タスクがまだ曖昧なら、まず通常の対話型 `codex` で分析します。明確に分割できる時だけ `team` を使ってください。
 
-### subagent の自動計画はできますか？
-はい。`single/subagent/team` のルート判定と実行ガードレールを備えています。
+## よくある誤解
 
-## 続きを読む
+- **すべての作業に Agent Team は不要**: 単一ファイル修正、小さな bug、曖昧な要件は単一 agent から始めます。
+- **初日に全環境変数を覚える必要はありません**: まず `aios` TUI を使ってください。
+- **機能一覧から始めない**: 「今何をしたいか」からコマンドを選びます。
+- **Doctor を飛ばさない**: install、browser、skills、native 設定を手で直す前に診断します。
 
-- [Superpowers](superpowers.md) - CLIをより賢くする自動化スキル
-- [クイックスタート](getting-started.md)
-- [Raw CLI vs RexCLI](cli-comparison.md)
-- [ケース集](case-library.md)
-- [アーキテクチャ](architecture.md)
-- [ContextDB](contextdb.md)
-- [変更履歴](changelog.md)
+## 次に読む
+
+- [クイックスタート](getting-started.md): install、Setup、Doctor、初回実行。
+- [シナリオ別コマンド](use-cases.md): 作業別に入口を選ぶ。
+- [Agent Team](team-ops.md): いつ team を使うか、どう監視し、どう完了するか。
+- [ContextDB](contextdb.md): 記憶がセッションをまたいで残る仕組み。
+- [トラブルシューティング](troubleshooting.md): install、browser、live 実行の問題。
