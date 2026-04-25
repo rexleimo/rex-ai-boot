@@ -6,6 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { parseArgs } from '../lib/cli/parse-args.mjs';
+import { getCommandHelpText } from '../lib/cli/help.mjs';
 import { runReleaseStatus } from '../lib/lifecycle/release-status.mjs';
 import { runSnapshotRollback } from '../lib/lifecycle/snapshot-rollback.mjs';
 
@@ -207,6 +208,8 @@ test('parseArgs accepts team shorthand and runtime overrides', () => {
     '4',
     '--task',
     'Refactor team flow',
+    '--plan',
+    'docs/plans/refactor-team.md',
     '--dry-run',
     '--format',
     'json',
@@ -216,6 +219,7 @@ test('parseArgs accepts team shorthand and runtime overrides', () => {
   assert.equal(explicit.options.clientId, 'gemini-cli');
   assert.equal(explicit.options.workers, 4);
   assert.equal(explicit.options.executionMode, 'dry-run');
+  assert.equal(explicit.options.planPath, 'docs/plans/refactor-team.md');
   assert.equal(explicit.options.format, 'json');
 
   const resumeRetry = parseArgs([
@@ -701,6 +705,12 @@ test('parseArgs treats memo help as help mode', () => {
   assert.equal(result.command, 'memo');
   assert.equal(result.mode, 'help');
   assert.equal(result.help, true);
+});
+
+
+test('orchestrate and team help mention plan preflight option', () => {
+  assert.match(getCommandHelpText('orchestrate'), /--plan <path>/);
+  assert.match(getCommandHelpText('team'), /--plan <path>/);
 });
 
 test('aios CLI prints help', () => {

@@ -910,6 +910,7 @@ export function buildOrchestrationPlan({
   dispatchPreflight = null,
   effectiveDispatchPolicy = null,
   executorCapabilityManifest = null,
+  readiness = null,
 } = {}) {
   const resolved = getOrchestratorBlueprint(blueprint);
   const resolvedTaskTitle = String(taskTitle || '').trim() || 'Untitled task';
@@ -936,6 +937,7 @@ export function buildOrchestrationPlan({
     dispatchPreflight: normalizeDispatchPreflight(dispatchPreflight),
     effectiveDispatchPolicy: normalizeDispatchPolicy(effectiveDispatchPolicy),
     executorCapabilityManifest: normalizeExecutorCapabilityManifest(executorCapabilityManifest),
+    readiness: readiness && typeof readiness === 'object' ? readiness : null,
     phases: resolved.phases.map((phase, index) => ({
       step: index + 1,
       id: phase.id,
@@ -1814,6 +1816,34 @@ function formatEffectiveDispatchPolicy(policy) {
   return formatPolicySection('Effective Dispatch Policy', policy);
 }
 
+
+function formatReadiness(readiness) {
+  if (!readiness || typeof readiness !== 'object') {
+    return [];
+  }
+  const blockedReasons = Array.isArray(readiness.blockedReasons) ? readiness.blockedReasons : [];
+  const warnings = Array.isArray(readiness.warnings) ? readiness.warnings : [];
+  const nextActions = Array.isArray(readiness.nextActions) ? readiness.nextActions : [];
+  const evidence = Array.isArray(readiness.evidence) ? readiness.evidence : [];
+  const lines = [
+    'Readiness:',
+    `- verdict=${readiness.verdict || 'ready'} blockers=${blockedReasons.length > 0 ? blockedReasons.join(', ') : '(none)'}`,
+  ];
+  if (warnings.length > 0) {
+    lines.push(...warnings.slice(0, 4).map((item) => `- warning=${item}`));
+  }
+  if (nextActions.length > 0) {
+    lines.push('- next actions:');
+    lines.push(...nextActions.slice(0, 4).map((item) => `  - ${item}`));
+  }
+  if (evidence.length > 0) {
+    lines.push('- evidence:');
+    lines.push(...evidence.slice(0, 4).map((item) => `  - [${item.type || 'evidence'}] ${item.path || '(inline)'} ${item.summary || ''}`));
+  }
+  lines.push('');
+  return lines;
+}
+
 function formatDispatchPreflight(dispatchPreflight) {
   if (!dispatchPreflight) {
     return [];
@@ -2103,6 +2133,7 @@ export function renderOrchestrationReport(input = {}) {
       ...buildOrchestrationPlan(input),
       ...(Object.prototype.hasOwnProperty.call(input, 'workItemTelemetry') ? { workItemTelemetry: input.workItemTelemetry } : {}),
       ...(Object.prototype.hasOwnProperty.call(input, 'dispatchInsights') ? { dispatchInsights: input.dispatchInsights } : {}),
+      ...(Object.prototype.hasOwnProperty.call(input, 'readiness') ? { readiness: input.readiness } : {}),
     };
   return [
     `ORCHESTRATION BLUEPRINT: ${plan.blueprint}`,
@@ -2117,6 +2148,7 @@ export function renderOrchestrationReport(input = {}) {
     ...formatLearnEvalOverlay(plan.learnEvalOverlay),
     ...formatDispatchPolicy(plan.dispatchPolicy),
     ...formatDispatchPreflight(plan.dispatchPreflight),
+    ...formatReadiness(plan.readiness),
     ...formatEffectiveDispatchPolicy(plan.effectiveDispatchPolicy),
     ...formatExecutorCapabilityManifest(plan.executorCapabilityManifest),
     ...formatDispatchPlan(plan.dispatchPlan),

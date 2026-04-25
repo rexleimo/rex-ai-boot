@@ -251,6 +251,7 @@ function createDefaultTeamOptions() {
     blueprint: 'feature',
     taskTitle: '',
     contextSummary: '',
+    planPath: '',
     sessionId: '',
     limit: 10,
     recommendationId: '',
@@ -663,6 +664,10 @@ function parseTeamArgs(argv) {
         options.contextSummary = takeValue(rest, index, '--context');
         index += 1;
         break;
+      case '--plan':
+        options.planPath = takeValue(rest, index, '--plan');
+        index += 1;
+        break;
       case '--session':
         options.sessionId = takeValue(rest, index, '--session');
         index += 1;
@@ -1046,6 +1051,13 @@ function parseTopLevelArgs(command, argv) {
         break;
       case '--context':
         options.contextSummary = takeValue(rest, index, '--context');
+        index += 1;
+        break;
+      case '--plan':
+        if (command !== 'orchestrate') {
+          throw new Error(`Unknown option: ${arg}`);
+        }
+        options.planPath = takeValue(rest, index, '--plan');
         index += 1;
         break;
       case '--session':

@@ -284,6 +284,7 @@ async function main() {
       blueprint: parsed.options.blueprint,
       taskTitle: parsed.options.taskTitle,
       contextSummary: parsed.options.contextSummary,
+      planPath: parsed.options.planPath,
       sessionId: parsed.options.sessionId,
       resumeSessionId: parsed.options.resumeSessionId,
       retryBlocked: Boolean(parsed.options.retryBlocked),

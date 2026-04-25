@@ -161,6 +161,20 @@ aios orchestrate --session <session-id> --format json
 aios orchestrate --session <session-id> --preflight auto --format json
 ```
 
+Plan + ownership preflight gates for `orchestrate` and `team`:
+
+- Use `--preflight auto` together with `--plan docs/plans/<topic>.md` to preview plan/ownership checks without executing live work.
+- Dry runs report blockers so you can fix the plan or ownership metadata first.
+- Live execution blocks on those blockers unless you add `--force`.
+- Plan files should include `Progress`, `Decision Log`, `Acceptance`, and `Next Actions`; editable jobs should resolve to stable `ownedPathPrefixes` such as `scripts/` or `mcp-server/`.
+
+Examples:
+
+```bash
+node scripts/aios.mjs orchestrate --session <session-id> --preflight auto --plan docs/plans/<topic>.md --execute dry-run --format json
+node scripts/aios.mjs team --session <session-id> --preflight auto --plan docs/plans/<topic>.md --dry-run --format json
+```
+
 One-click Team runtime (recommended):
 
 ```bash

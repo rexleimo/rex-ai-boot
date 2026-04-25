@@ -145,6 +145,7 @@ Options:
 Options:
   --task <title>
   --context <summary>
+  --plan <path>                 Plan artifact required by --preflight auto readiness checks
   --session <id>                 Load structured learn-eval recommendations for this session
   --limit <n>                   Number of checkpoints to inspect when loading learn-eval
   --recommendation <targetId>   Pin a specific learn-eval recommendation to the overlay
@@ -180,6 +181,7 @@ Options:
   --blueprint <feature|bugfix|refactor|security>
   --task <title>
   --context <summary>
+  --plan <path>                 Plan artifact required by --preflight auto readiness checks
   --session <id>
   --resume <id>                 Resume from a prior orchestration session
   --limit <n>

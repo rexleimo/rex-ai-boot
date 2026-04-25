@@ -25,6 +25,7 @@ import { runDoctor } from './doctor.mjs';
 import { executeEntropyGc } from './entropy-gc.mjs';
 import { runQualityGate } from './quality-gate.mjs';
 import { runReleaseStatus } from './release-status.mjs';
+import { evaluateOwnershipEvidence, evaluatePlanEvidence, mergeReadinessVerdicts } from './preflight-contracts.mjs';
 import { evaluateClarityGate, persistClarityGateDecision } from '../harness/clarity-gate.mjs';
 import {
   normalizeOrchestrateDispatchMode,
@@ -698,6 +699,7 @@ function applyRetryBlockedDispatchPlan(dispatchPlan, retryReplay) {
 export function normalizeOrchestrateOptions(rawOptions = {}) {
   const blueprintRaw = String(rawOptions.blueprint || '').trim();
   const taskTitleRaw = String(rawOptions.taskTitle || '').trim();
+  const planPath = String(rawOptions.planPath || '').trim();
   const resumeSessionIdRaw = String(rawOptions.resumeSessionId || '').trim();
   let sessionId = String(rawOptions.sessionId || '').trim();
   if (!sessionId && resumeSessionIdRaw) {
@@ -758,6 +760,7 @@ export function normalizeOrchestrateOptions(rawOptions = {}) {
     taskTitle: taskTitleRaw || 'Untitled task',
     taskTitleExplicit: taskTitleRaw.length > 0,
     contextSummary: String(rawOptions.contextSummary || '').trim(),
+    planPath,
     sessionId,
     resumeSessionId,
     retryBlocked,
@@ -784,6 +787,9 @@ export function planOrchestrate(rawOptions = {}) {
   }
   if (options.contextSummary) {
     args.push('--context', JSON.stringify(options.contextSummary));
+  }
+  if (options.planPath) {
+    args.push('--plan', options.planPath);
   }
   if (options.sessionId) {
     args.push('--session', options.sessionId);
@@ -839,6 +845,7 @@ export async function runOrchestrate(
   let contextSummary = options.contextSummary;
   let learnEvalOverlay = null;
   let learnEvalReport = null;
+  let readiness = null;
 
   if (options.sessionId) {
     learnEvalReport = await buildLearnEvalReport(
@@ -981,6 +988,48 @@ export async function runOrchestrate(
       ...replayResult.replay,
     };
   }
+
+  if (options.preflightMode === 'auto') {
+    const planReadiness = await evaluatePlanEvidence({
+      rootDir,
+      planPath: options.planPath,
+    });
+    const ownershipReadiness = evaluateOwnershipEvidence({
+      dispatchPlan,
+      workItems: basePlan.workItems,
+    });
+    readiness = mergeReadinessVerdicts(planReadiness, ownershipReadiness);
+  }
+
+  if (options.executionMode === 'live' && readiness?.verdict === 'blocked' && !options.force) {
+    const message = '[guard] refusing live execution: preflight readiness is blocked.';
+    const suggestedCommands = readiness.nextActions || [];
+    const report = {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      kind: 'guardrail.preflight-readiness',
+      sessionId: options.sessionId || null,
+      executionMode: 'live',
+      message,
+      ...basePlan,
+      readiness,
+      suggestedCommands,
+      ...(dispatchPlan ? { dispatchPlan } : {}),
+      ...(dispatchPreflight ? { dispatchPreflight } : {}),
+      ...(releaseGuardedEffectiveDispatchPolicy ? { effectiveDispatchPolicy: releaseGuardedEffectiveDispatchPolicy } : {}),
+    };
+    if (options.format === 'json') {
+      io.log(JSON.stringify(report, null, 2));
+      return { exitCode: 1, report };
+    }
+    writeWarning(io, `${message} ${readiness.blockedReasons.join(', ') || 'unknown reason'}`);
+    return { exitCode: 1, report };
+  }
+
+  if (options.executionMode === 'live' && readiness?.verdict === 'blocked' && options.force) {
+    writeWarning(io, `[warn] live preflight readiness override (--force): ${readiness.blockedReasons.join(', ')}`);
+  }
+
   const dispatchRunStartedAt = Date.now();
   const dispatchRuntime = options.executionMode !== 'none'
     ? resolveDispatchRuntime({ executionMode: options.executionMode }, dispatchRuntimeRegistry)
@@ -1162,6 +1211,7 @@ export async function runOrchestrate(
     dispatchPreflight,
     effectiveDispatchPolicy: clarityAdjustedPolicy,
     executorCapabilityManifest,
+    readiness,
   });
   const dispatchEvidence = dispatchRun
     ? await persistDispatchEvidence({
@@ -1179,6 +1229,7 @@ export async function runOrchestrate(
         ...(workItemTelemetry ? { workItemTelemetry } : {}),
         ...(dispatchInsights ? { dispatchInsights } : {}),
         ...(retryReplay ? { retryReplay } : {}),
+        ...(readiness ? { readiness } : {}),
       },
       elapsedMs: Date.now() - dispatchRunStartedAt,
     })
@@ -1196,6 +1247,7 @@ export async function runOrchestrate(
     ...(workItemTelemetry ? { workItemTelemetry } : {}),
     ...(dispatchInsights ? { dispatchInsights } : {}),
     ...(retryReplay ? { retryReplay } : {}),
+    ...(readiness ? { readiness } : {}),
     ...(dispatchEvidence ? { dispatchEvidence } : {}),
   };
 
