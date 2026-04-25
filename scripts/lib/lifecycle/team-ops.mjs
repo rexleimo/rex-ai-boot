@@ -367,6 +367,12 @@ async function persistSkillCandidatePatchTemplateArtifact({
   };
 }
 
+function formatWatchdogStatusLine(state = {}) {
+  const watchdog = state?.watchdog;
+  if (!watchdog || typeof watchdog !== 'object') return '';
+  return `Watchdog: decision=${watchdog.decision} reason=${watchdog.reason}`;
+}
+
 export async function runTeamStatus(
   rawOptions = {},
   {
@@ -480,8 +486,8 @@ export async function runTeamStatus(
     const outputBlocks = skillCandidateView === 'detail'
       ? [skillCandidateText]
       : [hudText, skillCandidateText];
-    if (includeWatchdog && filteredState.watchdog) {
-      outputBlocks.push(`Watchdog: decision=${filteredState.watchdog.decision} reason=${filteredState.watchdog.reason}`);
+    if (includeWatchdog) {
+      outputBlocks.push(formatWatchdogStatusLine(filteredState));
     }
 
     if (exportSkillCandidatePatchTemplate) {
@@ -547,6 +553,9 @@ export async function runTeamStatus(
     const outputBlocks = skillCandidateView === 'detail'
       ? [skillCandidateText]
       : [hudText, skillCandidateText];
+    if (includeWatchdog) {
+      outputBlocks.push(formatWatchdogStatusLine(filteredState));
+    }
     return outputBlocks.filter(Boolean).join('\n') + '\n';
   };
 

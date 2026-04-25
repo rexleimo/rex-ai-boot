@@ -121,6 +121,11 @@ export async function collectWatchdogSignals({
   const latestLogMtime = sessionDir ? await latestMtimeMs(sessionDir, { maxFiles: MAX_SCAN_FILES }) : null;
   const rollbackArtifacts = artifactsDir ? await countRollbackManifests(artifactsDir) : 0;
   const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+  const workerPids = dedupePids([
+    ...extractWorkerPids(dispatch),
+    ...extractWorkerPids(workers),
+    ...(sessionDir ? await readSessionPidFiles(sessionDir) : []),
+  ]);
 
   return {
     sessionId: normalizedSessionId,
@@ -130,7 +135,8 @@ export async function collectWatchdogSignals({
     commitAgeMinutes: readGitCommitAgeMinutes(path.resolve(workspaceRoot || normalizedRootDir), now),
     fileActivityAgeMinutes: ageMinutesFromEpoch(latestWorkspaceMtime, now),
     logAgeMinutes: ageMinutesFromEpoch(latestLogMtime, now),
-    cpuState: 'unknown',
+    cpuState: determineCpuState(workerPids),
+    workerPids,
     blockedJobs: countBlockedJobs(dispatch),
     rollbackArtifacts,
   };
@@ -232,6 +238,107 @@ async function latestMtimeMs(rootPath, { maxFiles = MAX_SCAN_FILES } = {}) {
 
   await visit(rootPath);
   return latest;
+}
+
+function normalizePid(value) {
+  const pid = Number.parseInt(String(value ?? '').trim(), 10);
+  if (!Number.isFinite(pid) || pid <= 0) return null;
+  return Math.floor(pid);
+}
+
+function dedupePids(values = []) {
+  return Array.from(new Set((Array.isArray(values) ? values : [values])
+    .map((value) => normalizePid(value))
+    .filter((value) => value !== null)));
+}
+
+function extractWorkerPids(source) {
+  const pids = [];
+
+  function visit(value, depth = 0) {
+    if (depth > 5 || value === null || value === undefined) return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, depth + 1);
+      return;
+    }
+    if (typeof value !== 'object') {
+      if (depth > 0) {
+        const pid = normalizePid(value);
+        if (pid !== null) pids.push(pid);
+      }
+      return;
+    }
+
+    for (const key of ['pid', 'processId', 'processID', 'workerPid', 'childPid']) {
+      const pid = normalizePid(value[key]);
+      if (pid !== null) pids.push(pid);
+    }
+    for (const key of ['workerPids', 'pids', 'processes', 'workers', 'jobRuns']) {
+      if (value[key] !== undefined) visit(value[key], depth + 1);
+    }
+    if (value.dispatchRun) visit(value.dispatchRun, depth + 1);
+    if (value.process) visit(value.process, depth + 1);
+    if (value.runtime) visit(value.runtime, depth + 1);
+    if (value.worker) visit(value.worker, depth + 1);
+    if (value.output) visit(value.output, depth + 1);
+  }
+
+  visit(source);
+  return dedupePids(pids);
+}
+
+function isProcessAlive(pid) {
+  const normalizedPid = normalizePid(pid);
+  if (normalizedPid === null) return false;
+  try {
+    process.kill(normalizedPid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === 'EPERM';
+  }
+}
+
+function determineCpuState(workerPids = []) {
+  const pids = dedupePids(workerPids);
+  if (pids.length === 0) return 'unknown';
+  return pids.some((pid) => isProcessAlive(pid)) ? 'active' : 'dead';
+}
+
+async function readSessionPidFiles(sessionDir) {
+  const pids = [];
+  async function readPidFile(filePath) {
+    try {
+      const raw = await fs.readFile(filePath, 'utf8');
+      pids.push(...dedupePids(raw.split(/\s+/)));
+    } catch {
+      // Ignore stale or unreadable pid hints; other signals still drive the decision.
+    }
+  }
+
+  async function visit(currentPath, depth = 0) {
+    if (depth > 2) return;
+    let entries = [];
+    try {
+      entries = await fs.readdir(currentPath, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const entryPath = path.join(currentPath, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'artifacts' || entry.name === 'workers' || entry.name === 'runtime') {
+          await visit(entryPath, depth + 1);
+        }
+        continue;
+      }
+      if (entry.isFile() && (entry.name === '.pid' || entry.name === 'pid' || entry.name.endsWith('.pid'))) {
+        await readPidFile(entryPath);
+      }
+    }
+  }
+
+  await visit(sessionDir);
+  return dedupePids(pids);
 }
 
 async function readLatestDispatchArtifact(artifactsDir) {
