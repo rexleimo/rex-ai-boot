@@ -31,7 +31,8 @@
     "rl-mixed-v1:browser": "node scripts/rl-mixed-v1.mjs browser-only --dry-run",
     "rl-mixed-v1:orchestrator": "node scripts/rl-mixed-v1.mjs orchestrator-only --dry-run",
     "rl-mixed-v1:mixed": "node scripts/rl-mixed-v1.mjs mixed --dry-run",
-    "rl-mixed-v1:eval": "node scripts/rl-mixed-v1.mjs mixed-eval --window 30 --json-output experiments/rl-mixed-v1/validation/latest.json"
+    "rl-mixed-v1:eval": "node scripts/rl-mixed-v1.mjs mixed-eval --window 30 --json-output experiments/rl-mixed-v1/validation/latest.json",
+    "competitors:update": "node scripts/update-competitor-repos.mjs"
   },
   "devDependencies": {
     "tsx": "^4.21.0"
