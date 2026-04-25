@@ -367,6 +367,58 @@ body {
   background: var(--gd-surface);
 }
 
+.rex-visual {
+  margin: 1.05rem 0 1.25rem;
+  padding: 0;
+}
+
+.rex-visual img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--gd-border);
+  border-radius: 14px;
+  background: var(--gd-surface-subtle);
+  box-shadow: var(--gd-shadow-paper);
+}
+
+.rex-visual figcaption {
+  margin-top: 0.42rem;
+  color: var(--gd-text-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.rex-checklist {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  margin: 0.76rem 0 0.95rem;
+}
+
+.rex-checklist__item {
+  padding: 0.68rem 0.78rem;
+  border: 1px solid var(--gd-border);
+  border-radius: 12px;
+  background: var(--gd-surface-subtle);
+  color: var(--gd-text);
+  font-weight: 500;
+}
+
+.rex-checklist__item::before {
+  content: "✓";
+  display: inline-grid;
+  width: 1.18rem;
+  height: 1.18rem;
+  margin-right: 0.38rem;
+  place-items: center;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
 .rexai-footer-links {
   display: flex;
   flex-wrap: wrap;

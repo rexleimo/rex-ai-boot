@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-04-25
+
+- docs(site): add visual onboarding for Chinese docs
+
 ## [1.6.1] - 2026-04-25
 
 - fix(release): restore GitHub release pipeline and simplify Chinese onboarding docs

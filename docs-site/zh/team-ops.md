@@ -14,6 +14,11 @@ aios team 3:codex "实现 X，完成前运行测试并总结改动"
 aios team status --provider codex --watch
 ```
 
+<figure class="rex-visual">
+  <img src="../assets/visual-agent-team-monitoring.svg" alt="Agent Team 启动前检查清单和 HUD 状态监控示意图">
+  <figcaption>先检查任务是否真的适合并行，再启动 team；监控窗口只负责看进度，关闭监控不等于停止主任务。</figcaption>
+</figure>
+
 ## 什么时候该用 team
 
 适合用：
@@ -35,6 +40,14 @@ aios team status --provider codex --watch
 ```bash
 codex
 ```
+
+开 team 前建议先确认这 3 项：
+
+<div class="rex-checklist">
+  <div class="rex-checklist__item">能拆成 2 个以上独立模块</div>
+  <div class="rex-checklist__item">多个 worker 不会改同一批文件</div>
+  <div class="rex-checklist__item">验收标准能一句话说清</div>
+</div>
 
 ## 10 分钟跑通流程
 

@@ -39,6 +39,8 @@ nvm use 22
     aios
     ```
 
+    如果你使用 bash 而不是 zsh，把 `source ~/.zshrc` 换成 `source ~/.bashrc`。
+
 === "Windows PowerShell"
 
     ```powershell
@@ -66,6 +68,11 @@ aios
 2. 组件先选 `all`，或最小选择 `shell,skills,superpowers`。
 3. 安装完成后选择 **Doctor**。
 4. Doctor 没有关键错误后再开始使用。
+
+<figure class="rex-visual">
+  <img src="../assets/visual-tui-setup-doctor.svg" alt="aios TUI 中先选择 Setup，再选择 Doctor 的示意图">
+  <figcaption>示意图：TUI 打开后先做 Setup，再做 Doctor。关键错误为 0 后，再进入项目里启动 `codex` / `claude` / `gemini`。</figcaption>
+</figure>
 
 如果你改了 shell 包装层，重新加载当前 shell：
 
@@ -114,12 +121,23 @@ gemini
 
 在项目里运行：
 
-```bash
-aios doctor --native --verbose
-ls memory/context-db 2>/dev/null || true
-```
+=== "macOS / Linux"
+
+    ```bash
+    aios doctor --native --verbose
+    ls -la memory/context-db
+    ```
+
+=== "Windows PowerShell"
+
+    ```powershell
+    aios doctor --native --verbose
+    Get-ChildItem -Path memory/context-db -ErrorAction SilentlyContinue
+    ```
 
 看到 `sessions/`、`index/` 或 `exports/` 这类目录，说明 ContextDB 已经开始记录。
+
+如果目录还不存在，先正常启动一次 `codex` / `claude` / `gemini`，让 RexCLI 自动初始化；不需要立刻重装。
 
 如果没有看到，不要急着重装，先跑：
 
