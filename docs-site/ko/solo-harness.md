@@ -1,0 +1,116 @@
+---
+title: 솔로 Harness
+description: ContextDB, run journal, resume/stop 제어, 선택적 worktree 격리로 하나의 coding agent 를 밤새 안전하게 실행합니다.
+---
+
+# 솔로 Harness
+
+`Solo Harness` 는 RexCLI 의 **단일 agent 장시간 실행 레인**입니다.
+
+하나의 provider 가 하나의 목표를 밤새 계속 밀어붙이게 하면서, 읽기 쉬운 run journal, 명시적인 stop/resume 제어, 필요할 때의 git worktree 격리를 유지하고 싶을 때 사용합니다.
+
+## 언제 Solo Harness 를 쓰나요
+
+잘 맞는 경우:
+
+- “내일 아침 인계 메모 정리”, “릴리스 체크리스트 마무리”처럼 목표가 명확함.
+- 여러 worker 로 쪼갤 만큼의 작업은 아님.
+- one-shot 명령보다 재개 가능한 operator loop 가 필요함.
+- 야간 변경을 메인 checkout 과 분리하고 싶음.
+
+잘 맞지 않는 경우:
+
+- 작업을 독립 모듈로 나눠 병렬 처리할 수 있음 -> [Agent Team](team-ops.md) 사용.
+- preflight gate 가 있는 단계형 DAG 가 필요함 -> `aios orchestrate ...` 사용.
+- 요구가 아직 모호함 -> 먼저 일반 인터랙티브 `codex` / `claude` 로 분석.
+
+## 빠른 시작
+
+```bash
+# 분리된 worktree 에서 야간 실행 시작
+aios harness run --objective "내일 아침 인계 메모 정리" --session nightly-demo --worktree
+
+# 구조화된 상태 확인
+aios harness status --session nightly-demo --json
+
+# 같은 session 을 HUD 로 확인
+aios hud --session nightly-demo --json
+
+# 안전한 경계에서 멈추도록 요청
+aios harness stop --session nightly-demo --reason "아침에 사람이 인계"
+
+# 나중에 같은 session 재개
+aios harness resume --session nightly-demo
+```
+
+## 먼저 dry-run
+
+artifact 계약만 먼저 확인하고 token 은 쓰고 싶지 않다면:
+
+```bash
+aios harness run --objective "내일 아침 인계 메모 정리" --session nightly-demo --worktree --dry-run --json
+```
+
+dry-run 은 session journal 만 만들고 provider 는 호출하지 않습니다.
+
+## 생성되는 파일
+
+artifact 는 다음 경로에 저장됩니다:
+
+```text
+memory/context-db/sessions/<session-id>/artifacts/solo-harness/
+```
+
+핵심 파일:
+
+- `objective.md`: 정규화된 목표.
+- `run-summary.json`: 현재 상태, 반복 횟수, backoff, worktree 정보.
+- `control.json`: stop 요청과 operator 메모.
+- `iteration-0001.json`: 각 반복의 정규화 결과.
+- `iteration-0001.log.jsonl`: 디버깅용 원시 로그.
+
+## 실전 operator 루프
+
+실용적인 야간 루프는 보통 이렇게 갑니다:
+
+1. `aios harness run --worktree` 로 시작.
+2. 자리를 뜨기 전에 `aios harness status --session <id> --json` 확인.
+3. 사람이 읽기 쉬운 스냅샷이 필요하면 `aios hud --session <id>`.
+4. 다음 안전한 경계에서 멈추게 하려면 `aios harness stop --session <id>`.
+5. 다음 날 또는 수동 수정 후 `aios harness resume --session <id>`.
+
+## Worktree 격리
+
+야간 실행에는 `--worktree` 를 강하게 권장합니다.
+
+현재 harness session 전용 git worktree 를 만들어 agent 가 메인 checkout 을 직접 수정하지 않게 합니다. 의미 있는 출력이 없으면 임시 worktree 를 자동 정리할 수 있고, 남길 가치가 있는 변경이 있으면 run summary 에 metadata 를 남겨 operator 가 이어받을 수 있게 합니다.
+
+이 흐름은 무차별적인 `git reset --hard` 복구를 전제로 하지 않습니다.
+
+## Provider / Runtime 참고
+
+live 실행은 기존 one-shot `scripts/ctx-agent.mjs` provider 경로를 재사용합니다.
+
+따라서 해당 로컬 CLI 가 설치되어 직접 실행 가능해야 합니다:
+
+- `codex`
+- `claude`
+- `gemini`
+- `opencode`
+
+provider CLI 가 준비되지 않았다면 먼저 dry-run 으로 artifact 를 확인하고 readiness 를 맞추세요.
+
+## Solo Harness 와 Agent Team 선택 기준
+
+| 필요 | 더 적합한 것 |
+|---|---|
+| 단일 목표, 단일 provider, 재개 가능한 야간 실행 | `aios harness ...` |
+| 분리 가능한 작업을 여러 worker 로 병렬 실행 | `aios team ...` |
+| preflight gate 가 있는 단계형 orchestration | `aios orchestrate ...` |
+
+## 관련 문서
+
+- [HUD 가이드](hud-guide.md)
+- [Agent Team](team-ops.md)
+- [시나리오별 명령 찾기](use-cases.md)
+- [문제 해결](troubleshooting.md)

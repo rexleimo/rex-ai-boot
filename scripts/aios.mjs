@@ -313,6 +313,15 @@ async function main() {
     return;
   }
 
+  if (parsed.command === 'harness') {
+    const { runHarnessCommand } = await import('./lib/lifecycle/harness.mjs');
+    const result = await runHarnessCommand(parsed.options, { rootDir });
+    if (result.exitCode !== 0) {
+      process.exitCode = result.exitCode;
+    }
+    return;
+  }
+
   if (parsed.command === 'hud') {
     const { runHud } = await import('./lib/lifecycle/hud.mjs');
     const result = await runHud(parsed.options, { rootDir });

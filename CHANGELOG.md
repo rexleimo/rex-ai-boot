@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-04-26
+
+- feat(harness): add solo overnight harness and official docs
+
 ## [1.6.3] - 2026-04-25
 
 - docs(site): sync visual onboarding across locales

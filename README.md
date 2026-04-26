@@ -195,6 +195,46 @@ aios orchestrate --session <session-id> --dispatch local --execute live --format
 
 Tip (codex-cli): Codex CLI v0.114+ supports structured exec outputs. AIOS will auto-use `codex exec` with `--output-schema` + `--output-last-message` + stdin when available, and fall back to stdout parsing for older versions.
 
+### Solo Harness (overnight, resumable, single-objective)
+
+Use `harness` when you want one provider to keep pushing on a single objective, preserve a readable run journal, and hand the session back to a human in the morning.
+
+What it does:
+
+- Keeps `ContextDB` as the canonical session memory and adds a human-readable solo run journal under `memory/context-db/sessions/<session-id>/artifacts/solo-harness/`
+- Supports `run`, `status`, `resume`, and `stop` for the same session instead of forcing a one-shot workflow
+- Uses `--worktree` to isolate overnight changes in a disposable git worktree instead of mutating the main checkout directly
+- Avoids blanket recovery tactics such as `git reset --hard`; preserved worktrees stay available for manual review
+
+Recommended flow:
+
+```bash
+aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --worktree
+aios harness status --session nightly-demo --json
+aios hud --session nightly-demo --json
+aios harness stop --session nightly-demo --reason "morning handoff"
+aios harness resume --session nightly-demo
+```
+
+Dry-run the journal contract without invoking a provider:
+
+```bash
+aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --worktree --dry-run --json
+```
+
+Journal files created for each run:
+
+- `objective.md`: the normalized objective stored with the session
+- `run-summary.json`: current status, iteration counters, backoff state, and worktree metadata
+- `control.json`: stop requests and operator notes
+- `iteration-0001.json` / `iteration-0001.log.jsonl`: per-iteration summary plus raw provider output
+
+Operational notes:
+
+- Live execution reuses the existing `scripts/ctx-agent.mjs` one-shot provider path, so the matching local CLI (`codex`, `claude`, `gemini`, or `opencode`) still needs to be installed and runnable
+- `resume` clears a prior stop request and recreates the isolated worktree when the previous path no longer exists
+- HUD auto-detects solo harness sessions, so `aios hud --session <session-id>` shows the latest run summary without requiring a dispatch artifact
+
 ### Incident Recovery (pre-mutation snapshots)
 
 Use this workflow when a live subagent run changed files incorrectly and you need to restore owned paths captured before mutation.

@@ -51,6 +51,25 @@ gemini   # 最後にレビューまたは比較
 
 同じプロジェクトディレクトリで実行すれば、ContextDB がイベントと checkpoint を保存し、ツールを切り替えても文脈を失いにくくします。
 
+## 1つの agent を夜通し動かしたい
+
+向いている: 目標が明確、provider は1つでよい、夜間に継続実行したい、並列 worker は不要。
+
+```bash
+aios harness run --objective "明朝の引き継ぎメモをまとめる" --session nightly-demo --worktree
+aios harness status --session nightly-demo --json
+aios hud --session nightly-demo --json
+```
+
+安全な境界で止めたい、または後で再開したい場合:
+
+```bash
+aios harness stop --session nightly-demo --reason "朝に人が引き継ぐ"
+aios harness resume --session nightly-demo
+```
+
+「1つの agent に1つの目標を継続させたい」なら [ソロ Harness](solo-harness.md)。本当に並列化できるなら [Agent Team](team-ops.md) を使います。
+
 ## Agent Team を使いたい
 
 適している: モジュールが独立、タスクが分割可能、token コストを許容できる。
@@ -123,6 +142,7 @@ aios privacy read --file .env
 
 - **日常開発**: `codex` / `claude` / `gemini`
 - **インストール/更新**: `aios`
+- **ソロ夜間実行**: `aios harness run --objective "明朝の引き継ぎメモをまとめる" --worktree`
 - **Agent Team**: `aios team 3:codex "task"`
 - **進捗**: `aios team status --watch`
 - **納品前**: `aios quality-gate pre-pr --profile strict`

@@ -99,6 +99,30 @@ function formatDispatchLine(state) {
   ].filter(Boolean).join(' ');
 }
 
+function formatHarnessLine(state) {
+  const harness = state?.latestHarnessRun && typeof state.latestHarnessRun === 'object'
+    ? state.latestHarnessRun
+    : null;
+  if (!harness) return '';
+
+  const parts = [
+    `status=${normalizeText(harness.status) || 'unknown'}`,
+  ];
+  if (Number.isFinite(harness.iterationCount)) parts.push(`iteration=${Math.max(0, Math.floor(harness.iterationCount))}`);
+  if (normalizeText(harness.lastOutcome)) parts.push(`outcome=${normalizeText(harness.lastOutcome)}`);
+  if (normalizeText(harness.lastFailureClass)) parts.push(`fail=${normalizeText(harness.lastFailureClass)}`);
+  const backoffDelay = Number.isFinite(harness.backoff?.nextDelayMs)
+    ? Math.max(0, Math.floor(harness.backoff.nextDelayMs))
+    : null;
+  if (backoffDelay !== null) parts.push(`backoff=${backoffDelay}ms`);
+  const stopRequested = state?.harnessControl?.stopRequested === true || harness.stopRequested === true;
+  parts.push(`stopRequested=${stopRequested ? 'true' : 'false'}`);
+  if (harness.worktree?.enabled === true) {
+    parts.push(`worktree=${harness.worktree.preserved === true ? 'preserved' : 'enabled'}`);
+  }
+  return clipLine(`Harness: ${parts.join(' ')}`, 220);
+}
+
 function formatDispatchInsightsSignals(insights = null) {
   const signals = Array.isArray(insights?.signals) ? insights.signals : [];
   if (signals.length === 0) return 'signals=(none)';
@@ -345,7 +369,10 @@ function formatWorkItemsLine(state) {
 }
 
 function formatSuggestedCommands(state) {
-  const commands = Array.isArray(state?.suggestedCommands) ? state.suggestedCommands : [];
+  const commands = [
+    ...(Array.isArray(state?.harnessSuggestedCommands) ? state.harnessSuggestedCommands : []),
+    ...(Array.isArray(state?.suggestedCommands) ? state.suggestedCommands : []),
+  ];
   if (commands.length === 0) return [];
   const lines = ['Next:'];
   for (const cmd of commands.slice(0, 4)) {
@@ -502,6 +529,7 @@ export function renderHud(state, { preset = 'focused', watchMeta = null } = {}) 
     const sessionLine = formatSessionLine(state);
     const dispatch = state?.latestDispatch || null;
     const dispatchLabel = dispatch ? (dispatch.ok === true ? 'dispatch=ok' : `dispatch=blocked(${dispatch.blockedJobs || 0})`) : 'dispatch=none';
+    const harnessLine = formatHarnessLine(state);
     const dispatchProgressLabel = formatMinimalDispatchProgressLabel(state);
     const qualityLabel = formatMinimalQualityLabel(state);
     const skillCandidateLabel = formatMinimalSkillCandidateLabel(state);
@@ -511,7 +539,7 @@ export function renderHud(state, { preset = 'focused', watchMeta = null } = {}) 
     const insightsLabel = insights && insights.status && insights.status !== 'clear'
       ? `insights=${normalizeText(insights.status)}(${Number.isFinite(insights.score) ? Math.max(0, Math.floor(insights.score)) : 0})`
       : '';
-    const statusLine = [dispatchLabel, insightsLabel, dispatchProgressLabel, qualityLabel, skillCandidateLabel].filter(Boolean).join(' ');
+    const statusLine = [harnessLine, dispatchLabel, insightsLabel, dispatchProgressLabel, qualityLabel, skillCandidateLabel].filter(Boolean).join(' ');
     return watchLine
       ? `${sessionLine}\n${statusLine}\n${watchLine}\n`
       : `${sessionLine}\n${statusLine}\n`;
@@ -524,6 +552,7 @@ export function renderHud(state, { preset = 'focused', watchMeta = null } = {}) 
     '',
     `Goal: ${clipLine(state?.session?.goal, 200) || '(none)'}`,
     formatCheckpointLine(state),
+    formatHarnessLine(state),
     formatDispatchLine(state),
     formatDispatchInsightsLine(state),
   ];

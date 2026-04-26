@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { buildHindsightEval } from '../harness/hindsight-eval.mjs';
+import { readSoloControl, readSoloRunSummary } from '../harness/solo-journal.mjs';
 import { getHarnessTarget } from '../harness/targets.mjs';
 import { buildTeamWatchdogState } from '../lifecycle/watchdog.mjs';
 
@@ -11,6 +12,7 @@ export const HUD_PROVIDER_AGENT_MAP = Object.freeze({
   codex: 'codex-cli',
   claude: 'claude-code',
   gemini: 'gemini-cli',
+  opencode: 'opencode-cli',
 });
 
 const AGENT_PROVIDER_MAP = Object.freeze(
@@ -109,7 +111,7 @@ function computeCompletionRatio(done = 0, total = 0) {
 function normalizeProvider(raw = '') {
   const value = normalizeText(raw).toLowerCase();
   if (!value) return '';
-  if (value === 'codex' || value === 'claude' || value === 'gemini') return value;
+  if (value === 'codex' || value === 'claude' || value === 'gemini' || value === 'opencode') return value;
   return '';
 }
 
@@ -1133,6 +1135,22 @@ function buildSuggestedCommands({ sessionId, provider, latestDispatch, latestSki
   return normalizeStringArray(commands);
 }
 
+function buildHarnessSuggestedCommands({ sessionId, latestHarnessRun = null } = {}) {
+  const normalizedSessionId = normalizeText(sessionId);
+  if (!normalizedSessionId || !latestHarnessRun || typeof latestHarnessRun !== 'object') {
+    return [];
+  }
+
+  const commands = [
+    `node scripts/aios.mjs harness status --session ${normalizedSessionId} --json`,
+  ];
+  if (normalizeText(latestHarnessRun.status) !== 'done') {
+    commands.push(`node scripts/aios.mjs harness resume --session ${normalizedSessionId}`);
+    commands.push(`node scripts/aios.mjs harness stop --session ${normalizedSessionId}`);
+  }
+  return normalizeStringArray(commands);
+}
+
 export async function readHudState({
   rootDir,
   sessionId = '',
@@ -1160,6 +1178,9 @@ export async function readHudState({
       sessionState: null,
       latestCheckpoint: null,
       latestDispatch: null,
+      latestHarnessRun: null,
+      harnessControl: null,
+      harnessSuggestedCommands: [],
       latestSkillCandidate: null,
       recentSkillCandidates: [],
       latestQualityGate: null,
@@ -1180,24 +1201,30 @@ export async function readHudState({
   let state = null;
   let checkpoint = null;
   let dispatch = null;
+  let harnessRun = null;
+  let harnessControl = null;
   let skillCandidate = null;
   let recentSkillCandidates = [];
   let qualityGateEvent = null;
   let dispatchEvidence = [];
   if (fastMode) {
-    [meta, dispatch, skillCandidate, recentSkillCandidates, qualityGateEvent] = await Promise.all([
+    [meta, dispatch, harnessRun, harnessControl, skillCandidate, recentSkillCandidates, qualityGateEvent] = await Promise.all([
       safeReadJsonCached(metaPath),
       findLatestDispatchArtifact(rootDir, selection.sessionId),
+      readSoloRunSummary({ rootDir, sessionId: selection.sessionId }),
+      readSoloControl({ rootDir, sessionId: selection.sessionId }),
       findLatestSkillCandidateArtifact(rootDir, selection.sessionId),
       collectRecentSkillCandidates(rootDir, selection.sessionId, { limit: resolvedSkillCandidateLimit }),
       readLatestQualityGateEvent(eventsPath),
     ]);
   } else {
-    [meta, state, checkpoint, dispatch, skillCandidate, recentSkillCandidates, qualityGateEvent, dispatchEvidence] = await Promise.all([
+    [meta, state, checkpoint, dispatch, harnessRun, harnessControl, skillCandidate, recentSkillCandidates, qualityGateEvent, dispatchEvidence] = await Promise.all([
       safeReadJsonCached(metaPath),
       safeReadJsonCached(statePath),
       readLastJsonLine(checkpointPath),
       findLatestDispatchArtifact(rootDir, selection.sessionId),
+      readSoloRunSummary({ rootDir, sessionId: selection.sessionId }),
+      readSoloControl({ rootDir, sessionId: selection.sessionId }),
       findLatestSkillCandidateArtifact(rootDir, selection.sessionId),
       collectRecentSkillCandidates(rootDir, selection.sessionId, { limit: resolvedSkillCandidateLimit }),
       readLatestQualityGateEvent(eventsPath),
@@ -1216,7 +1243,7 @@ export async function readHudState({
   const warnings = [];
   if (!meta) warnings.push('Session meta.json missing or unreadable.');
   if (!fastMode && !checkpoint) warnings.push('No checkpoints found for this session yet.');
-  if (!dispatch) warnings.push('No dispatch artifact found for this session yet.');
+  if (!dispatch && !harnessRun) warnings.push('No dispatch artifact found for this session yet.');
 
   const latestDispatch = dispatch
     ? {
@@ -1240,6 +1267,12 @@ export async function readHudState({
       sessionState: null,
       latestCheckpoint: null,
       latestDispatch,
+      latestHarnessRun: harnessRun,
+      harnessControl,
+      harnessSuggestedCommands: buildHarnessSuggestedCommands({
+        sessionId: effectiveSelection.sessionId,
+        latestHarnessRun: harnessRun,
+      }),
       latestSkillCandidate: skillCandidate,
       recentSkillCandidates,
       latestQualityGate: qualityGateEvent,
@@ -1276,6 +1309,10 @@ export async function readHudState({
     latestSkillCandidate: skillCandidate,
     dispatchHindsight,
   });
+  const harnessSuggestedCommands = buildHarnessSuggestedCommands({
+    sessionId: effectiveSelection.sessionId,
+    latestHarnessRun: harnessRun,
+  });
   const dispatchFixHint = buildDispatchFixHint({
     sessionId: effectiveSelection.sessionId,
     dispatchHindsight,
@@ -1290,6 +1327,9 @@ export async function readHudState({
     sessionState: state,
     latestCheckpoint: checkpoint,
     latestDispatch,
+    latestHarnessRun: harnessRun,
+    harnessControl,
+    harnessSuggestedCommands,
     latestSkillCandidate: skillCandidate,
     recentSkillCandidates,
     latestQualityGate: qualityGateEvent,

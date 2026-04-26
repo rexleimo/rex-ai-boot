@@ -6,6 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { buildHindsightEval } from '../lib/harness/hindsight-eval.mjs';
+import { initSoloRunJournal, writeSoloControl } from '../lib/harness/solo-journal.mjs';
 import { readHudDispatchSummary, readHudState, selectHudSessionId } from '../lib/hud/state.mjs';
 import { renderHud } from '../lib/hud/render.mjs';
 import { computeAdaptiveNextIntervalMs, createThrottledWatchRender, watchRenderLoop } from '../lib/hud/watch.mjs';
@@ -256,6 +257,57 @@ test('watchRenderLoop skips redraw when output is unchanged', async () => {
   const stdout = stdoutWrites.join('');
   assert.equal(stdout.split('hello').length - 1, 1);
   assert.equal(stdout.split('world').length - 1, 1);
+});
+
+test('readHudState and renderHud expose solo harness status without dispatch warnings', async () => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aios-hud-solo-harness-'));
+  const sessionId = 'solo-harness-session';
+  const sessionsRoot = path.join(rootDir, 'memory', 'context-db', 'sessions');
+
+  await writeJson(
+    path.join(sessionsRoot, sessionId, 'meta.json'),
+    makeSessionMeta({ sessionId, agent: 'codex-cli', updatedAt: '2026-04-26T01:00:00.000Z' })
+  );
+  await writeJson(
+    path.join(sessionsRoot, sessionId, 'state.json'),
+    { sessionId, status: 'running', updatedAt: '2026-04-26T01:00:00.000Z' }
+  );
+
+  await initSoloRunJournal({
+    rootDir,
+    sessionId,
+    objective: 'Ship release checklist',
+    provider: 'codex',
+    clientId: 'codex-cli',
+    profile: 'standard',
+    worktree: {
+      enabled: true,
+      baseRef: 'HEAD',
+      path: '/tmp/solo-harness-demo/repo',
+      preserved: true,
+      cleanupReason: '',
+    },
+  });
+  await writeSoloControl({
+    rootDir,
+    sessionId,
+    stopRequested: false,
+    reason: '',
+    requestedAt: null,
+  });
+
+  const state = await readHudState({ rootDir, sessionId });
+  assert.equal(state.latestHarnessRun?.kind, 'solo-harness.run-summary');
+  assert.equal(state.latestHarnessRun?.status, 'running');
+  assert.equal(state.harnessControl?.stopRequested, false);
+  assert.equal(state.warnings.some((warning) => /No dispatch artifact found/u.test(warning)), false);
+  assert.ok(
+    Array.isArray(state.harnessSuggestedCommands)
+      && state.harnessSuggestedCommands.some((command) => command.includes('harness status --session solo-harness-session'))
+  );
+
+  const text = renderHud(state, { preset: 'focused' });
+  assert.match(text, /Harness: status=running/);
 });
 
 test('createThrottledWatchRender limits read cadence while reusing last output', async () => {

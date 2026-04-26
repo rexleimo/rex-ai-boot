@@ -1,6 +1,10 @@
 import {
   createDefaultDoctorOptions,
   createDefaultEntropyGcOptions,
+  createDefaultHarnessResumeOptions,
+  createDefaultHarnessRunOptions,
+  createDefaultHarnessStatusOptions,
+  createDefaultHarnessStopOptions,
   createDefaultLearnEvalOptions,
   createDefaultOrchestrateOptions,
   createDefaultQualityGateOptions,
@@ -22,6 +26,7 @@ import {
   normalizeReleaseStatusFormat,
   normalizeReleaseStatusHistoryFormat,
   normalizeSnapshotRollbackFormat,
+  normalizeSoloHarnessProvider,
   normalizeSkillInstallMode,
   normalizeSkillNames,
   normalizeSkillScope,
@@ -39,6 +44,7 @@ const TEAM_PROVIDER_CLIENT_MAP = Object.freeze({
   claude: 'claude-code',
   gemini: 'gemini-cli',
 });
+const HARNESS_SUBCOMMANDS = new Set(['run', 'status', 'resume', 'stop']);
 
 function takeValue(argv, index, flag) {
   const value = argv[index + 1];
@@ -74,6 +80,14 @@ function parseWatchInterval(raw, flag) {
     throw new Error(`${flag} must be a positive integer or "auto"`);
   }
   return parsed;
+}
+
+function normalizeBaseRef(raw = 'HEAD') {
+  const value = String(raw || 'HEAD').trim();
+  if (!value) {
+    throw new Error('--base-ref must not be empty');
+  }
+  return value;
 }
 
 function parsePrivacyMode(raw) {
@@ -262,6 +276,188 @@ function createDefaultTeamOptions() {
     force: false,
     format: 'text',
     teamSpec: '3:codex',
+  };
+}
+
+function parseHarnessArgs(argv) {
+  const rest = argv.slice(1);
+  if (rest[0] === '-h' || rest[0] === '--help') {
+    return {
+      mode: 'help',
+      help: true,
+      command: 'harness',
+      options: createDefaultHarnessRunOptions(),
+    };
+  }
+  const subcommand = rest[0] && !rest[0].startsWith('-') ? String(rest[0]).trim().toLowerCase() : 'run';
+  if (!HARNESS_SUBCOMMANDS.has(subcommand)) {
+    throw new Error(`harness subcommand must be one of: ${[...HARNESS_SUBCOMMANDS].join(', ')}`);
+  }
+  if (subcommand === 'run') return parseHarnessRunArgs(argv);
+  if (subcommand === 'status') return parseHarnessStatusArgs(argv);
+  if (subcommand === 'resume') return parseHarnessResumeArgs(argv);
+  return parseHarnessStopArgs(argv);
+}
+
+function parseHarnessRunArgs(argv) {
+  const rest = argv.slice(2);
+  const options = createDefaultHarnessRunOptions();
+  let help = false;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const arg = rest[index];
+    if (arg === '--') continue;
+    if (arg === '-h' || arg === '--help') {
+      help = true;
+      continue;
+    }
+
+    switch (arg) {
+      case '--objective':
+        options.objective = takeValue(rest, index, '--objective');
+        index += 1;
+        break;
+      case '--session':
+        options.sessionId = takeValue(rest, index, '--session');
+        index += 1;
+        break;
+      case '--provider':
+        options.provider = normalizeSoloHarnessProvider(takeValue(rest, index, '--provider'));
+        index += 1;
+        break;
+      case '--profile':
+        options.profile = normalizeHarnessProfile(takeValue(rest, index, '--profile'));
+        index += 1;
+        break;
+      case '--worktree':
+        options.worktree = true;
+        break;
+      case '--base-ref':
+        options.baseRef = normalizeBaseRef(takeValue(rest, index, '--base-ref'));
+        index += 1;
+        break;
+      case '--dry-run':
+        options.dryRun = true;
+        break;
+      case '--json':
+        options.json = true;
+        break;
+      default:
+        throw new Error(`Unknown option: ${arg}`);
+    }
+  }
+
+  return {
+    mode: help ? 'help' : 'command',
+    help,
+    command: 'harness',
+    options,
+  };
+}
+
+function parseHarnessStatusArgs(argv) {
+  const rest = argv.slice(2);
+  const options = createDefaultHarnessStatusOptions();
+  let help = false;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const arg = rest[index];
+    if (arg === '--') continue;
+    if (arg === '-h' || arg === '--help') {
+      help = true;
+      continue;
+    }
+
+    switch (arg) {
+      case '--session':
+        options.sessionId = takeValue(rest, index, '--session');
+        index += 1;
+        break;
+      case '--json':
+        options.json = true;
+        break;
+      default:
+        throw new Error(`Unknown option: ${arg}`);
+    }
+  }
+
+  return {
+    mode: help ? 'help' : 'command',
+    help,
+    command: 'harness',
+    options,
+  };
+}
+
+function parseHarnessResumeArgs(argv) {
+  const rest = argv.slice(2);
+  const options = createDefaultHarnessResumeOptions();
+  let help = false;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const arg = rest[index];
+    if (arg === '--') continue;
+    if (arg === '-h' || arg === '--help') {
+      help = true;
+      continue;
+    }
+
+    switch (arg) {
+      case '--session':
+        options.sessionId = takeValue(rest, index, '--session');
+        index += 1;
+        break;
+      case '--json':
+        options.json = true;
+        break;
+      default:
+        throw new Error(`Unknown option: ${arg}`);
+    }
+  }
+
+  return {
+    mode: help ? 'help' : 'command',
+    help,
+    command: 'harness',
+    options,
+  };
+}
+
+function parseHarnessStopArgs(argv) {
+  const rest = argv.slice(2);
+  const options = createDefaultHarnessStopOptions();
+  let help = false;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const arg = rest[index];
+    if (arg === '--') continue;
+    if (arg === '-h' || arg === '--help') {
+      help = true;
+      continue;
+    }
+
+    switch (arg) {
+      case '--session':
+        options.sessionId = takeValue(rest, index, '--session');
+        index += 1;
+        break;
+      case '--reason':
+        options.reason = takeValue(rest, index, '--reason');
+        index += 1;
+        break;
+      case '--json':
+        options.json = true;
+        break;
+      default:
+        throw new Error(`Unknown option: ${arg}`);
+    }
+  }
+
+  return {
+    mode: help ? 'help' : 'command',
+    help,
+    command: 'harness',
+    options,
   };
 }
 
@@ -1318,6 +1514,10 @@ export function parseArgs(argv = []) {
     return parseHudArgs(argv);
   }
 
+  if (first === 'harness') {
+    return parseHarnessArgs(argv);
+  }
+
   const command = first === 'verify'
     ? 'doctor'
     : first === 'quality' || first === 'quality-gate'
@@ -1328,7 +1528,7 @@ export function parseArgs(argv = []) {
         ? 'snapshot-rollback'
       : first;
 
-  if (!['setup', 'update', 'uninstall', 'doctor', 'quality-gate', 'orchestrate', 'team', 'hud', 'learn-eval', 'entropy-gc', 'snapshot-rollback', 'release-status'].includes(command)) {
+  if (!['setup', 'update', 'uninstall', 'doctor', 'quality-gate', 'orchestrate', 'team', 'hud', 'harness', 'learn-eval', 'entropy-gc', 'snapshot-rollback', 'release-status'].includes(command)) {
     throw new Error(`Unknown command: ${argv[0]}`);
   }
 

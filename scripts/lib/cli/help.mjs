@@ -14,6 +14,7 @@ Commands:
   quality-gate  Run repo quality checks with harness profiles
   orchestrate   Preview reusable subagent workflow blueprints
   team          One-click multi-client live team runtime (codex/claude/gemini)
+  harness       Solo overnight harness with run journal + resume controls
   hud           Show ContextDB + dispatch HUD (CLI/TUI)
   learn-eval    Turn checkpoint telemetry into operator recommendations
   entropy-gc    Auto-archive stale ContextDB artifacts with rollback manifests
@@ -34,6 +35,8 @@ Examples:
   node scripts/aios.mjs orchestrate feature --task "Ship orchestrator blueprints"
   node scripts/aios.mjs team 3:codex "Ship orchestrator blueprints"
   node scripts/aios.mjs team 2:claude --session codex-cli-20260303T080437-065e16c0 --dry-run
+  node scripts/aios.mjs harness run --objective "Ship release checklist" --worktree
+  node scripts/aios.mjs harness status --session codex-cli-20260303T080437-065e16c0 --json
   node scripts/aios.mjs hud --provider codex
   node scripts/aios.mjs hud --watch --preset focused
   node scripts/aios.mjs team status --provider codex --watch
@@ -216,6 +219,32 @@ Options:
   --preset <minimal|focused|full> (team status) Rendering preset (default: focused; with --watch defaults to minimal unless --preset provided)
   --interval-ms <n|auto>        (team status) Watch refresh interval (default: 1000; use "auto" for 250-2000ms adaptive cadence; auto-fast enabled when <=500 or auto with watch+minimal)
   AIOS_WATCH_STALLED_MS=<ms>    (env) Mark watch output as stalled when job/tool progress is unchanged beyond threshold (default: 30000)
+  -h, --help
+`;
+    case 'harness':
+      return `Usage:
+  node scripts/aios.mjs harness run --objective <text> [options]
+  node scripts/aios.mjs harness status --session <id> [options]
+  node scripts/aios.mjs harness resume --session <id> [options]
+  node scripts/aios.mjs harness stop --session <id> [options]
+
+Examples:
+  node scripts/aios.mjs harness run --objective "Ship release checklist" --worktree
+  node scripts/aios.mjs harness run --objective "Draft tomorrow handoff" --session demo-session --dry-run --json
+  node scripts/aios.mjs harness status --session demo-session --json
+  node scripts/aios.mjs harness resume --session demo-session
+  node scripts/aios.mjs harness stop --session demo-session
+
+Options:
+  --objective <text>            (run) Required objective for a new solo harness run
+  --session <id>                Explicit ContextDB session id
+  --provider <codex|claude|gemini|opencode> (run) Provider used by the solo harness
+  --profile <minimal|standard|strict> (run) Harness profile for surrounding checks
+  --worktree                    (run) Execute inside an isolated git worktree
+  --base-ref <ref>              (run) Git ref used to seed worktree mode (default: HEAD)
+  --reason <text>               (stop) Operator note recorded in control.json
+  --dry-run                     (run) Create/update the journal without invoking a provider
+  --json                        Output structured JSON instead of text
   -h, --help
 `;
     case 'hud':

@@ -23,6 +23,7 @@ description: Start from the task you want to solve, then go deeper into ContextD
 |---|---|---|
 | Install and open the TUI | [Quick Start](getting-started.md) | `aios` |
 | Give an agent project memory | [ContextDB](contextdb.md) | `touch .contextdb-enable && codex` |
+| Run one agent overnight | [Solo Harness](solo-harness.md) | `aios harness run --objective "Draft tomorrow handoff" --worktree` |
 | Run multiple agents together | [Agent Team](team-ops.md) | `aios team 3:codex "Implement X and run tests"` |
 | See task progress | [HUD Guide](hud-guide.md) | `aios team status --provider codex --watch` |
 | Diagnose browser automation | [Troubleshooting](troubleshooting.md) | `aios internal browser doctor --fix` |
@@ -35,6 +36,8 @@ RexCLI is not another coding agent. It is a local-first capability layer:
 2. **Workflow layer: Superpowers** - turns vague requests into plans, debugs with evidence, and verifies before completion.
 3. **Collaboration layer: Agent Team** - sends clearly separable work to multiple CLI workers and tracks them with HUD.
 4. **Tool layer: Browser MCP + Privacy Guard** - lets agents use the browser and redacts sensitive config before sharing.
+
+For long-running single-agent work, [Solo Harness](solo-harness.md) adds run journals, resume/stop controls, and optional worktree isolation on top of ContextDB.
 
 In short: you still run `codex`, `claude`, and `gemini`; RexCLI helps them remember more, coordinate better, and guess less.
 
@@ -81,5 +84,6 @@ If the task is still unclear, start with normal interactive `codex` and ask it t
 - [Quick Start](getting-started.md): install, Setup, Doctor, and first run.
 - [Find Commands By Scenario](use-cases.md): choose the right entry point by task.
 - [Agent Team](team-ops.md): when to use a team, how to monitor it, and how to finish safely.
+- [Solo Harness](solo-harness.md): how to let one agent work overnight with status, stop, and resume controls.
 - [ContextDB](contextdb.md): how memory persists across sessions.
 - [Troubleshooting](troubleshooting.md): install, browser, and live execution issues.

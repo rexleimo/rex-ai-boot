@@ -51,6 +51,25 @@ gemini   # 마지막 검토 또는 비교
 
 모두 같은 프로젝트 디렉터리에서 실행하면 ContextDB 가 이벤트와 checkpoint 를 저장해, 도구를 바꿔도 컨텍스트를 잃을 가능성을 줄입니다.
 
+## 한 agent 를 밤새 계속 돌리고 싶어요
+
+적합: 목표가 명확하고, provider 하나면 충분하고, 야간에 계속 진행시키고 싶으며, 병렬 worker 가 필요하지 않을 때.
+
+```bash
+aios harness run --objective "내일 아침 인계 메모 정리" --session nightly-demo --worktree
+aios harness status --session nightly-demo --json
+aios hud --session nightly-demo --json
+```
+
+안전한 경계에서 멈추게 하거나 나중에 이어서 실행하려면:
+
+```bash
+aios harness stop --session nightly-demo --reason "아침에 사람이 인계"
+aios harness resume --session nightly-demo
+```
+
+“한 agent 가 한 목표를 계속 밀어붙이게” 하고 싶다면 [솔로 Harness](solo-harness.md) 를 사용하세요. 작업이 정말 병렬 친화적일 때만 [Agent Team](team-ops.md) 을 쓰면 됩니다.
+
 ## Agent Team 을 켜고 싶어요
 
 적합: 모듈이 독립적이고, 작업을 나눌 수 있으며, token 비용을 감수할 수 있을 때.
@@ -123,6 +142,7 @@ aios privacy read --file .env
 
 - **일상 개발**: `codex` / `claude` / `gemini`
 - **설치/업데이트**: `aios`
+- **솔로 야간 실행**: `aios harness run --objective "내일 아침 인계 메모 정리" --worktree`
 - **Agent Team**: `aios team 3:codex "task"`
 - **진행 상황**: `aios team status --watch`
 - **전달 전**: `aios quality-gate pre-pr --profile strict`

@@ -14,6 +14,12 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
 
 ## Latest Stable
 
+- `1.7.0` (2026-04-26):
+  - Adds `aios harness` for single-agent overnight runs with run journals, stop/resume controls, HUD surfacing, and optional worktree isolation.
+  - Adds official Solo Harness documentation across English, Chinese, Japanese, and Korean docs.
+
+## Earlier Stable
+
 - `1.6.3` (2026-04-25):
   - Syncs the Chinese visual onboarding structure to English, Japanese, and Korean pages.
   - Rewrites localized Overview, Quick Start, scenario commands, and Agent Team pages around the same beginner-first path.

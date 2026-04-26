@@ -181,6 +181,46 @@ aios orchestrate --session <session-id> --dispatch local --execute live --format
 
 提示（codex-cli）：推荐 Codex CLI >= v0.114。AIOS 会在可用时自动使用 `codex exec` 的结构化输出（`--output-schema` + `--output-last-message` + stdin），旧版本会自动降级为 stdout 解析。
 
+### Solo Harness（可过夜、可恢复、单目标执行）
+
+如果你想让一个 provider 围绕单个目标持续推进、夜里自己跑、早上再人工接手，就用 `harness`。
+
+它和现有能力的关系：
+
+- `ContextDB` 仍然是正式会话记忆层；`harness` 只是额外补一层人类可快速阅读的 run journal
+- 不会为了“恢复现场”直接做粗暴的 `git reset --hard`
+- `--worktree` 会把夜跑放进隔离的 git worktree，尽量不污染主工作区
+- `status` / `resume` / `stop` 让你可以中途观察、叫停、第二天继续
+
+推荐操作链路：
+
+```bash
+aios harness run --objective "整理明早交接清单" --session nightly-demo --worktree
+aios harness status --session nightly-demo --json
+aios hud --session nightly-demo --json
+aios harness stop --session nightly-demo --reason "白天人工接手"
+aios harness resume --session nightly-demo
+```
+
+如果你先想验证 artifact 和目录结构，不想真的调用模型：
+
+```bash
+aios harness run --objective "整理明早交接清单" --session nightly-demo --worktree --dry-run --json
+```
+
+每个 solo harness session 会在 `memory/context-db/sessions/<session-id>/artifacts/solo-harness/` 下落这些文件：
+
+- `objective.md`：标准化后的目标描述
+- `run-summary.json`：当前状态、迭代次数、backoff、worktree 信息
+- `control.json`：停止请求和 operator 备注
+- `iteration-0001.json` / `iteration-0001.log.jsonl`：每轮总结和原始输出日志
+
+补充说明：
+
+- live 模式复用现有 `scripts/ctx-agent.mjs` 的一次性 provider 调用链路，所以本机仍然需要安装并可运行对应 CLI（`codex`、`claude`、`gemini`、`opencode`）
+- `resume` 会先清掉之前的 stop 标记；如果原来的 worktree 路径已经不存在，会尝试自动重建
+- `aios hud --session <session-id>` 现在能直接识别 solo harness session，不再要求先有 dispatch artifact
+
 ### HUD（会话可见性）
 
 ```bash

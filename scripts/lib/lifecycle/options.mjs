@@ -17,6 +17,7 @@ export const ENTROPY_GC_FORMAT_NAMES = ['text', 'json'];
 export const SNAPSHOT_ROLLBACK_FORMAT_NAMES = ['text', 'json'];
 export const RELEASE_STATUS_FORMAT_NAMES = ['text', 'json'];
 export const RELEASE_STATUS_HISTORY_FORMAT_NAMES = ['csv', 'ndjson'];
+export const SOLO_HARNESS_PROVIDER_NAMES = ['codex', 'claude', 'gemini', 'opencode'];
 
 export function normalizeWrapMode(raw = 'opt-in') {
   const value = String(raw || 'opt-in').trim().toLowerCase();
@@ -115,6 +116,14 @@ export function normalizeReleaseStatusHistoryFormat(raw = 'csv') {
   const value = String(raw || 'csv').trim().toLowerCase();
   if (!RELEASE_STATUS_HISTORY_FORMAT_NAMES.includes(value)) {
     throw new Error(`release-status history format must be one of: ${RELEASE_STATUS_HISTORY_FORMAT_NAMES.join(', ')}`);
+  }
+  return value;
+}
+
+export function normalizeSoloHarnessProvider(raw = 'codex') {
+  const value = String(raw || 'codex').trim().toLowerCase();
+  if (!SOLO_HARNESS_PROVIDER_NAMES.includes(value)) {
+    throw new Error(`--provider must be one of: ${SOLO_HARNESS_PROVIDER_NAMES.join(', ')}`);
   }
   return value;
 }
@@ -302,5 +311,44 @@ export function createDefaultReleaseStatusOptions() {
     historyOutputPath: '',
     historyFormat: 'csv',
     historyDays: 14,
+  };
+}
+
+export function createDefaultHarnessRunOptions() {
+  return {
+    subcommand: 'run',
+    objective: '',
+    sessionId: '',
+    provider: 'codex',
+    profile: 'standard',
+    worktree: false,
+    baseRef: 'HEAD',
+    dryRun: false,
+    json: false,
+  };
+}
+
+export function createDefaultHarnessStatusOptions() {
+  return {
+    subcommand: 'status',
+    sessionId: '',
+    json: false,
+  };
+}
+
+export function createDefaultHarnessResumeOptions() {
+  return {
+    subcommand: 'resume',
+    sessionId: '',
+    json: false,
+  };
+}
+
+export function createDefaultHarnessStopOptions() {
+  return {
+    subcommand: 'stop',
+    sessionId: '',
+    json: false,
+    reason: 'operator-request',
   };
 }

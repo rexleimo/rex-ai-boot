@@ -3,7 +3,7 @@
   "purpose": "AIOS competitor/reference watchlist. When the user asks to update competitor content, sync these project snapshots before analyzing impact.",
   "default_local_root": "temp/competitor-repos",
   "reporting_preference": "When asked for the competitor list, answer in a Markdown table.",
-  "last_updated_at": "2026-04-24T23:27:22.592Z",
+  "last_updated_at": "2026-04-25T22:53:19.477Z",
   "projects": [
     {
       "input_name": "volcengine/OpenViking",
@@ -489,6 +489,43 @@
         "Use cold-start worker per task to avoid context bloat.",
         "Add .pause file and intermediate checkpoint/commit cadence to task queues."
       ]
+    },
+    {
+      "input_name": "kunchenguid/gnhf",
+      "canonical_repo": "kunchenguid/gnhf",
+      "github_url": "https://github.com/kunchenguid/gnhf",
+      "local_slug": "kunchenguid__gnhf",
+      "category": "autonomous_agent_orchestrator",
+      "resolution": "Exact owner/repo from user input.",
+      "status": "active",
+      "essence": "Agent-agnostic overnight orchestrator that runs iterative coding-agent loops with per-iteration commits, rollback-on-failure, resume metadata, and optional git worktree isolation.",
+      "core_functions": [
+        "iteration prompt plus notes loop",
+        "per-iteration commit and rollback",
+        "exponential backoff on hard agent errors",
+        "resume metadata under .gnhf/runs",
+        "git worktree isolation",
+        "live terminal status and debug logs"
+      ],
+      "aios_relevance": "Direct reference for AIOS long-running harness ergonomics: commit cadence, rollback semantics, resume UX, worktree isolation, and per-agent adapter simplicity.",
+      "similarity_score": 4,
+      "impact_score": 5,
+      "watch_priority": "P0",
+      "adoption_ideas": [
+        "Add gnhf-style prompt and notes artifacts to AIOS long-running sessions.",
+        "Add per-iteration commit or rollback policy with exponential backoff knobs for harness workers.",
+        "Add worktree-preserving overnight runs so multiple isolated workers can progress on one repo safely."
+      ],
+      "description": "Before I go to bed, I tell my agents: good night, have fun",
+      "default_branch": "main",
+      "last_commit_sha": "7c5a6b91c322588a441ed4213c09726a6c52d96d",
+      "last_pushed_at": "2026-04-24T07:36:07Z",
+      "last_github_updated_at": "2026-04-25T22:44:53Z",
+      "stars": 755,
+      "forks": 49,
+      "license": "MIT",
+      "local_path": "temp/competitor-repos/kunchenguid__gnhf",
+      "last_synced_at": "2026-04-25T22:53:16.597Z"
     }
   ]
 }

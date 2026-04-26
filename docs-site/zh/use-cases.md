@@ -51,6 +51,25 @@ gemini   # 最后复查或对比
 
 只要都在同一个项目目录里，ContextDB 会保存事件和 checkpoint，降低“换工具就丢上下文”的概率。
 
+## 我想让一个 agent 自己过夜跑
+
+适合：目标明确、只需要一个 provider、希望夜里持续推进，而且没必要拆成并行 worker。
+
+```bash
+aios harness run --objective "整理明早交接清单" --session nightly-demo --worktree
+aios harness status --session nightly-demo --json
+aios hud --session nightly-demo --json
+```
+
+如果你想让它停在安全边界，或者第二天继续：
+
+```bash
+aios harness stop --session nightly-demo --reason "白天人工接手"
+aios harness resume --session nightly-demo
+```
+
+如果你要的是“一个 agent 盯一个目标持续做”，用 [单 Agent 夜跑](solo-harness.md)。如果任务本身适合并行拆分，再用 [多 Agent 实战](team-ops.md)。
+
 ## 我想开多 Agent
 
 适合：模块独立、任务可以拆、你能接受 token 成本。
@@ -123,6 +142,7 @@ aios privacy read --file .env
 
 - **日常开发**：`codex` / `claude` / `gemini`
 - **安装更新**：`aios`
+- **单 Agent 夜跑**：`aios harness run --objective "整理明早交接清单" --worktree`
 - **多 Agent**：`aios team 3:codex "任务"`
 - **看进度**：`aios team status --watch`
 - **交付前检查**：`aios quality-gate pre-pr --profile strict`

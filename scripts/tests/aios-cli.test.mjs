@@ -318,6 +318,43 @@ test('parseArgs accepts hud command options', () => {
   assert.equal(autoIntervalNoFast.options.fast, false);
 });
 
+test('parseArgs accepts harness subcommands', () => {
+  const run = parseArgs(['harness', 'run', '--objective', 'Ship X', '--worktree', '--dry-run']);
+  assert.equal(run.command, 'harness');
+  assert.equal(run.options.subcommand, 'run');
+  assert.equal(run.options.objective, 'Ship X');
+  assert.equal(run.options.worktree, true);
+  assert.equal(run.options.dryRun, true);
+  assert.equal(run.options.provider, 'codex');
+
+  const status = parseArgs(['harness', 'status', '--session', 's1', '--json']);
+  assert.equal(status.command, 'harness');
+  assert.equal(status.options.subcommand, 'status');
+  assert.equal(status.options.sessionId, 's1');
+  assert.equal(status.options.json, true);
+
+  const resume = parseArgs(['harness', 'resume', '--session', 's1']);
+  assert.equal(resume.options.subcommand, 'resume');
+
+  const stop = parseArgs(['harness', 'stop', '--session', 's1']);
+  assert.equal(stop.options.subcommand, 'stop');
+});
+
+test('parseArgs treats top-level harness help as help mode', () => {
+  const help = parseArgs(['harness', '--help']);
+  assert.equal(help.mode, 'help');
+  assert.equal(help.command, 'harness');
+  assert.equal(help.help, true);
+});
+
+test('getCommandHelpText includes harness usage and examples', () => {
+  const text = getCommandHelpText('harness');
+  assert.match(text, /node scripts\/aios\.mjs harness run --objective/);
+  assert.match(text, /harness status/);
+  assert.match(text, /harness resume/);
+  assert.match(text, /harness stop/);
+});
+
 test('parseArgs accepts team status/history subcommands', () => {
   const status = parseArgs(['team', 'status', '--provider', 'codex', '--json']);
   assert.equal(status.command, 'team');

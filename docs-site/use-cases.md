@@ -51,6 +51,25 @@ gemini   # review or compare last
 
 As long as all three run in the same project directory, ContextDB saves events and checkpoints so switching tools is less likely to lose context.
 
+## I Want One Agent To Keep Working Overnight
+
+Good fit: one clear objective, one provider, resumable overnight work, and no need for parallel workers.
+
+```bash
+aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --worktree
+aios harness status --session nightly-demo --json
+aios hud --session nightly-demo --json
+```
+
+If you need the run to stop cleanly or continue later:
+
+```bash
+aios harness stop --session nightly-demo --reason "morning handoff"
+aios harness resume --session nightly-demo
+```
+
+Use [Solo Harness](solo-harness.md) when you want one agent to stay on one objective. Use [Agent Team](team-ops.md) when the work is truly parallel-friendly.
+
 ## I Want To Start Agent Team
 
 Good fit: independent modules, splittable work, and acceptable token cost.
@@ -123,6 +142,7 @@ Do not paste `.env`, cookies, tokens, or browser profiles directly into a model.
 
 - **Daily development**: `codex` / `claude` / `gemini`
 - **Install/update**: `aios`
+- **Solo overnight run**: `aios harness run --objective "Draft tomorrow handoff" --worktree`
 - **Agent Team**: `aios team 3:codex "task"`
 - **Progress**: `aios team status --watch`
 - **Before delivery**: `aios quality-gate pre-pr --profile strict`

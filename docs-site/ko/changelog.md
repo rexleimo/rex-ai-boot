@@ -14,6 +14,12 @@ description: 릴리스 이력, 업그레이드 안내, 관련 문서 링크.
 
 ## 최신 안정 버전
 
+- `1.7.0` (2026-04-26):
+  - 단일 agent 야간 실행용 `aios harness` 추가. run journal, stop/resume 제어, HUD 표시, 선택적 worktree 격리를 지원합니다.
+  - 공식 `Solo Harness` 문서를 English, 中文, 日本語, 한국어 사이트에 동기화했습니다.
+
+## 이전 안정 버전
+
 - `1.6.3` (2026-04-25):
   - 중국어 문서의 시각적 온보딩 구조를 English, 日本語, 한국어 페이지로 동기화.
   - Overview, Quick Start, 시나리오별 명령, Agent Team 페이지를 같은 초보자 우선 흐름으로 업데이트.
