@@ -1,6 +1,6 @@
 ---
 title: Blog Hub
-description: Engineering and growth articles about AI memory systems, Hermes-style workflows, Agent Team runtimes, and automatic subagent planning.
+description: Engineering and growth articles about AI memory systems, single-agent harness workflows, Agent Team runtimes, and automatic subagent planning.
 ---
 
 # Blog Hub
@@ -13,6 +13,7 @@ Product documentation lives on `/` and the localized docs roots.
 This blog tracks practical patterns for:
 
 - AI **memory system** design (`ContextDB`)
+- **single-agent overnight harnesses** for long-running work
 - **Hermes engine** style workflow orchestration
 - **Agent Team** collaboration models
 - **automatic subagent planning** and execution gates
@@ -26,6 +27,7 @@ This blog tracks practical patterns for:
 
 ## Latest Posts
 
+- [Solo Harness: Let One Agent Work Overnight Without Losing Control](2026-04-solo-harness.md)
 - [Browser MCP Weak-Model Upgrade: Semantic Snapshot + Text Click](2026-04-browser-mcp-weak-model-upgrade.md)
 - [Advanced Design Skills for Page Building: From Vague Prompts to Production UI](advanced-design-skills-page-building.md)
 - [RexCLI TUI Refactor: Modern Terminal UI with React Ink](2026-04-rexcli-ink-tui-refactor.md)
@@ -40,6 +42,9 @@ This blog tracks practical patterns for:
 
 ### Where should I start if I care about memory systems?
 Start from [ContextDB Search Upgrade](contextdb-fts-bm25-search.md), then pair with docs at `/contextdb/`.
+
+### Where should I start for overnight single-agent work?
+Start with [Solo Harness: Let One Agent Work Overnight Without Losing Control](2026-04-solo-harness.md), then pair it with the official docs at `https://cli.rexai.top/solo-harness/`.
 
 ### Where are Agent Team and subagent orchestration updates?
 Follow [Orchestrate Live](orchestrate-live.md) and release notes on this blog hub.

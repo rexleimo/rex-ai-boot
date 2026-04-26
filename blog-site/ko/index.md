@@ -1,6 +1,6 @@
 ---
 title: 블로그 허브
-description: AI 기억 시스템, Hermes 워크플로, Agent Team, 자동 subagent 계획 중심의 성장/엔지니어링 아티클.
+description: AI 기억 시스템, 단일 agent harness 워크플로, Agent Team, 자동 subagent 계획 중심의 성장/엔지니어링 아티클.
 ---
 
 # 블로그 허브
@@ -13,6 +13,7 @@ description: AI 기억 시스템, Hermes 워크플로, Agent Team, 자동 subage
 이 블로그의 핵심 주제:
 
 - **기억 시스템** (ContextDB)
+- **단일 agent 야간 harness** 와 장시간 실행
 - **Hermes 엔진** 스타일 워크플로
 - **Agent Team** 협업 실행
 - **자동 subagent 계획** 및 실행 게이트
@@ -26,6 +27,7 @@ description: AI 기억 시스템, Hermes 워크플로, Agent Team, 자동 subage
 
 ## 최신 글
 
+- [Solo Harness: 한 Agent 를 밤새 돌려도 통제를 잃지 않는 방법](2026-04-solo-harness.md)
 - [Browser MCP 약한 모델 개선: Semantic Snapshot + Text Click](2026-04-browser-mcp-weak-model-upgrade.md)
 - [고급 디자인 스킬 페이지 제작: 모호한 프롬프트를 실전 UI로](advanced-design-skills-page-building.md)
 - [RexCLI TUI 리팩토링: React Ink 기반의 현대적 터미널 UI](2026-04-rexcli-ink-tui-refactor.md)
@@ -40,6 +42,9 @@ description: AI 기억 시스템, Hermes 워크플로, Agent Team, 자동 subage
 
 ### 기억 시스템 관련 글은 어디서 시작하면 되나요?
 [ContextDB 검색 업그레이드](contextdb-fts-bm25-search.md)부터 읽는 것이 가장 빠릅니다.
+
+### 단일 agent 야간 실행은 어떤 글부터 읽으면 되나요?
+먼저 [Solo Harness: 한 Agent 를 밤새 돌려도 통제를 잃지 않는 방법](2026-04-solo-harness.md)을 읽고, 이어서 [공식 문서](https://cli.rexai.top/ko/solo-harness/)를 확인하면 됩니다.
 
 ### Agent Team / subagent 업데이트는 어디서 확인하나요?
 [Orchestrate Live](orchestrate-live.md)를 중심으로 확인하면 됩니다.

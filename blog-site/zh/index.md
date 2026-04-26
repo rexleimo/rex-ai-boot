@@ -1,6 +1,6 @@
 ---
 title: 博客中心
-description: 聚焦 AI 记忆系统、Hermes 引擎工作流、Agent Team 与自动化子代理规划的工程与增长文章。
+description: 聚焦 AI 记忆系统、单 Agent harness 工作流、Agent Team 与自动化子代理规划的工程与增长文章。
 ---
 
 # 博客中心
@@ -13,6 +13,7 @@ description: 聚焦 AI 记忆系统、Hermes 引擎工作流、Agent Team 与自
 这里重点覆盖：
 
 - **记忆系统**（ContextDB）实践
+- **单 Agent 夜跑 harness** 与长任务执行
 - **Hermes 引擎** 风格的编排工作流
 - **Agent Team** 多智能体协作
 - **自动化规划子代理** 与执行门禁
@@ -26,6 +27,7 @@ description: 聚焦 AI 记忆系统、Hermes 引擎工作流、Agent Team 与自
 
 ## 最新文章
 
+- [Solo Harness：让一个 Agent 过夜跑，但你依然可控](2026-04-solo-harness.md)
 - [Browser MCP 弱模型升级：语义快照 + 文本点击](2026-04-browser-mcp-weak-model-upgrade.md)
 - [高级设计技能页面制作：把模糊提示词变成可生产 UI](advanced-design-skills-page-building.md)
 - [RexCli TUI 重构：基于 React Ink 的现代终端交互](zh/2026-04-rexcli-ink-tui-refactor.md)
@@ -41,6 +43,9 @@ description: 聚焦 AI 记忆系统、Hermes 引擎工作流、Agent Team 与自
 
 ### 想看记忆系统相关内容，先读哪篇？
 先看 [ContextDB 检索升级：FTS5/BM25 + 增量索引同步（P1.5）](contextdb-fts-bm25-search.md)，再回到文档站 `/contextdb/`。
+
+### 想看单 Agent 夜跑，先读哪篇？
+先看 [Solo Harness：让一个 Agent 过夜跑，但你依然可控](2026-04-solo-harness.md)，再回到官方文档 [单 Agent 夜跑](https://cli.rexai.top/zh/solo-harness/)。
 
 ### Agent Team 和子代理编排更新看哪里？
 重点看 [Orchestrate Live：Subagent Runtime 正式可用](orchestrate-live.md)。
