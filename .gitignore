@@ -86,5 +86,4 @@ memory/skills/skills/
 .gemini/settings.json
 
 # Local analysis clones (do not commit)
-everything-claude-code/
 .superpowers/
