@@ -249,6 +249,10 @@ test('parseArgs accepts hud command options', () => {
   assert.equal(jsonResult.options.provider, 'codex');
   assert.equal(jsonResult.options.json, true);
 
+  const watchdogResult = parseArgs(['hud', '--watchdog']);
+  assert.equal(watchdogResult.command, 'hud');
+  assert.equal(watchdogResult.options.watchdog, true);
+
   const showSkillCandidates = parseArgs(['hud', '--show-skill-candidates']);
   assert.equal(showSkillCandidates.command, 'hud');
   assert.equal(showSkillCandidates.options.showSkillCandidates, true);

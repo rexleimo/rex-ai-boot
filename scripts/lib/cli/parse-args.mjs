@@ -147,6 +147,7 @@ function createDefaultHudOptions() {
     skillCandidateLimit: 0,
     exportSkillCandidatePatchTemplate: false,
     draftId: '',
+    watchdog: false,
     json: false,
     intervalMs: 1000,
   };
@@ -230,6 +231,9 @@ function parseHudArgs(argv) {
         break;
       case '--json':
         options.json = true;
+        break;
+      case '--watchdog':
+        options.watchdog = true;
         break;
       case '--interval-ms':
         options.intervalMs = parseWatchInterval(takeValue(rest, index, '--interval-ms'), '--interval-ms');

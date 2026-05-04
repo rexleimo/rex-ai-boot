@@ -130,6 +130,7 @@ export function normalizeHudOptions(rawOptions = {}) {
     skillCandidateLimit: requestedSkillCandidateLimit,
     exportSkillCandidatePatchTemplate: rawOptions.exportSkillCandidatePatchTemplate === true,
     draftId: normalizeText(rawOptions.draftId),
+    watchdog: rawOptions.watchdog === true,
     json: rawOptions.json === true,
     intervalMs: cadence.renderIntervalMs,
     intervalLabel: cadence.renderIntervalLabel,
@@ -190,6 +191,7 @@ export async function runHud(rawOptions = {}, { rootDir, io = console, env = pro
       provider: options.provider,
       fast: fastWatchMinimal,
       skillCandidateLimit,
+      watchdog: options.watchdog,
     });
     const filteredState = filterSkillCandidateState(state, { draftId });
 
