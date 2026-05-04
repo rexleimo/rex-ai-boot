@@ -37,25 +37,15 @@ function buildRollbackCommand(sessionId) {
   return `node scripts/aios.mjs snapshot-rollback --session ${normalizedSessionId} --dry-run`;
 }
 
-function normalizeReadinessText(value) {
-  return String(value ?? '').trim();
-}
-
-function normalizeReadinessArray(value) {
+function normalizeUniqueTextArray(value) {
   const source = Array.isArray(value) ? value : [];
-  return [...new Set(source.map((item) => normalizeReadinessText(item)).filter(Boolean))];
-}
-
-function normalizeWatchdogVerdict(value = '') {
-  const normalized = normalizeReadinessText(value).toLowerCase();
-  if (normalized === 'ready' || normalized === 'warning' || normalized === 'blocked') return normalized;
-  return 'ready';
+  return [...new Set(source.map((item) => normalizeText(item)).filter(Boolean))];
 }
 
 export function buildWatchdogReadiness(recovery = {}) {
-  const decision = normalizeReadinessText(recovery?.decision || 'observe').toLowerCase();
-  const nextActions = normalizeReadinessArray(recovery?.nextActions);
-  const reason = normalizeReadinessText(recovery?.reason);
+  const decision = normalizeText(recovery?.decision || 'observe').toLowerCase();
+  const nextActions = normalizeUniqueTextArray(recovery?.nextActions);
+  const reason = normalizeText(recovery?.reason);
 
   if (decision === 'observe') {
     return {
@@ -71,7 +61,7 @@ export function buildWatchdogReadiness(recovery = {}) {
     return {
       verdict: 'warning',
       blockedReasons: [],
-      warnings: normalizeReadinessArray([reason || 'watchdog recovery is recommended']),
+      warnings: normalizeUniqueTextArray([reason || 'watchdog recovery is recommended']),
       nextActions,
       evidence: [],
     };
@@ -79,9 +69,9 @@ export function buildWatchdogReadiness(recovery = {}) {
 
   // pause/rollback and any unknown decision are treated as blocked.
   return {
-    verdict: normalizeWatchdogVerdict('blocked'),
-    blockedReasons: normalizeReadinessArray([decision || 'blocked']),
-    warnings: normalizeReadinessArray([reason || 'watchdog recovery is blocked']),
+    verdict: 'blocked',
+    blockedReasons: normalizeUniqueTextArray([decision || 'blocked']),
+    warnings: normalizeUniqueTextArray([reason || 'watchdog recovery is blocked']),
     nextActions,
     evidence: [],
   };
