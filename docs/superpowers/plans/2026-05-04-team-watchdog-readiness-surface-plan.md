@@ -25,7 +25,7 @@
 - Modify: `scripts/lib/lifecycle/watchdog.mjs`
 - Modify: `scripts/tests/team-watchdog.test.mjs`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add tests that assert watchdog recovery decisions map into the shared readiness vocabulary:
 
@@ -62,7 +62,7 @@ node --test scripts/tests/team-watchdog.test.mjs
 
 Expected before implementation: `buildWatchdogReadiness` is missing or the verdict assertions fail.
 
-- [ ] **Step 2: Implement the minimal adapter**
+- [x] **Step 2: Implement the minimal adapter**
 
 Add a helper that turns the existing recovery decision into the shared readiness shape:
 
@@ -101,7 +101,7 @@ export function buildWatchdogReadiness(recovery = {}) {
 
 Then include the readiness object in the JSON/text payload returned by `runTeamWatchdog`.
 
-- [ ] **Step 3: Verify the watchdog contract**
+- [x] **Step 3: Verify the watchdog contract**
 
 Run:
 
@@ -118,7 +118,7 @@ Expected: the new readiness tests pass and the existing watchdog recovery tests 
 - Modify: `scripts/lib/hud/render.mjs`
 - Modify: `scripts/tests/hud-state.test.mjs`
 
-- [ ] **Step 1: Write the failing integration tests**
+- [x] **Step 1: Write the failing integration tests**
 
 Add assertions that the watch/status path exposes readiness and prints it in the rendered output:
 
@@ -158,7 +158,7 @@ node --test scripts/tests/hud-state.test.mjs scripts/tests/team-watchdog.test.mj
 
 Expected before implementation: the JSON output does not yet include `watchdog.readiness`, or the HUD output omits the readiness label.
 
-- [ ] **Step 2: Thread readiness through the status pipeline**
+- [x] **Step 2: Thread readiness through the status pipeline**
 
 Update `runTeamStatus` so the watchdog state returned by `buildTeamWatchdogState` carries the readiness object, and make the non-JSON watch output print a compact line such as:
 
@@ -168,11 +168,11 @@ Watchdog: decision=retry readiness=warning reason=blocked jobs detected without 
 
 Keep the existing watch cadence, stall tracking, and skill-candidate output unchanged.
 
-- [ ] **Step 3: Render readiness in the HUD**
+- [x] **Step 3: Render readiness in the HUD**
 
 Extend `renderHud()` so the current session panel shows the same readiness label whenever `state.watchdog.readiness` exists. Keep the line short; the goal is to make the verdict scannable, not to duplicate the full recovery explanation.
 
-- [ ] **Step 4: Verify the status and HUD tests**
+- [x] **Step 4: Verify the status and HUD tests**
 
 Run:
 
@@ -187,7 +187,7 @@ Expected: the watchdog readiness label appears in both the JSON state and the re
 **Files:**
 - Modify: `scripts/tests/aios-orchestrator.test.mjs`
 
-- [ ] **Step 1: Add a regression test for the existing orchestrate contract**
+- [x] **Step 1: Add a regression test for the existing orchestrate contract**
 
 Add one focused assertion that `runOrchestrate({ preflightMode: 'auto', executionMode: 'dry-run' })` still returns the shared `readiness` object, and that blocked live runs still fail with `kind: 'guardrail.preflight-readiness'`.
 
@@ -216,11 +216,11 @@ node --test scripts/tests/aios-orchestrator.test.mjs scripts/tests/team-watchdog
 
 Expected before verification: the new assertions either fail or need to be aligned to the exact readiness shape already emitted by orchestrate.
 
-- [ ] **Step 2: Keep the orchestrate guard unchanged**
+- [x] **Step 2: Keep the orchestrate guard unchanged**
 
 Do not add new CLI flags or a second readiness schema. If the regression test reveals a mismatch, align only the field names and labels so `team watchdog` and `orchestrate` share the same `ready/warning/blocked` vocabulary.
 
-- [ ] **Step 3: Final verification**
+- [x] **Step 3: Final verification**
 
 Run:
 
