@@ -258,6 +258,7 @@ Options:
   --watch                       Refresh display on an interval (TTY-only)
   --fast                        In --watch + minimal preset, skip heavy reads and throttle state refresh to ~1s
   --no-fast                     Force disable fast mode (overrides auto-fast)
+  --watchdog                    Include watchdog decision + readiness (computed from worker signals)
   --show-skill-candidates [inline|detail] Show skill-candidate artifact rows (default mode: inline; "detail" prints candidate view directly)
   --skill-candidate-view <inline|detail> Explicitly choose how skill candidates are rendered
   --skill-candidate-limit <n>   Cap detailed skill-candidate rows (implies --show-skill-candidates, default 6)
