@@ -1,10 +1,22 @@
 # AIOS Competitor Feature Roadmap
 
 Date: 2026-04-25
+Updated: 2026-05-04
 
 ## Scope
 
-This note synthesizes local competitor snapshots under `temp/competitor-repos/` plus current AIOS docs/code references. GitHub API refresh hit unauthenticated rate limits during this run, so this roadmap prioritizes the already-synced local snapshots from 2026-04-24/25 and avoids relying on unverified live web claims.
+This note synthesizes local competitor snapshots under `temp/competitor-repos/` plus current AIOS docs/code references. The original roadmap was written from the 2026-04-24/25 local snapshots. On 2026-05-04, AIOS refreshed GitHub metadata for the harness/agent-heavy watchlist rows and confirmed that the main product direction still holds. Because full tarball refreshes stalled on large downloads during the May 4 pass, the addendum below should be read as a metadata refresh rather than a full source re-audit.
+
+## 2026-05-04 Metadata Refresh Addendum
+
+The latest known upstream activity in the harness/agent focus set still clusters around execution contracts, recovery, and operator-facing control:
+
+- `HKUDS/OpenHarness` -> `7873f0d10917` (`2026-05-03T09:03:42Z`)
+- `lazynet/lazy-harness` -> `04bb2119d16e` (`2026-05-03T15:42:34Z`)
+- `kunchenguid/gnhf` -> `011f3d38ed8e` (`2026-05-03T05:38:10Z`)
+- `code-yeongyu/oh-my-openagent` -> `9ba3b574a7d1` (`2026-05-03T09:43:40Z`)
+
+The practical conclusion from the May 4 refresh is confidence, not redirection: AIOS should still prioritize harness reliability, readiness verdicts, plan/ownership discipline, edit safety, and browser evidence before broadening the generated-agent surface.
 
 ## Executive Summary
 
@@ -16,12 +28,15 @@ AIOS already has strong primitives: ContextDB, cross-CLI wrappers, `team` / `orc
 4. Browser visual evidence and regression reports.
 5. Operator control plane and generated team templates.
 
+The May 4 metadata refresh strengthens one ordering rule inside that roadmap: `watchdog + readiness verdict + plan/ownership blockers` should land before broader team-factory or surface-area expansion.
+
 ## Highest-Value Feature Gaps
 
 | Priority | Feature | Competitor reference | AIOS opportunity |
 |---|---|---|---|
 | P0 | ContextDB explain + hygiene | OpenViking, OpenClaw Recall | Add `contextdb search --explain`, suppression reasons, `status/prune-noise/reindex/compact`. |
 | P0 | Worker watchdog + auto recovery | long-running-tasks, OpenHarness, lazy-harness | Upgrade `team status --watch` from observation to commit/file/CPU/log stall detection plus pause/retry/resume. |
+| P0 | Run readiness verdicts | OpenHarness, lazy-harness | Add machine-readable `ready/warning/blocked` verdicts with top next actions for `aios team`, `aios orchestrate`, and browser flows. |
 | P0 | Compact continuity chain | lazy-harness | Save working summary before compaction/session end and reinject on resume/session start. |
 | P0 | Plan/ownership gates | execplan-skills, oh-my-openagent | Block multi-step work when plan/checkpoint/owned path evidence is missing or invalid. |
 | P0 | Browser smoke evidence | vision-test-harness | YAML/JSON browser flows, screenshots, pixel diff, privacy overlay, HTML report. |
@@ -68,6 +83,7 @@ Best competitors:
 - OpenHarness: dry-run readiness with `ready/warning/blocked`, concrete next actions, permissions/hooks/task lifecycle, MCP, background tasks, and retry/backoff.
 - lazy-harness: profile isolation, hooks, SQLite monitoring, knowledge directory, scheduler, migration dry-run/backup/rollback, pre-compact summary, post-compact reinjection, and selftest.
 - long-running-tasks: cron-based unattended queue, one-task cold-start workers, intermediate commits, `.pause`, progress reports, and multi-signal stall detection.
+- gnhf: overnight iteration loop with resume notes, commit/rollback ergonomics, and worktree-preserving isolation for long unattended runs.
 
 Evidence:
 
@@ -84,11 +100,12 @@ Evidence:
 Recommended AIOS work:
 
 - P0: Upgrade `team status --watch` into a watchdog with commit age, file activity, worker process/CPU, and log freshness; connect to `team --resume`, `retry-blocked`, and rollback.
+- P0: Add readiness verdicts for `aios team`, `aios orchestrate`, and browser flows with `ready/warning/blocked` plus actionable next steps.
 - P0: Add `.pause` semantics and a recovery decision object: `observe`, `retry`, `respawn`, `rollback`, `human_gate`.
 - P0: Add compact continuity: pre-compact/session-end summary plus post-compact/session-start reinjection through ContextDB.
 - P1: Add `aios selftest` or `aios doctor --orchestrate` for machine health: wrapper state, ContextDB writeability, subagent clients, browser MCP, telemetry paths, scheduler availability.
 - P1: Add recurring jobs for `learn-eval`, stale session cleanup, watchdog checks, and scheduled doctor.
-- P2: Make dry-run output more operator-focused with a machine-readable readiness verdict, blocked reasons, and top next actions.
+- P1: Expand dry-run output into a reusable readiness layer shared by text summaries, JSON output, HUD, and browser preflight.
 
 ### 3. Execution Quality / Planning / Edit Safety
 
@@ -155,9 +172,10 @@ Recommended AIOS work:
 
 1. ContextDB explain + hygiene.
 2. Worker watchdog with recovery decision states.
-3. Compact continuity chain.
-4. Plan/ownership preflight blockers.
-5. Browser smoke evidence reports with privacy overlay.
+3. Run readiness verdicts for `team` / `orchestrate` / browser flows.
+4. Compact continuity chain.
+5. Plan/ownership preflight blockers.
+6. Browser smoke evidence reports with privacy overlay.
 
 Success signal: a long-running browser/team task can explain its context, prove visual outcomes, recover from stalled workers, and show next actions without reading raw logs.
 
