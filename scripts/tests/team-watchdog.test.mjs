@@ -9,6 +9,7 @@ import { readHudState } from '../lib/hud/state.mjs';
 import { runTeamStatus } from '../lib/lifecycle/team-ops.mjs';
 import {
   collectWatchdogSignals,
+  buildWatchdogReadiness,
   decideWatchdogRecovery,
   runTeamWatchdog,
 } from '../lib/lifecycle/watchdog.mjs';
@@ -157,6 +158,26 @@ test('collectWatchdogSignals derives active or dead CPU state from worker pid ev
   assert.equal(signals.cpuState, 'dead');
 });
 
+test('buildWatchdogReadiness maps observe to ready', () => {
+  const recovery = decideWatchdogRecovery({
+    commitAgeMinutes: 2,
+    fileActivityAgeMinutes: 1,
+    logAgeMinutes: 1,
+    cpuState: 'active',
+  });
+  const readiness = buildWatchdogReadiness(recovery);
+
+  assert.equal(readiness.verdict, 'ready');
+  assert.deepEqual(readiness.blockedReasons, []);
+});
+
+test('buildWatchdogReadiness maps pause to blocked', () => {
+  const readiness = buildWatchdogReadiness(decideWatchdogRecovery({ paused: true }));
+
+  assert.equal(readiness.verdict, 'blocked');
+  assert.ok(readiness.blockedReasons.some((reason) => /pause/i.test(reason)));
+});
+
 test('parseArgs accepts team watchdog command and status --watchdog', () => {
   const watchdog = parseArgs(['team', 'watchdog', '--session', 's1', '--json']);
   assert.equal(watchdog.command, 'team');
@@ -184,6 +205,7 @@ test('runTeamWatchdog emits structured JSON decision', async () => {
   const payload = JSON.parse(logs.at(-1));
   assert.equal(payload.sessionId, sessionId);
   assert.equal(payload.decision, 'pause');
+  assert.equal(payload.readiness.verdict, 'blocked');
 });
 
 test('runTeamStatus --watchdog includes watchdog decision in JSON state and HUD state can expose it', async () => {
@@ -200,10 +222,12 @@ test('runTeamStatus --watchdog includes watchdog decision in JSON state and HUD 
   const payload = JSON.parse(logs.at(-1));
   assert.equal(payload.selection?.sessionId, sessionId);
   assert.equal(payload.watchdog?.decision, 'pause');
+  assert.equal(payload.watchdog?.readiness?.verdict, 'blocked');
 
   const state = await readHudState({ rootDir, sessionId, provider: 'codex', watchdog: true });
   assert.equal(state.selection?.sessionId, sessionId);
   assert.equal(state.watchdog?.decision, 'pause');
+  assert.equal(state.watchdog?.readiness?.verdict, 'blocked');
 });
 
 

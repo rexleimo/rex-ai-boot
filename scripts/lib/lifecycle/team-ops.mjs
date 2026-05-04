@@ -370,7 +370,12 @@ async function persistSkillCandidatePatchTemplateArtifact({
 function formatWatchdogStatusLine(state = {}) {
   const watchdog = state?.watchdog;
   if (!watchdog || typeof watchdog !== 'object') return '';
-  return `Watchdog: decision=${watchdog.decision} reason=${watchdog.reason}`;
+  const readiness = watchdog.readiness && typeof watchdog.readiness === 'object'
+    ? watchdog.readiness
+    : null;
+  const readinessVerdict = normalizeText(readiness?.verdict);
+  const readinessLabel = readinessVerdict ? ` readiness=${readinessVerdict}` : '';
+  return `Watchdog: decision=${watchdog.decision}${readinessLabel} reason=${watchdog.reason}`;
 }
 
 export async function runTeamStatus(

@@ -215,6 +215,36 @@ function formatMinimalDispatchProgressLabel(state) {
   return parts.join(' ');
 }
 
+function formatMinimalWatchdogLabel(state) {
+  const watchdog = state?.watchdog && typeof state.watchdog === 'object'
+    ? state.watchdog
+    : null;
+  if (!watchdog) return '';
+  const readiness = watchdog.readiness && typeof watchdog.readiness === 'object'
+    ? watchdog.readiness
+    : null;
+  const verdict = normalizeText(readiness?.verdict);
+  return verdict ? `readiness=${verdict}` : '';
+}
+
+function formatWatchdogLine(state) {
+  const watchdog = state?.watchdog && typeof state.watchdog === 'object'
+    ? state.watchdog
+    : null;
+  if (!watchdog) return '';
+  const readiness = watchdog.readiness && typeof watchdog.readiness === 'object'
+    ? watchdog.readiness
+    : null;
+  const verdict = normalizeText(readiness?.verdict);
+  const decision = normalizeText(watchdog.decision);
+  const bits = [
+    'Watchdog:',
+    decision ? `decision=${decision}` : '',
+    verdict ? `readiness=${verdict}` : '',
+  ].filter(Boolean);
+  return bits.length > 1 ? bits.join(' ') : '';
+}
+
 function formatDispatchProgressLine(state) {
   const progress = normalizeProgressCounts(state?.latestDispatch?.jobProgress);
   if (!progress) return '';
@@ -533,13 +563,22 @@ export function renderHud(state, { preset = 'focused', watchMeta = null } = {}) 
     const dispatchProgressLabel = formatMinimalDispatchProgressLabel(state);
     const qualityLabel = formatMinimalQualityLabel(state);
     const skillCandidateLabel = formatMinimalSkillCandidateLabel(state);
+    const watchdogLabel = formatMinimalWatchdogLabel(state);
     const insights = dispatch?.dispatchInsights && typeof dispatch.dispatchInsights === 'object'
       ? dispatch.dispatchInsights
       : null;
     const insightsLabel = insights && insights.status && insights.status !== 'clear'
       ? `insights=${normalizeText(insights.status)}(${Number.isFinite(insights.score) ? Math.max(0, Math.floor(insights.score)) : 0})`
       : '';
-    const statusLine = [harnessLine, dispatchLabel, insightsLabel, dispatchProgressLabel, qualityLabel, skillCandidateLabel].filter(Boolean).join(' ');
+    const statusLine = [
+      harnessLine,
+      dispatchLabel,
+      insightsLabel,
+      dispatchProgressLabel,
+      qualityLabel,
+      skillCandidateLabel,
+      watchdogLabel,
+    ].filter(Boolean).join(' ');
     return watchLine
       ? `${sessionLine}\n${statusLine}\n${watchLine}\n`
       : `${sessionLine}\n${statusLine}\n`;
@@ -555,6 +594,7 @@ export function renderHud(state, { preset = 'focused', watchMeta = null } = {}) 
     formatHarnessLine(state),
     formatDispatchLine(state),
     formatDispatchInsightsLine(state),
+    formatWatchdogLine(state),
   ];
 
   const dispatchProgressLine = formatDispatchProgressLine(state);

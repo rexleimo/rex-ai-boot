@@ -571,6 +571,17 @@ test('renderHud minimal shows watch visibility and quality category labels', () 
       outcome: 'retry-needed',
       categoryRef: 'category:quality-logs',
     },
+    watchdog: {
+      decision: 'observe',
+      reason: 'watchdog baseline',
+      readiness: {
+        verdict: 'ready',
+        blockedReasons: [],
+        warnings: [],
+        nextActions: [],
+        evidence: [],
+      },
+    },
   }, {
     preset: 'minimal',
     watchMeta: {
@@ -586,6 +597,7 @@ test('renderHud minimal shows watch visibility and quality category labels', () 
   assert.match(rendered, /jobs=1\/4 run=1 blk=2 tool=local-phase:1\/4/);
   assert.match(rendered, /quality=failed\(category:quality-logs\)/);
   assert.match(rendered, /skill=skill-constraints\/ownership-policy#2/);
+  assert.match(rendered, /readiness=ready/);
   assert.match(rendered, /watch: render=250ms data-refresh=1000ms fast=on data-age=20000ms/);
 });
 

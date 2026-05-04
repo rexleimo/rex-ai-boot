@@ -37,6 +37,56 @@ function buildRollbackCommand(sessionId) {
   return `node scripts/aios.mjs snapshot-rollback --session ${normalizedSessionId} --dry-run`;
 }
 
+function normalizeReadinessText(value) {
+  return String(value ?? '').trim();
+}
+
+function normalizeReadinessArray(value) {
+  const source = Array.isArray(value) ? value : [];
+  return [...new Set(source.map((item) => normalizeReadinessText(item)).filter(Boolean))];
+}
+
+function normalizeWatchdogVerdict(value = '') {
+  const normalized = normalizeReadinessText(value).toLowerCase();
+  if (normalized === 'ready' || normalized === 'warning' || normalized === 'blocked') return normalized;
+  return 'ready';
+}
+
+export function buildWatchdogReadiness(recovery = {}) {
+  const decision = normalizeReadinessText(recovery?.decision || 'observe').toLowerCase();
+  const nextActions = normalizeReadinessArray(recovery?.nextActions);
+  const reason = normalizeReadinessText(recovery?.reason);
+
+  if (decision === 'observe') {
+    return {
+      verdict: 'ready',
+      blockedReasons: [],
+      warnings: [],
+      nextActions,
+      evidence: [],
+    };
+  }
+
+  if (decision === 'retry' || decision === 'respawn') {
+    return {
+      verdict: 'warning',
+      blockedReasons: [],
+      warnings: normalizeReadinessArray([reason || 'watchdog recovery is recommended']),
+      nextActions,
+      evidence: [],
+    };
+  }
+
+  // pause/rollback and any unknown decision are treated as blocked.
+  return {
+    verdict: normalizeWatchdogVerdict('blocked'),
+    blockedReasons: normalizeReadinessArray([decision || 'blocked']),
+    warnings: normalizeReadinessArray([reason || 'watchdog recovery is blocked']),
+    nextActions,
+    evidence: [],
+  };
+}
+
 export function decideWatchdogRecovery(signals = {}) {
   const staleThresholdMinutes = normalizeNumber(signals.staleThresholdMinutes, DEFAULT_STALE_THRESHOLD_MINUTES);
   const sessionId = normalizeText(signals.sessionId);
@@ -152,9 +202,11 @@ export async function buildTeamWatchdogState(options = {}, context = {}) {
     provider: options.provider,
     workers: options.workers,
   });
+  const recovery = decideWatchdogRecovery(signals);
   return {
     sessionId: signals.sessionId,
-    ...decideWatchdogRecovery(signals),
+    ...recovery,
+    readiness: buildWatchdogReadiness(recovery),
   };
 }
 
@@ -172,6 +224,7 @@ function formatWatchdogText(state) {
   const lines = [
     `AIOS Team Watchdog: ${state.sessionId || '(no session)'}`,
     `Decision: ${state.decision}`,
+    state.readiness?.verdict ? `Readiness: ${state.readiness.verdict}` : '',
     `Reason: ${state.reason}`,
   ];
   if (Array.isArray(state.nextActions) && state.nextActions.length > 0) {
