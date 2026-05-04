@@ -257,6 +257,7 @@ export async function runHud(rawOptions = {}, { rootDir, io = console, env = pro
       provider: options.provider,
       fast: fastWatchMinimal,
       skillCandidateLimit,
+      watchdog: options.watchdog,
     });
     const filteredState = filterSkillCandidateState(state, { draftId });
     const hudText = renderHud(filteredState, {
