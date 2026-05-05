@@ -837,7 +837,7 @@ test('dispatch runtime registry rejects unsupported subagent client in live mode
     dispatchPolicy: null,
     env: {
       AIOS_EXECUTE_LIVE: '1',
-      AIOS_SUBAGENT_CLIENT: 'opencode-cli',
+      AIOS_SUBAGENT_CLIENT: 'unsupported-cli',
     },
   });
 
@@ -845,7 +845,7 @@ test('dispatch runtime registry rejects unsupported subagent client in live mode
   assert.equal(result.ok, false);
   assert.equal(Array.isArray(result.jobRuns), true);
   assert.match(String(result.error || ''), /Unsupported AIOS_SUBAGENT_CLIENT/i);
-  assert.match(String(result.error || ''), /codex-cli, claude-code, gemini-cli/i);
+  assert.match(String(result.error || ''), /codex-cli, claude-code, gemini-cli, opencode-cli/i);
 });
 
 test('dispatch runtime registry can simulate the subagent runtime when explicitly enabled', async () => {

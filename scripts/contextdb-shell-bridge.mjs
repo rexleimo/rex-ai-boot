@@ -532,12 +532,13 @@ function inferSubagentClientFromCommand(command) {
   if (command === 'claude') return 'claude-code';
   if (command === 'gemini') return 'gemini-cli';
   if (command === 'codex') return 'codex-cli';
+  if (command === 'opencode') return 'opencode-cli';
   return '';
 }
 
 function normalizeSubagentClient(value) {
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'codex-cli' || normalized === 'claude-code' || normalized === 'gemini-cli') {
+  if (normalized === 'codex-cli' || normalized === 'claude-code' || normalized === 'gemini-cli' || normalized === 'opencode-cli') {
     return normalized;
   }
   return '';

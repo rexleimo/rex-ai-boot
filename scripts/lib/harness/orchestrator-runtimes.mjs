@@ -1,10 +1,12 @@
 import runtimeSpec from '../../../memory/specs/orchestrator-runtimes.json' with { type: 'json' };
-import { normalizeHandoffPayload } from './handoff.mjs';
+import { normalizeHandoffPayload, validateHandoffPayload } from './handoff.mjs';
 import { createHandoffFromPhase, executeLocalDispatchPlan, mergeParallelHandoffs } from './orchestrator.mjs';
-import { executeSubagentDispatchPlan } from './subagent-runtime.mjs';
+import { executeSubagentDispatchPlan, runOneShot } from './subagent-runtime.mjs';
+import { runGroupChat } from './groupchat-runtime.mjs';
 
 export const LOCAL_DRY_RUN_RUNTIME = 'local-dry-run';
 export const SUBAGENT_RUNTIME = 'subagent-runtime';
+export const GROUPCHAT_RUNTIME = 'groupchat-runtime';
 export const LIVE_EXECUTION_ENV = 'AIOS_EXECUTE_LIVE';
 export const SUBAGENT_SIMULATE_ENV = 'AIOS_SUBAGENT_SIMULATE';
 
@@ -247,7 +249,9 @@ export function getDispatchRuntime(runtimeId = LOCAL_DRY_RUN_RUNTIME) {
   return cloneDispatchRuntime(definition);
 }
 
-export function selectDispatchRuntime({ executionMode = 'none' } = {}) {
+export function selectDispatchRuntime({ executionMode = 'none', runtimeId = '' } = {}) {
+  const explicitId = String(runtimeId || '').trim();
+  if (explicitId) return explicitId;
   const mode = String(executionMode || 'none').trim();
   if (mode === 'dry-run') {
     return LOCAL_DRY_RUN_RUNTIME;
@@ -256,6 +260,134 @@ export function selectDispatchRuntime({ executionMode = 'none' } = {}) {
     return SUBAGENT_RUNTIME;
   }
   throw new Error(`No dispatch runtime available for execution mode: ${mode}`);
+}
+
+function extractHandoffJson(rawOutput) {
+  const text = String(rawOutput || '').trim();
+  if (!text) return null;
+
+  // Try extracting from markdown code fence: ```json ... ```
+  const fenceMatch = /```(?:json)?\s*\n?([\s\S]*?)\n?```/i.exec(text);
+  const candidate = fenceMatch ? fenceMatch[1].trim() : text;
+
+  // Find the outermost JSON object
+  const firstBrace = candidate.indexOf('{');
+  if (firstBrace === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  let end = -1;
+
+  for (let i = firstBrace; i < candidate.length; i += 1) {
+    const ch = candidate[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') { depth += 1; continue; }
+    if (ch === '}') { depth -= 1; if (depth === 0) { end = i + 1; break; } }
+  }
+
+  if (end === -1) return null;
+
+  try {
+    return JSON.parse(candidate.slice(firstBrace, end));
+  } catch {
+    return null;
+  }
+}
+
+function buildGroupChatSpawnFn({ clientId, timeoutMs, env, rootDir, io }) {
+  return async ({ role, speaker, workItem, conversationHistory, systemPrompt, conversationPrompt, userPrompt }) => {
+    const promptText = String(userPrompt || conversationPrompt || '').trim();
+    if (!promptText) {
+      return { exitCode: 1, error: 'Empty prompt for groupchat speaker', handoff: null, rawOutput: '', elapsedMs: 0 };
+    }
+
+    const startedAt = Date.now();
+    let result;
+    try {
+      result = await runOneShot(clientId, {
+        systemPrompt: '',
+        userPrompt: promptText,
+        timeoutMs,
+        env,
+        io,
+        cwd: rootDir || undefined,
+      });
+    } catch (error) {
+      const elapsedMs = Date.now() - startedAt;
+      return {
+        exitCode: 1,
+        error: error instanceof Error ? error.message : String(error),
+        handoff: null,
+        rawOutput: '',
+        elapsedMs,
+      };
+    }
+
+    const elapsedMs = Date.now() - startedAt;
+    const rawOutput = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
+    const handoffJson = extractHandoffJson(rawOutput);
+    const handoff = handoffJson
+      ? normalizeHandoffPayload(handoffJson)
+      : normalizeHandoffPayload({
+          status: result.exitCode === 0 ? 'completed' : 'blocked',
+          fromRole: role,
+          toRole: 'planner',
+          taskTitle: workItem?.title || 'GroupChat task',
+          contextSummary: rawOutput.slice(0, 500),
+          findings: [],
+          recommendations: result.exitCode === 0 ? ['Task completed'] : ['Re-plan needed'],
+        });
+
+    return {
+      exitCode: result.exitCode,
+      handoff,
+      rawOutput,
+      elapsedMs,
+      error: result.error || null,
+    };
+  };
+}
+
+function mapGroupChatResultToDispatchResult(groupChatResult, plan, dispatchPlan) {
+  const jobRuns = [];
+  const history = Array.isArray(groupChatResult.conversationHistory)
+    ? groupChatResult.conversationHistory
+    : [];
+
+  for (const entry of history) {
+    jobRuns.push({
+      jobId: `gc-${entry.turnNumber}`,
+      jobType: 'phase',
+      role: entry.role,
+      executor: entry.speaker,
+      executorLabel: entry.speaker,
+      dependsOn: [],
+      status: entry.handoff?.status === 'blocked' ? 'blocked' : 'completed',
+      inputSummary: { dependencyCount: 0, inputTypes: [] },
+      output: {
+        outputType: 'handoff',
+        payload: entry.handoff || null,
+      },
+    });
+  }
+
+  const executorDetails = [...new Set(history.map(e => e.speaker))]
+    .map(speaker => ({ id: speaker, label: speaker }));
+
+  return {
+    mode: 'live',
+    ok: groupChatResult.ok === true,
+    executorRegistry: executorDetails.map(e => e.id),
+    executorDetails,
+    jobRuns,
+    finalOutputs: jobRuns
+      .filter(jr => jr.output?.outputType === 'handoff')
+      .map(jr => ({ jobId: jr.jobId, outputType: 'handoff' })),
+  };
 }
 
 export function createDispatchRuntimeRegistry({ executeDryRunPlan = executeLocalDispatchPlan } = {}) {
@@ -309,6 +441,70 @@ export function createDispatchRuntimeRegistry({ executeDryRunPlan = executeLocal
 
           const result = await executeSubagentDispatchPlan(plan, dispatchPlan, { dispatchPolicy, io, env, rootDir });
           return normalizeDispatchRuntimeResult(result, runtime, mode);
+        },
+      };
+      continue;
+    }
+
+    if (runtime.id === GROUPCHAT_RUNTIME) {
+      registry[GROUPCHAT_RUNTIME] = {
+        ...runtime,
+        async execute({ plan, dispatchPlan, dispatchPolicy, io, env, rootDir } = {}) {
+          const mode = runtime.executionModes[0] || 'live';
+          const gated = !isLiveExecutionEnabled(env);
+
+          if (gated) {
+            return normalizeDispatchRuntimeResult({
+              mode,
+              ok: false,
+              error: `Live execution is disabled by default. Set ${LIVE_EXECUTION_ENV}=1 to opt in.`,
+              executorRegistry: Array.isArray(dispatchPlan?.executorRegistry) ? [...dispatchPlan.executorRegistry] : [],
+              executorDetails: Array.isArray(dispatchPlan?.executorDetails)
+                ? dispatchPlan.executorDetails.map((item) => ({ ...item }))
+                : [],
+              jobRuns: [],
+              finalOutputs: [],
+            }, runtime, mode);
+          }
+
+          const clientId = String(env?.AIOS_SUBAGENT_CLIENT || '').trim().toLowerCase();
+          if (!clientId) {
+            return normalizeDispatchRuntimeResult({
+              mode,
+              ok: false,
+              error: 'AIOS_SUBAGENT_CLIENT is required for groupchat-runtime live execution.',
+              executorRegistry: [],
+              executorDetails: [],
+              jobRuns: [],
+              finalOutputs: [],
+            }, runtime, mode);
+          }
+
+          const concurrency = (() => {
+            const v = Number.parseInt(String(env?.AIOS_SUBAGENT_CONCURRENCY || '').trim(), 10);
+            return Number.isFinite(v) && v > 0 ? v : 3;
+          })();
+          const timeoutMs = (() => {
+            const v = Number.parseInt(String(env?.AIOS_SUBAGENT_TIMEOUT_MS || '').trim(), 10);
+            return Number.isFinite(v) && v > 0 ? v : 10 * 60 * 1000;
+          })();
+
+          const spawnFn = buildGroupChatSpawnFn({ clientId, timeoutMs, env, rootDir, io });
+
+          const groupChatResult = await runGroupChat({
+            taskTitle: String(plan?.taskTitle || '').trim() || 'Untitled task',
+            contextSummary: String(plan?.contextSummary || '').trim(),
+            workItems: Array.isArray(plan?.workItems) ? plan.workItems : null,
+            blueprint: String(plan?.blueprint || 'feature').trim(),
+            spawnFn,
+            config: { maxRounds: 10, concurrency, timeoutMs },
+            rootDir,
+            env,
+            io,
+          });
+
+          const dispatchResult = mapGroupChatResultToDispatchResult(groupChatResult, plan, dispatchPlan);
+          return normalizeDispatchRuntimeResult(dispatchResult, runtime, mode);
         },
       };
       continue;

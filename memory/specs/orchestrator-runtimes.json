@@ -12,6 +12,12 @@
       "description": "Runs orchestration phase jobs via external CLI subagents (codex/claude/gemini). Live execution is opt-in via AIOS_EXECUTE_LIVE=1 and requires AIOS_SUBAGENT_CLIENT.",
       "requiresModel": true,
       "executionModes": ["live"]
+    },
+    "groupchat-runtime": {
+      "label": "GroupChat Runtime",
+      "description": "Runs orchestration via round-based agent group chat with shared conversation history and re-plan support. Live execution is opt-in via AIOS_EXECUTE_LIVE=1.",
+      "requiresModel": true,
+      "executionModes": ["live"]
     }
   }
 }

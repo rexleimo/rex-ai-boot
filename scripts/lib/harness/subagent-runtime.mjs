@@ -9,6 +9,8 @@ import { spawnCommand, spawnCommandWithInput, commandExists } from '../platform/
 import { normalizeHandoffPayload, validateHandoffPayload } from './handoff.mjs';
 import { normalizeOrchestratorAgentSpec } from './orchestrator-agents.mjs';
 import { mergeParallelHandoffs } from './orchestrator.mjs';
+import { buildPersonaOverlay } from '../memo/persona.mjs';
+import { workspaceMemorySessionId, workspaceMemorySessionDir, workspaceMemoryMetaPath, workspaceMemoryPinnedPath } from '../memo/workspace-memory.mjs';
 
 export const SUBAGENT_CLIENT_ENV = 'AIOS_SUBAGENT_CLIENT';
 export const SUBAGENT_CONCURRENCY_ENV = 'AIOS_SUBAGENT_CONCURRENCY';
@@ -21,11 +23,12 @@ export const SUBAGENT_UPSTREAM_BACKOFF_MS_ENV = 'AIOS_SUBAGENT_UPSTREAM_BACKOFF_
 export const SUBAGENT_PRE_MUTATION_SNAPSHOT_ENV = 'AIOS_SUBAGENT_PRE_MUTATION_SNAPSHOT';
 export const SUBAGENT_CODEX_DISABLE_MCP_ENV = 'AIOS_SUBAGENT_CODEX_DISABLE_MCP';
 
-const SUPPORTED_CLIENTS = new Set(['codex-cli', 'claude-code', 'gemini-cli']);
+const SUPPORTED_CLIENTS = new Set(['codex-cli', 'claude-code', 'gemini-cli', 'opencode-cli']);
 const CLIENT_COMMAND = {
   'codex-cli': 'codex',
   'claude-code': 'claude',
   'gemini-cli': 'gemini',
+  'opencode-cli': 'opencode',
 };
 
 const CODEX_OUTPUT_SCHEMA_REL = path.join('memory', 'specs', 'agent-handoff.schema.json');
@@ -459,6 +462,88 @@ async function loadContextPacket({ rootDir, sessionId, env, io }) {
   }
 }
 
+async function loadRolePinnedMemory(role, rootDir) {
+  const normalizedRole = normalizeText(role).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+  if (!normalizedRole || !rootDir) return '';
+
+  const space = `workspace-memory--${normalizedRole}`;
+  const sessionId = workspaceMemorySessionId(space);
+  const pinnedPath = workspaceMemoryPinnedPath(rootDir, sessionId);
+
+  try {
+    const content = await fs.readFile(pinnedPath, 'utf8');
+    return String(content || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+async function appendJobFindingsToRoleMemory({ role, rootDir, jobId, taskTitle, findings, contextSummary }) {
+  const normalizedRole = normalizeText(role).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+  if (!normalizedRole || !rootDir) return;
+
+  const space = `workspace-memory--${normalizedRole}`;
+  const sessionId = workspaceMemorySessionId(space);
+  const dir = workspaceMemorySessionDir(rootDir, sessionId);
+  const metaPath = workspaceMemoryMetaPath(rootDir, sessionId);
+
+  try {
+    await fs.access(metaPath);
+  } catch {
+    try {
+      await fs.mkdir(dir, { recursive: true });
+      runContextDbCli([
+        'init', '--workspace', rootDir,
+      ]);
+      runContextDbCli([
+        'session:new', '--workspace', rootDir,
+        '--agent', 'workspace-memory',
+        '--project', path.basename(rootDir),
+        '--goal', `Workspace memory space "${space}"`,
+        '--session-id', sessionId,
+        '--tags', `space:${space}`,
+      ]);
+    } catch { /* skip on session creation failure */ }
+  }
+
+  const findingsText = Array.isArray(findings) && findings.length > 0
+    ? findings.slice(0, 3).map(f => `- ${normalizeText(f)}`).join('\n')
+    : 'no findings reported';
+  const memoText = `[${jobId || 'job'}] ${normalizeText(taskTitle)}: ${normalizeText(contextSummary || 'completed')}\n${findingsText}`;
+
+  const turnId = `memo:${normalizedRole}:${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  try {
+    runContextDbCli([
+      'event:add', '--workspace', rootDir,
+      '--session', sessionId,
+      '--role', 'user',
+      '--kind', 'memo',
+      '--text', memoText.slice(0, 1400),
+      '--turn-id', turnId,
+      '--turn-type', 'side',
+      '--environment', 'memo',
+      '--hindsight-status', 'na',
+      '--outcome', 'success',
+    ]);
+  } catch { /* skip event write on failure */ }
+
+  const pinnedPath = workspaceMemoryPinnedPath(rootDir, sessionId);
+  let existingPinned = '';
+  try {
+    existingPinned = await fs.readFile(pinnedPath, 'utf8');
+  } catch { /* no existing pinned */ }
+  const pinnedEntry = `- [${new Date().toISOString()}] ${jobId}: ${normalizeText(contextSummary || taskTitle)}`;
+  const newPinned = existingPinned.trim()
+    ? `${existingPinned.trim()}\n${pinnedEntry}`
+    : `# ${normalizedRole} Role Memory\n\n${pinnedEntry}`;
+  const clipped = newPinned.length > 5000
+    ? newPinned.slice(newPinned.length - 4500)
+    : newPinned;
+  try {
+    await fs.writeFile(pinnedPath, `${clipped.trim()}\n`, 'utf8');
+  } catch { /* skip pinned write on failure */ }
+}
+
 function extractJsonCandidate(rawText = '') {
   const text = String(rawText || '').trim();
   if (!text) return null;
@@ -502,12 +587,31 @@ function renderDependencyContext(dependencyRuns = []) {
   return handoffs.map((payload, index) => `- upstream[${index + 1}]: ${JSON.stringify(payload)}`).join('\n');
 }
 
-function buildSystemPrompt({ agent, contextText, plan, job, phase }) {
+function buildSystemPrompt({ agent, contextText, plan, job, phase, rootDir, env, rolePinnedMemory }) {
   const lines = [];
   if (agent?.systemPrompt) {
     lines.push(agent.systemPrompt);
   } else {
     lines.push('You are a role-based subagent for AIOS orchestrations.');
+  }
+
+  if (rootDir) {
+    try {
+      const personaOverlay = buildPersonaOverlay('persona', { workspaceRoot: rootDir, env });
+      if (personaOverlay) { lines.push(''); lines.push(personaOverlay.trim()); }
+    } catch { /* skip persona on error */ }
+    try {
+      const userOverlay = buildPersonaOverlay('user', { workspaceRoot: rootDir, env });
+      if (userOverlay) { lines.push(''); lines.push(userOverlay.trim()); }
+    } catch { /* skip user profile on error */ }
+  }
+
+  if (rolePinnedMemory) {
+    lines.push('');
+    lines.push('## Role Memory (Pinned)');
+    lines.push('Key findings preserved from prior invocations of this role:');
+    lines.push('');
+    lines.push(rolePinnedMemory.trim());
   }
 
   lines.push('');
@@ -694,7 +798,7 @@ function attachAttemptMeta(result, payload) {
   return payload;
 }
 
-async function runOneShot(clientId, { systemPrompt, userPrompt, timeoutMs, env, io = null, cwd = null, codexOutput = null }) {
+export async function runOneShot(clientId, { systemPrompt, userPrompt, timeoutMs, env, io = null, cwd = null, codexOutput = null }) {
   const command = CLIENT_COMMAND[clientId];
   if (!command) {
     return { exitCode: 1, stdout: '', stderr: '', error: `Unsupported subagent client: ${clientId}` };
@@ -717,6 +821,11 @@ async function runOneShot(clientId, { systemPrompt, userPrompt, timeoutMs, env, 
       ? `${systemText}\n\n## New User Request\n${promptText}`
       : promptText;
     args = ['-p', fullPrompt];
+  } else if (clientId === 'opencode-cli') {
+    const fullPrompt = systemText
+      ? `${systemText}\n\n## New User Request\n${promptText}`
+      : promptText;
+    args = ['run', fullPrompt];
   } else {
     const fullPrompt = systemText
       ? `${systemText}\n\n## New User Request\n${promptText}`
@@ -1055,7 +1164,9 @@ async function executePhaseJob(plan, job, phase, dependencyRuns, {
   codexTempDir,
 }) {
   const agent = resolveAgentForJob(job, agentSpecNormalized);
-  const systemPrompt = buildSystemPrompt({ agent, contextText, plan, job, phase });
+  const role = normalizeText(job?.role);
+  const rolePinnedMemory = await loadRolePinnedMemory(role, rootDir);
+  const systemPrompt = buildSystemPrompt({ agent, contextText, plan, job, phase, rootDir, env, rolePinnedMemory });
   const userPrompt = buildUserPrompt({ plan, job, phase, dependencyRuns });
 
   const codexOutput = clientId === 'codex-cli' && codexTempDir && rootDir
@@ -1174,6 +1285,17 @@ async function executePhaseJob(plan, job, phase, dependencyRuns, {
     : '';
   io?.log?.(`[subagent-runtime] completed ${job.jobId} status=${payloadStatus} elapsedMs=${elapsedMs}${costNote}`);
 
+  if (jobStatus === 'completed') {
+    appendJobFindingsToRoleMemory({
+      role: job.role,
+      rootDir,
+      jobId: job.jobId,
+      taskTitle: plan.taskTitle,
+      findings: validation.value.findings,
+      contextSummary: validation.value.contextSummary,
+    }).catch(() => { /* background best-effort */ });
+  }
+
   return {
     jobId: job.jobId,
     jobType: job.jobType,
@@ -1260,7 +1382,7 @@ export async function executeSubagentDispatchPlan(
   const normalizedClient = normalizeText(env?.[SUBAGENT_CLIENT_ENV]).toLowerCase();
   const clientId = normalizedClient || '';
   if (!SUPPORTED_CLIENTS.has(clientId)) {
-    const supportedHint = `Set ${SUBAGENT_CLIENT_ENV} to one of: codex-cli, claude-code, gemini-cli.`;
+    const supportedHint = `Set ${SUBAGENT_CLIENT_ENV} to one of: codex-cli, claude-code, gemini-cli, opencode-cli.`;
     return {
       mode: 'live',
       ok: false,

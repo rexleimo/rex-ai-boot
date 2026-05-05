@@ -836,6 +836,7 @@ export async function runOrchestrate(
     env = process.env,
     preflightAdapters = DEFAULT_PREFLIGHT_ADAPTERS,
     dispatchRuntimeRegistry = createDispatchRuntimeRegistry(),
+    runtimeId = '',
   } = {}
 ) {
   const { options } = planOrchestrate(rawOptions);
@@ -1032,7 +1033,7 @@ export async function runOrchestrate(
 
   const dispatchRunStartedAt = Date.now();
   const dispatchRuntime = options.executionMode !== 'none'
-    ? resolveDispatchRuntime({ executionMode: options.executionMode }, dispatchRuntimeRegistry)
+    ? resolveDispatchRuntime({ executionMode: options.executionMode, runtimeId }, dispatchRuntimeRegistry)
     : null;
   const executorCapabilityManifest = dispatchPlan
     ? buildExecutorCapabilityManifest({
