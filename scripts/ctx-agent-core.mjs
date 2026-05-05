@@ -1825,15 +1825,8 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
       ? `${basePrompt}\n\n${routerGuide}`
       : basePrompt;
 
-    console.log(`Session: ${facadeResult.facade?.sessionId || '(new)'}`);
-    console.log(`Workspace: ${opts.workspaceRoot}`);
-    console.log('Context packet: (lazy-load; agent self-discovers memory)');
-    if (memoryPrelude) {
-      console.log('Memory prelude: enabled (persona/user/workspace layers)');
-    }
-    if (routerGuide) {
-      console.log(`Task router guide: enabled (mode=${opts.routeMode})`);
-    }
+    console.error(`[aios] Session: ${facadeResult.facade?.sessionId || '(new)'}`);
+    console.error(`[aios] Memory: ${memoryPrelude ? 'persona+user+workspace loaded' : 'empty'} | Context: lazy-load | Route: ${opts.routeMode}`);
 
     if (shouldScheduleAsyncBootstrap(facadeResult, opts.agent)) {
       forkAsyncBootstrap(opts.workspaceRoot, opts);
@@ -1884,9 +1877,6 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
   const packAbs = packResult.packAbs;
   const contextText = packResult.contextText;
   const memoryPrelude = await buildMemoryPrelude(opts.workspaceRoot, process.env);
-  if (memoryPrelude) {
-    console.log('Memory prelude: enabled (persona/user/workspace layers)');
-  }
 
   const persistenceInstructions = buildPersistenceInstructions();
   const baseContextText = memoryPrelude
@@ -1942,26 +1932,8 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
     })
     : '';
 
-  console.log(`Session: ${opts.sessionId}`);
-  console.log(`Workspace: ${opts.workspaceRoot}`);
-  if (packResult.mode === 'fresh') {
-    console.log(`Context packet: ${packAbs}`);
-  } else if (packResult.mode === 'stale') {
-    console.log(`Context packet: ${packAbs} (stale)`);
-  } else {
-    console.log('Context packet: (unavailable)');
-  }
-  if (latestInjected?.ok && latestInjected.relPath) {
-    console.log(`Latest injected context: ${latestInjected.relPath}`);
-    if (!opts.prompt) {
-      console.log(
-        `Rehydrate tip: after /new (codex) or /clear (claude/gemini), restart the CLI (preferred) or re-attach ${latestInjected.relPath} as your first prompt.`
-      );
-    }
-  }
-  if (routerGuide) {
-    console.log(`Task router guide: enabled (mode=${opts.routeMode})`);
-  }
+  console.error(`[aios] Session: ${opts.sessionId}`);
+  console.error(`[aios] Memory: ${memoryPrelude ? 'persona+user+workspace loaded' : 'empty'} | Context: ${packResult.mode} | Route: ${opts.routeMode}`);
 
   if (opts.prompt) {
     const routeDecision = resolveTaskRouteDecision({
