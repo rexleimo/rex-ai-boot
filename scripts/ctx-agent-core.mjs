@@ -848,6 +848,25 @@ async function ensureMemoryLayers(workspaceRoot, { agent = 'claude-code', projec
   }
 }
 
+function buildPersistenceInstructions() {
+  return [
+    '## Memory Persistence (AIOS)',
+    '',
+    'Before finishing a work session or completing a multi-step task, save your progress:',
+    '',
+    '- Quick note: `aios memo add "描述当前进展和下一步"`',
+    '- Pin important facts: `aios memo pin add "需要跨会话记住的关键信息"`',
+    '',
+    'Save when:',
+    '- You complete a significant task or subtask',
+    '- You encounter a blocker you can\'t resolve',
+    '- You\'re about to end the session',
+    '- You discover something non-obvious that future sessions need to know',
+    '',
+    'Do NOT save routine progress or trivial updates.',
+  ].join('\n');
+}
+
 export function shouldAutoRebuildNative(env = process.env) {
   return parseBoolEnv(env.CTXDB_AUTO_REBUILD_NATIVE, true);
 }
@@ -1752,9 +1771,10 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
           sessionId: facadeResult.facade?.sessionId || '',
         })
       : '';
+    const persistenceInstructions = buildPersistenceInstructions();
     const basePrompt = memoryPrelude
-      ? `${memoryPrelude}\n\n${facadePrompt}`
-      : facadePrompt;
+      ? `${memoryPrelude}\n\n${persistenceInstructions}\n\n${facadePrompt}`
+      : `${persistenceInstructions}\n\n${facadePrompt}`;
     const effectivePrompt = routerGuide
       ? `${basePrompt}\n\n${routerGuide}`
       : basePrompt;
@@ -1822,11 +1842,14 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
     console.log('Memory prelude: enabled (persona/user/workspace layers)');
   }
 
+  const persistenceInstructions = buildPersistenceInstructions();
   const baseContextText = memoryPrelude
     ? contextText
-      ? `${memoryPrelude}\n\n${contextText}`
-      : memoryPrelude
-    : contextText;
+      ? `${memoryPrelude}\n\n${persistenceInstructions}\n\n${contextText}`
+      : `${memoryPrelude}\n\n${persistenceInstructions}`
+    : contextText
+      ? `${persistenceInstructions}\n\n${contextText}`
+      : persistenceInstructions;
   const routerGuide = shouldInjectTaskRouterGuide(process.env)
     ? buildTaskRouterGuide({
       agent: opts.agent,
