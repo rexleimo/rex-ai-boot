@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 export const DEFAULT_WORKSPACE_MEMORY_SPACE = 'default';
@@ -46,4 +47,37 @@ export function workspaceMemoryPinnedPath(workspaceRoot, sessionId) {
 
 export function workspaceMemoryEventsPath(workspaceRoot, sessionId) {
   return path.join(workspaceMemorySessionDir(workspaceRoot, sessionId), 'l2-events.jsonl');
+}
+
+export function ensureWorkspaceMemorySession(workspaceRoot, space = 'default') {
+  const sessionId = workspaceMemorySessionId(space);
+  const dir = workspaceMemorySessionDir(workspaceRoot, sessionId);
+  const metaPath = workspaceMemoryMetaPath(workspaceRoot, sessionId);
+
+  if (existsSync(metaPath)) {
+    return { created: false, sessionId, dir };
+  }
+
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(metaPath, JSON.stringify({
+    schemaVersion: 1,
+    agent: 'workspace-memory',
+    project: 'workspace-memory',
+    goal: `Workspace memory for space: ${space}`,
+    status: 'running',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }, null, 2) + '\n', 'utf8');
+
+  const pinnedPath = workspaceMemoryPinnedPath(workspaceRoot, sessionId);
+  if (!existsSync(pinnedPath)) {
+    writeFileSync(pinnedPath, '', 'utf8');
+  }
+
+  const eventsPath = workspaceMemoryEventsPath(workspaceRoot, sessionId);
+  if (!existsSync(eventsPath)) {
+    writeFileSync(eventsPath, '', 'utf8');
+  }
+
+  return { created: true, sessionId, dir };
 }
