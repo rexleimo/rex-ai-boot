@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureBootstrapTask, isBootstrapEnabled } from './ctx-bootstrap.mjs';
 import {
+  ensureWorkspaceMemorySession,
   normalizeWorkspaceMemorySpace,
   workspaceMemoryEventsPath,
   workspaceMemoryMetaPath,
@@ -14,7 +15,7 @@ import {
   workspaceMemorySessionId,
   workspaceMemoryStatePath,
 } from './lib/memo/workspace-memory.mjs';
-import { buildPersonaOverlay } from './lib/memo/persona.mjs';
+import { buildPersonaOverlay, ensurePersonaLayer } from './lib/memo/persona.mjs';
 import { scanWorkspaceMemoryContent } from './lib/memo/safety.mjs';
 import { extractTouchedFilesFromText, writeContinuitySummary } from './lib/contextdb/continuity.mjs';
 
@@ -28,7 +29,7 @@ const ROUTE_EXECUTION_MODES = new Set(['dry-run', 'live']);
 const TEAM_ROUTE_PROVIDERS = new Set(['auto', 'codex', 'claude', 'gemini']);
 const HARNESS_ROUTE_PROVIDERS = new Set(['auto', 'codex', 'claude', 'gemini', 'opencode']);
 const ORCHESTRATE_BLUEPRINTS = new Set(['feature', 'bugfix', 'refactor', 'security']);
-const SUPPORTED_SUBAGENT_CLIENT_IDS = new Set(['codex-cli', 'claude-code', 'gemini-cli']);
+const SUPPORTED_SUBAGENT_CLIENT_IDS = new Set(['codex-cli', 'claude-code', 'gemini-cli', 'opencode-cli']);
 const CTXDB_CODEX_DISABLE_MCP_ENV = 'CTXDB_CODEX_DISABLE_MCP';
 const TEAM_ROUTE_KEYWORD_PATTERNS = [
   /并行|并发|同时推进|拆分|多模块|跨模块|跨系统|多阶段/u,
@@ -815,6 +816,38 @@ async function buildMemoryPrelude(workspaceRoot, env = process.env) {
   return sections.join('\n\n').trim();
 }
 
+async function ensureMemoryLayers(workspaceRoot, { agent = 'claude-code', project = 'aios' } = {}) {
+  try {
+    ensurePersonaLayer('persona', { env: process.env });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn(`[warn] persona init skipped: ${reason}`);
+  }
+
+  try {
+    ensurePersonaLayer('user', { env: process.env });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn(`[warn] user profile init skipped: ${reason}`);
+  }
+
+  try {
+    ensureWorkspaceMemorySession(workspaceRoot);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn(`[warn] workspace memory init skipped: ${reason}`);
+  }
+
+  try {
+    const facadePath = path.join(workspaceRoot, 'memory', 'context-db', '.facade.json');
+    const facade = await generateFacadeFromSession(workspaceRoot, agent, project);
+    await fs.writeFile(facadePath, JSON.stringify(facade, null, 2) + '\n', 'utf8');
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn(`[warn] facade refresh skipped: ${reason}`);
+  }
+}
+
 export function shouldAutoRebuildNative(env = process.env) {
   return parseBoolEnv(env.CTXDB_AUTO_REBUILD_NATIVE, true);
 }
@@ -1470,10 +1503,12 @@ async function runRoutedOneShotTask({
     preflightMode: 'auto',
     format: 'json',
   };
+  const useGroupChat = spec.routeMode === 'team' && spec.executionMode === 'live';
   const result = await runOrchestrate(orchestrateOptions, {
     rootDir: workspaceRoot,
     env: spec.env,
     io,
+    runtimeId: useGroupChat ? 'groupchat-runtime' : '',
   });
   const commandOutput = outputChunks.join('\n').trim();
   const lines = [
@@ -1690,6 +1725,8 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
       console.warn(`[warn] bootstrap task initialization failed: ${reason}`);
     }
   }
+
+  await ensureMemoryLayers(opts.workspaceRoot, { agent: opts.agent, project: opts.project });
 
   const lazyMode = shouldLazyLoad(process.env);
 
