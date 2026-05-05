@@ -105,9 +105,17 @@ aios harness resume --session nightly-demo --no-hooks
 적합: 모듈이 독립적이고, 작업을 나눌 수 있으며, token 비용을 감수할 수 있을 때.
 
 ```bash
+# Dry-run preview (안전, 모델 호출 없음)
 aios team 3:codex "X 구현, 완료 전 테스트 실행, 변경 요약"
+
+# 라이브 GroupChat 실행 (라운드 기반, 공유 대화)
+AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=codex-cli aios team 3:codex "X 구현"
+
+# 진행 상황 모니터링
 aios team status --provider codex --watch
 ```
+
+라이브 모드에서 Agent Team 은 **GroupChat Runtime** 을 사용합니다. 에이전트가 공유 대화 스레드로 라운드 기반 실행을 하며, planner 가 작업을 분석하고 implementer 들이 라운드별로 병렬 작업한 뒤 reviewer 가 검증합니다. 막힌 에이전트는 자동으로 re-plan 라운드를 트리거합니다.
 
 부적합: 요구가 모호함, 단일 bug, 여러 worker 가 같은 파일을 수정할 가능성이 높음. 이때는 일반 `codex` 부터 시작하세요.
 
@@ -158,6 +166,13 @@ aios orchestrate --session <session-id> --dispatch local --execute live
 
 새 사용자는 `aios team ...` 을 우선 사용하세요. `orchestrate live` 는 session, plan, preflight gate 를 이미 이해한 메인테이너에게 더 적합합니다.
 
+집중된 단일 변경 작업에는 `bugfix` blueprint (3라운드: plan → implement → review) 를 사용하세요:
+
+```bash
+AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=codex-cli \
+  aios orchestrate bugfix --task "Fix X" --execute live --preflight none
+```
+
 ## 브라우저 자동화를 진단하고 싶어요
 
 ```bash
@@ -180,7 +195,7 @@ aios privacy read --file .env
 - **일상 개발**: `codex` / `claude` / `gemini` / `opencode`
 - **설치/업데이트**: `aios`
 - **솔로 야간 실행**: `aios harness run --objective "내일 아침 인계 메모 정리" --worktree`
-- **Agent Team**: `aios team 3:codex "task"`
+- **Agent Team (GroupChat)**: `aios team 3:codex "task"` (라운드 기반 공유 대화)
 - **진행 상황**: `aios team status --watch`
 - **전달 전**: `aios quality-gate pre-pr --profile strict`
 - **브라우저 문제**: `aios internal browser doctor --fix`

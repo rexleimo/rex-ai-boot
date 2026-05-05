@@ -7,6 +7,8 @@ description: Agent Team 을 언제 쓰고, 어떻게 시작・모니터링・마
 
 Agent Team 은 “많을수록 좋은” 기능이 아닙니다. **분리 가능하고, 경계가 명확하며, 병렬 실행해도 안전한** 작업에 적합합니다.
 
+라이브 모드에서 Agent Team 은 **GroupChat Runtime** 을 사용합니다. 에이전트가 공유 대화 스레드로 라운드 기반 실행을 하며, planner 가 작업을 분석하고 implementer 들이 병렬로 작업한 뒤 reviewer 가 검증합니다. 에이전트가 막히면 자동으로 re-plan 라운드가 트리거됩니다.
+
 하나만 기억한다면:
 
 ```bash
@@ -142,11 +144,70 @@ export AIOS_SUBAGENT_CLIENT=codex-cli
 aios orchestrate --session <session-id> --dispatch local --execute live
 ```
 
+## GroupChat Runtime (라운드 기반 Agent Team)
+
+라이브 모드에서 `aios team` 은 **GroupChat Runtime** 을 사용합니다. 이는 에이전트들이 격리된 일회성 dispatch 가 아닌, 단일 공유 대화 스레드에서 실행되는 라운드 기반 실행 모델입니다.
+
+### 기존 병렬 dispatch 와의 차이점
+
+| | 기존 병렬 | GroupChat Runtime |
+|---|---|---|
+| 에이전트 간 통신 | 격리됨; 의존 출력만 | 공유 대화 히스토리 |
+| 실행 순서 | 정적 DAG 단계 | 라운드(순차), 라운드 내 병렬 speaker |
+| 블록 복구 | 수동 retry | 자동 re-plan (planner 재평가) |
+| 작업 확장 | 고정 큐 | Planner 발견 사항이 병렬 작업 항목으로 |
+| 종료 | 모든 job 완료 | 합의 또는 최대 라운드 도달 |
+
+### 라운드 흐름
+
+GroupChat 은 blueprint 단계를 라운드에 매핑합니다. 각 라운드 내에서 speaker 는 동시에 실행됩니다 (`AIOS_SUBAGENT_CONCURRENCY` 로 제어). 한 라운드가 끝나면 다음 라운드의 모든 에이전트가 전체 누적 히스토리를 볼 수 있습니다.
+
+```
+Round 1 → planner (분석, 작업 항목 생성)
+Round 2 → N × implementer (병렬, 작업 항목당 하나씩)
+Round 3 → reviewer (+ security-reviewer 병렬)
+```
+
+implementer 가 `blocked` 또는 `needs-input` 을 보고하면 **re-plan 라운드**가 자동으로 삽입됩니다. planner 가 전체 히스토리를 보고 상황을 재평가한 후 다음 단계를 결정합니다.
+
+### Blueprint 선택
+
+| Blueprint | 라운드 | 적합한 상황 |
+|---|---|---|
+| `bugfix` | plan → implement → review | 단일 초점 수정, 작은 범위 |
+| `feature` | plan → implement → review + security | 품질 게이트가 필요한 새 기능 |
+| `refactor` | plan → implement → review | 순수 리팩터링, 기능 변경 없음 |
+| `security` | assess → plan → implement → review | 보안에 민감한 변경 |
+
+작업에 맞는 가장 작은 blueprint 를 선택하세요. 단순 파일 생성에는 `feature` 가 아닌 `bugfix` 를 사용합니다.
+
+### 설정
+
+```bash
+# 라이브 실행 필수
+export AIOS_EXECUTE_LIVE=1
+export AIOS_SUBAGENT_CLIENT=codex-cli   # 또는 claude-code, gemini-cli, opencode-cli
+
+# 동시성 (라운드당 speaker 수)
+export AIOS_SUBAGENT_CONCURRENCY=3      # 기본값: 3
+
+# 에이전트 턴당 타임아웃 (ms)
+export AIOS_SUBAGENT_TIMEOUT_MS=600000  # 기본값: 10분
+
+# capability preflight 없이 라이브 실행 허용 (주의해서 사용)
+export AIOS_ALLOW_UNKNOWN_CAPABILITIES=1
+```
+
+GroupChat 라이브 실행은 `AIOS_EXECUTE_LIVE=1` 로 gate 되어 있습니다. 이 설정이 없으면 `aios team` 은 dispatch plan 의 dry-run preview 로 폴백합니다.
+
 ## 자주 쓰는 명령
 
 ```bash
-# team 시작
+# team 시작 (기본 dry-run preview)
 aios team 3:codex "Ship X"
+
+# 라이브 GroupChat 실행으로 team 시작
+AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=codex-cli aios team 3:codex "Ship X"
 
 # 현재 상태 모니터링
 aios team status --provider codex --watch
@@ -162,6 +223,10 @@ aios hud --provider codex
 
 # blocked jobs retry
 aios team --resume <session-id> --retry-blocked --provider codex --workers 2
+
+# GroupChat runtime 으로 orchestrate (풀 라운드 기반 실행)
+AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=codex-cli \
+  aios orchestrate bugfix --task "Fix X" --execute live --preflight none
 ```
 
 ## 고급 운영 참고

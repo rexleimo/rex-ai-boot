@@ -105,9 +105,17 @@ Tip: if you start from wrapped `codex` / `claude` / `gemini` / `opencode` and as
 Good fit: independent modules, splittable work, and acceptable token cost.
 
 ```bash
+# Dry-run preview (safe, no model calls)
 aios team 3:codex "Implement X, run tests before finishing, and summarize changes"
+
+# Live GroupChat execution (round-based, shared conversation)
+AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=codex-cli aios team 3:codex "Implement X"
+
+# Monitor progress
 aios team status --provider codex --watch
 ```
+
+In live mode, Agent Team uses the **GroupChat Runtime**: agents run in rounds with a shared conversation thread. The planner analyzes the task, implementers work in parallel per round, and reviewers validate. Blocked agents trigger automatic re-plan rounds.
 
 Bad fit: fuzzy requirements, one-off bugs, or multiple workers likely editing the same file. Use normal `codex` first in those cases.
 
@@ -158,6 +166,13 @@ aios orchestrate --session <session-id> --dispatch local --execute live
 
 New users should prefer `aios team ...`. `orchestrate live` is for maintainers who already understand sessions, plans, and preflight gates.
 
+For focused single-change tasks, use the `bugfix` blueprint (3 rounds: plan → implement → review):
+
+```bash
+AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=codex-cli \
+  aios orchestrate bugfix --task "Fix X" --execute live --preflight none
+```
+
 ## I Want To Diagnose Browser Automation
 
 ```bash
@@ -180,7 +195,7 @@ Do not paste `.env`, cookies, tokens, or browser profiles directly into a model.
 - **Daily development**: `codex` / `claude` / `gemini` / `opencode`
 - **Install/update**: `aios`
 - **Solo overnight run**: `aios harness run --objective "Draft tomorrow handoff" --worktree`
-- **Agent Team**: `aios team 3:codex "task"`
+- **Agent Team (GroupChat)**: `aios team 3:codex "task"` (round-based shared conversation)
 - **Progress**: `aios team status --watch`
 - **Before delivery**: `aios quality-gate pre-pr --profile strict`
 - **Browser issue**: `aios internal browser doctor --fix`

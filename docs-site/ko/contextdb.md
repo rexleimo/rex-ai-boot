@@ -30,7 +30,7 @@ ContextDB는 다중 CLI agent를 위한 파일시스템 세션 계층입니다. 
 
 - `single`: 현재 클라이언트에서 계속 진행.
 - `subagent`: 하나의 주 도메인에 staged orchestration / verification gate 가 필요.
-- `team`: 2개 이상의 독립 도메인을 병렬 worker 로 진행 가능.
+- `team`: GroupChat Runtime 사용 — 공유 대화 히스토리와 자동 re-plan 을 갖춘 라운드 기반 병렬 에이전트.
 - `harness`: 명시적인 장시간/야간/재개 가능/checkpoint 중심 목표.
 
 제어:

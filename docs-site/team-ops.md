@@ -7,6 +7,8 @@ description: When to use Agent Team, how to start, monitor, finish, and when not
 
 Agent Team is not “more agents is always better”. It is for tasks that are **splittable, clearly bounded, and safe to run in parallel**.
 
+In live mode, Agent Team uses the **GroupChat Runtime**: agents run in rounds with a shared conversation thread. The planner analyzes the task, implementers work in parallel, and reviewers validate. If an agent gets blocked, a re-plan round is automatically triggered.
+
 If you only remember one command:
 
 ```bash
@@ -142,11 +144,70 @@ export AIOS_SUBAGENT_CLIENT=codex-cli
 aios orchestrate --session <session-id> --dispatch local --execute live
 ```
 
+## GroupChat Runtime (Round-Based Agent Team)
+
+When `aios team` runs in live mode, it uses the **GroupChat Runtime**: a round-based execution model where agents share a single conversation thread instead of working in isolated one-shot dispatches.
+
+### How It Differs From Classic Parallel Dispatch
+
+| | Classic Parallel | GroupChat Runtime |
+|---|---|---|
+| Agent communication | Isolated; only dependency outputs | Shared conversation history |
+| Execution order | Static DAG phases | Rounds (sequential) with parallel speakers per round |
+| Blocked recovery | Manual retry | Automatic re-plan (planner re-evaluates) |
+| Work item expansion | Fixed queue | Planner findings become parallel work items |
+| Termination | All jobs complete | Consensus or max rounds |
+
+### Round Flow
+
+GroupChat maps blueprint phases to rounds. Within each round, speakers run concurrently (controlled by `AIOS_SUBAGENT_CONCURRENCY`). After a round finishes, all agents in the next round can see the full accumulated history.
+
+```
+Round 1 → planner (analyze, produce work items)
+Round 2 → N × implementer (parallel, one per work item)
+Round 3 → reviewer (+ security-reviewer in parallel)
+```
+
+If an implementer reports `blocked` or `needs-input`, a **re-plan round** is automatically inserted: a planner re-evaluates the situation with full history visibility and decides the next step.
+
+### Blueprint Selection
+
+| Blueprint | Rounds | Best for |
+|---|---|---|
+| `bugfix` | plan → implement → review | Single-focus fixes, small scope |
+| `feature` | plan → implement → review + security | New features with quality gates |
+| `refactor` | plan → implement → review | Pure refactoring, no feature changes |
+| `security` | assess → plan → implement → review | Security-sensitive changes |
+
+Choose the smallest blueprint that fits the task. A simple file creation needs `bugfix`, not `feature`.
+
+### Configuration
+
+```bash
+# Required for live execution
+export AIOS_EXECUTE_LIVE=1
+export AIOS_SUBAGENT_CLIENT=codex-cli   # or claude-code, gemini-cli, opencode-cli
+
+# Concurrency (speakers per round)
+export AIOS_SUBAGENT_CONCURRENCY=3      # default: 3
+
+# Timeout per agent turn (ms)
+export AIOS_SUBAGENT_TIMEOUT_MS=600000  # default: 10 min
+
+# Allow live execution without capability preflight (use with caution)
+export AIOS_ALLOW_UNKNOWN_CAPABILITIES=1
+```
+
+GroupChat live execution is gated behind `AIOS_EXECUTE_LIVE=1`. Without it, `aios team` falls back to a dry-run preview of the dispatch plan.
+
 ## Common Command Reference
 
 ```bash
-# Start a team
+# Start a team (dry-run preview by default)
 aios team 3:codex "Ship X"
+
+# Start a team with live GroupChat execution
+AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=codex-cli aios team 3:codex "Ship X"
 
 # Watch current status
 aios team status --provider codex --watch
@@ -162,6 +223,10 @@ aios hud --provider codex
 
 # Retry blocked jobs
 aios team --resume <session-id> --retry-blocked --provider codex --workers 2
+
+# Orchestrate with GroupChat runtime (full round-based execution)
+AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=codex-cli \
+  aios orchestrate bugfix --task "Fix X" --execute live --preflight none
 ```
 
 ## Advanced Operations Reference

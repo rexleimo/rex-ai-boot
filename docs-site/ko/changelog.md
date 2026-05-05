@@ -16,6 +16,8 @@ description: 릴리스 이력, 업그레이드 안내, 관련 문서 링크.
 
 - `1.8.0` (2026-05-05):
   - 래핑된 `codex`, `claude`, `gemini`, `opencode` 세션용 self-trigger harness routing 을 추가했습니다.
+  - **GroupChat Runtime**: `aios team` 라이브 모드가 이제 공유 대화 히스토리를 갖춘 라운드 기반 에이전트 실행을 사용합니다. 각 라운드의 에이전트는 병렬로 실행되며, 모든 에이전트가 전체 누적 스레드를 볼 수 있습니다. 막힌 에이전트는 자동으로 re-plan 라운드를 트리거합니다. 기존의 일회성 격리 dispatch 모델과 대조됩니다.
+  - **OpenCode CLI subagent 지원**: `opencode-cli` 가 모든 orchestration 경로 (subagent, team, GroupChat runtime) 에서 완전히 지원되는 `AIOS_SUBAGENT_CLIENT` 가 되었습니다.
 
 ## 이전 안정 버전
 

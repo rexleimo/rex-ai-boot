@@ -30,7 +30,7 @@ Wrapped interactive clients (`codex`, `claude`, `gemini`, and `opencode`) receiv
 
 - `single`: continue in the active client.
 - `subagent`: use staged orchestration or verification gates for one main domain.
-- `team`: use parallel workers for 2+ independent domains.
+- `team`: use the GroupChat Runtime — round-based parallel agents with shared conversation history and automatic re-plan.
 - `harness`: use Solo Harness for explicit long-running, overnight, resumable, checkpoint-heavy objectives.
 
 Controls:

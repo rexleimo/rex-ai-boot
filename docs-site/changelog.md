@@ -16,6 +16,8 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
 
 - `1.8.0` (2026-05-05):
   - Adds self-trigger harness routing for wrapped `codex`, `claude`, `gemini`, and `opencode` sessions.
+  - **GroupChat Runtime**: `aios team` live mode now uses round-based agent execution with shared conversation history. Agents in each round run in parallel; all agents see the full accumulated thread. Blocked agents trigger automatic re-plan rounds. Contrasts with the old one-shot isolated dispatch model.
+  - **OpenCode CLI subagent support**: `opencode-cli` is now a fully supported `AIOS_SUBAGENT_CLIENT` for all orchestration paths (subagent, team, and GroupChat runtimes).
 
 ## Earlier Stable
 

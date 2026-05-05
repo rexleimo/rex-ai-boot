@@ -16,6 +16,8 @@ description: 版本历史、升级说明与文档变更入口。
 
 - `1.8.0`（2026-05-05）：
   - 新增包装式 `codex`、`claude`、`gemini`、`opencode` 会话的自触发 harness 路由。
+  - **GroupChat Runtime**：`aios team` live 模式现在使用基于轮次的 agent 执行，共享对话历史。每轮中的 agent 并行运行；所有 agent 都能看到完整的累积对话线程。被阻塞的 agent 会触发自动 re-plan 轮次。与旧的单次隔离 dispatch 模式形成对比。
+  - **OpenCode CLI subagent 支持**：`opencode-cli` 现已成为所有编排路径（subagent、team 和 GroupChat runtime）完全支持的 `AIOS_SUBAGENT_CLIENT`。
 
 ## 较早稳定版
 

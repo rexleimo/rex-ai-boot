@@ -105,9 +105,17 @@ aios harness resume --session nightly-demo --no-hooks
 适合：模块独立、任务可以拆、你能接受 token 成本。
 
 ```bash
+# Dry-run 预览（安全，不调用模型）
 aios team 3:codex "实现 X，完成前运行测试并总结改动"
+
+# Live GroupChat 执行（基于轮次，共享对话）
+AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=codex-cli aios team 3:codex "实现 X"
+
+# 监控进度
 aios team status --provider codex --watch
 ```
+
+在 live 模式下，Agent Team 使用 **GroupChat Runtime**：agent 在轮次中运行，共享同一个对话线程。Planner 分析任务，implementer 按轮次并行工作，reviewer 验证。被阻塞的 agent 会触发自动 re-plan 轮次。
 
 不适合：需求还模糊、单点 bug、多个 worker 会改同一个文件。此时先用普通 `codex`。
 
@@ -158,6 +166,13 @@ aios orchestrate --session <session-id> --dispatch local --execute live
 
 新用户优先用 `aios team ...`。`orchestrate live` 更适合已经理解 session、plan、preflight 的维护者。
 
+对于聚焦单点修改的任务，可使用 `bugfix` blueprint（3 轮：plan → implement → review）：
+
+```bash
+AIOS_EXECUTE_LIVE=1 AIOS_SUBAGENT_CLIENT=codex-cli \
+  aios orchestrate bugfix --task "修复 X" --execute live --preflight none
+```
+
 ## 我想排查浏览器自动化
 
 ```bash
@@ -180,7 +195,7 @@ aios privacy read --file .env
 - **日常开发**：`codex` / `claude` / `gemini` / `opencode`
 - **安装更新**：`aios`
 - **单 Agent 夜跑**：`aios harness run --objective "整理明早交接清单" --worktree`
-- **多 Agent**：`aios team 3:codex "任务"`
+- **多 Agent（GroupChat）**：`aios team 3:codex "任务"`（基于轮次的共享对话）
 - **看进度**：`aios team status --watch`
 - **交付前检查**：`aios quality-gate pre-pr --profile strict`
 - **浏览器问题**：`aios internal browser doctor --fix`
