@@ -1546,6 +1546,52 @@ async function runRoutedOneShotTask({
   };
 }
 
+function runInteractiveAgentWithSaveGuard(agent, contextText, extraArgs, opts) {
+  const sessionId = opts.sessionId || '';
+  const workspaceRoot = opts.workspaceRoot || '';
+
+  let eventsMtimeMs = 0;
+  if (sessionId && workspaceRoot) {
+    try {
+      const eventsPath = workspaceMemoryEventsPath(workspaceRoot, sessionId);
+      const stats = statSync(eventsPath);
+      eventsMtimeMs = stats.mtimeMs;
+    } catch {
+      // file doesn't exist yet — mtime stays 0
+    }
+  }
+
+  const saveGuard = () => {
+    if (sessionId && workspaceRoot) {
+      try {
+        const eventsPath = workspaceMemoryEventsPath(workspaceRoot, sessionId);
+        const stats = statSync(eventsPath);
+        if (stats.mtimeMs > eventsMtimeMs) return;
+      } catch {
+        // can't read — fall through to write checkpoint
+      }
+    }
+
+    try {
+      const checkpointScript = path.join(ROOT_DIR, 'scripts', 'ctx-agent.mjs');
+      spawnSync('node', [
+        checkpointScript,
+        '--agent', agent,
+        '--workspace', workspaceRoot,
+        '--project', opts.project || 'aios',
+        '--checkpoint-status', 'completed',
+        '--prompt', `Auto checkpoint: ${agent} session ended (no explicit save)`,
+      ], { stdio: 'ignore', timeout: 10000 });
+    } catch {
+      // best-effort
+    }
+  };
+
+  process.on('exit', saveGuard);
+
+  runInteractiveAgent(agent, contextText, extraArgs, opts);
+}
+
 function runInteractiveAgent(
   agent,
   contextText,
@@ -1793,7 +1839,7 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
       forkAsyncBootstrap(opts.workspaceRoot, opts);
     }
 
-    runInteractiveAgent(opts.agent, effectivePrompt, opts.extraArgs, {
+    runInteractiveAgentWithSaveGuard(opts.agent, effectivePrompt, opts.extraArgs, {
       injectContext: true,
       workspaceRoot: opts.workspaceRoot,
       project: opts.project,
@@ -2077,7 +2123,7 @@ Task: ${routedPrompt}`;
     return;
   }
 
-  runInteractiveAgent(opts.agent, effectiveContextText, opts.extraArgs, {
+  runInteractiveAgentWithSaveGuard(opts.agent, effectiveContextText, opts.extraArgs, {
     injectContext,
     contextPacketPath: openCodeContextPacketPath,
     workspaceRoot: opts.workspaceRoot,
