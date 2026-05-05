@@ -52,3 +52,26 @@ test('buildSoloHarnessCommand routes one-shot runs through ctx-agent', () => {
   assert.ok(built.args.includes('session-1'));
   assert.ok(built.args.includes('--prompt'));
 });
+
+test('buildSoloHarnessCommand separates AIOS install root from target workspace', () => {
+  const built = buildSoloHarnessCommand({
+    rootDir: '/tmp/project',
+    aiosRootDir: '/opt/aios',
+    workspaceRoot: '/tmp/project/.aios-worktrees/session-1',
+    sessionId: 'session-1',
+    objective: 'Ship checklist',
+    provider: 'codex',
+    prompt: 'return json',
+  });
+
+  assert.equal(built.args[0], '/opt/aios/scripts/ctx-agent.mjs');
+  assert.equal(built.cwd, '/tmp/project/.aios-worktrees/session-1');
+  assert.deepEqual(
+    built.args.slice(built.args.indexOf('--workspace'), built.args.indexOf('--workspace') + 2),
+    ['--workspace', '/tmp/project/.aios-worktrees/session-1']
+  );
+  assert.deepEqual(
+    built.args.slice(built.args.indexOf('--project'), built.args.indexOf('--project') + 2),
+    ['--project', 'session-1']
+  );
+});

@@ -3,6 +3,15 @@ AIOS native enhancements are active in this repository.
 
 Use repo-local skills, agents, and bootstrap docs before falling back to ad-hoc behavior.
 
+
+## AIOS Self-Trigger Routing
+
+- Continue normally in the active coding client for single-domain work.
+- If the user asks for delegation, parallel work, or 2+ clearly independent domains, trigger AIOS directly instead of asking the user to run it manually: `aios team ...` or `node <AIOS_ROOT>/scripts/ctx-agent.mjs --route team|subagent ...`.
+- If the user asks for a long-running, overnight, resumable, checkpoint-heavy objective, trigger the solo harness directly: `aios harness run --objective "<task>" --worktree --max-iterations 8`.
+- Use `aios harness status --session <id>`, `aios hud --session <id>`, `aios harness stop --session <id> --reason "<why>"`, and `aios harness resume --session <id>` for handoff and recovery.
+- Do not ask the user to manually trigger AIOS commands unless they requested dry-run/preview or the environment lacks permission to run shell commands.
+
 ## Privacy & Relay Safety
 
 - Before sending context to any model or relay service, assume prompts, code snippets, diffs, logs, screenshots, MCP output, and browser-extracted text may leave this machine.
@@ -12,6 +21,14 @@ Use repo-local skills, agents, and bootstrap docs before falling back to ad-hoc 
 - LLM privacy instructions are advisory; do not claim strict privacy compliance unless deterministic AIOS gates verified the relevant checks.
 
 ContextDB remains the shared runtime layer for memory, checkpoints, and execution evidence.
+
+Wrapped `codex` / `claude` / `gemini` / `opencode` sessions receive an AIOS startup route prompt. The agent should self-select `single`, `subagent`, `team`, or `harness` and run the matching AIOS command when the request warrants it.
+
+Persona and user profile memory are part of the same runtime layer:
+- `aios memo persona ...` manages the global agent identity file (`~/.aios/SOUL.md` by default).
+- `aios memo user ...` manages the global operator preference file (`~/.aios/USER.md` by default).
+- `ctx-agent` injects persona and user profile content into the Memory prelude before workspace memo content.
+- Treat these files as stable guidance, not task facts; project-specific facts should still go through ContextDB events, checkpoints, or workspace memo.
 
 Browser MCP is available through the repo-local AIOS server and should be preferred for browser work.
 
@@ -30,4 +47,8 @@ For browser tasks, use this operating pattern unless the user explicitly asks ot
 # AIOS For OpenCode
 
 This repository provides compatibility-tier native enhancements for OpenCode through repo-local skills and AIOS runtime conventions.
+
+## Agent Self-Trigger
+
+When this client is launched through AIOS shell integration, continue normal single-agent work by default. For explicit delegation/parallel requests, run the injected `team` or `subagent` AIOS command. For long-running, overnight, resumable objectives, run `aios harness run --objective "<task>" --worktree --max-iterations 8` and use `aios harness status/resume/stop` for handoff.
 <!-- AIOS NATIVE END -->

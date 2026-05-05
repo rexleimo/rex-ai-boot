@@ -24,6 +24,25 @@ At runtime, ContextDB can execute this sequence:
 - Interactive mode usually runs steps `1, 2, 5` before opening CLI.
 - One-shot mode runs all `1..5` in a single command.
 
+## Startup Auto-Route Prompt
+
+Wrapped interactive clients (`codex`, `claude`, `gemini`, and `opencode`) receive a conservative startup route prompt. It tells the agent to keep ordinary work on `single`, and only self-trigger AIOS commands when the task clearly needs another lane:
+
+- `single`: continue in the active client.
+- `subagent`: use staged orchestration or verification gates for one main domain.
+- `team`: use parallel workers for 2+ independent domains.
+- `harness`: use Solo Harness for explicit long-running, overnight, resumable, checkpoint-heavy objectives.
+
+Controls:
+
+```bash
+export CTXDB_INTERACTIVE_AUTO_ROUTE=0      # disable the startup route prompt
+export CTXDB_HARNESS_PROVIDER=codex       # codex|claude|gemini|opencode
+export CTXDB_HARNESS_MAX_ITERATIONS=8     # injected harness loop budget
+```
+
+The injected `harness` command includes `--workspace <project-root>` so session artifacts are written into the active project, not the AIOS installation directory.
+
 ## Fail-Open Packing
 
 If `contextdb context:pack` fails, `ctx-agent` will **warn and continue** by running the CLI without injected context.
@@ -56,6 +75,7 @@ npm run contextdb -- index:rebuild
 ## Workspace Memory (`aios memo`)
 
 Use `aios memo` when you want durable operator memory without leaving the CLI flow.
+Persona and user profile layers are global by design, so the agent can carry stable behavior and operator preferences across projects while project facts stay inside ContextDB.
 
 Storage boundaries:
 
@@ -78,6 +98,42 @@ aios memo persona add "Response style: concise, direct, evidence-first"
 aios memo user init
 aios memo user add "Preferred language: zh-CN + technical English terms"
 ```
+
+### Persona / User Profile Memory
+
+Use this when you want a durable "personality and operating contract" that every wrapped coding agent can see without repeating it in each project prompt.
+
+- `persona` stores the agent baseline: identity, tone, engineering standards, safety posture.
+- `user` stores stable operator preferences: language, delivery style, recurring priorities.
+- `ctx-agent` builds a Memory prelude in this order: persona, user profile, then workspace memo content.
+- Persona/user files are scanned for unsafe prompt-injection-like content before write and before injection.
+- Each identity file is capacity-limited to keep startup prompts bounded.
+
+Commands:
+
+```bash
+aios memo persona init
+aios memo persona set "Identity: pragmatic AI engineering partner"
+aios memo persona add "Response style: concise, direct, evidence-first"
+aios memo persona show
+aios memo persona path
+
+aios memo user init
+aios memo user set "Preferred language: zh-CN + technical English terms"
+aios memo user add "Delivery preference: implementation first, concise review second"
+aios memo user show
+aios memo user path
+```
+
+Configuration:
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `AIOS_IDENTITY_HOME` | Directory for global identity files | `~/.aios` |
+| `AIOS_PERSONA_PATH` | Explicit persona file path | `~/.aios/SOUL.md` |
+| `AIOS_USER_PROFILE_PATH` | Explicit user profile file path | `~/.aios/USER.md` |
+| `AIOS_PERSONA_MAX_CHARS` | Persona capacity limit | `2400` |
+| `AIOS_USER_PROFILE_MAX_CHARS` | User profile capacity limit | `2400` |
 
 ## Lazy Load Startup (P0) {#lazy-load}
 
@@ -248,7 +304,7 @@ Those commands reset the **in-CLI conversation state**. ContextDB is still on di
 
 Recovery options:
 
-- Preferred: exit the CLI and re-run `codex` / `claude` / `gemini` from your shell (wrapper runs `context:pack` again and re-injects).
+- Preferred: exit the CLI and re-run `codex` / `claude` / `gemini` / `opencode` from your shell (wrapper runs `context:pack` again and re-injects).
 - If you must stay in the same process: in the new conversation, ask the agent to read the latest snapshot:
   - `@memory/context-db/exports/latest-codex-cli-context.md`
   - `@memory/context-db/exports/latest-claude-code-context.md`

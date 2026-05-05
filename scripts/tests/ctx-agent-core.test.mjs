@@ -124,6 +124,14 @@ test('resolveTaskRouteDecision honors explicit prompt route triggers', () => {
   assert.equal(subagent.routeMode, 'subagent');
   assert.equal(subagent.taskPrompt, '修复回归并走预检');
   assert.equal(subagent.explicitTrigger, true);
+
+  const harness = resolveTaskRouteDecision({
+    prompt: '/harness 过夜整理明早交接清单',
+    routeMode: 'auto',
+  });
+  assert.equal(harness.routeMode, 'harness');
+  assert.equal(harness.taskPrompt, '过夜整理明早交接清单');
+  assert.equal(harness.explicitTrigger, true);
 });
 
 test('resolveTaskRouteDecision auto-routes complex prompts to team', () => {
@@ -151,6 +159,16 @@ test('resolveTaskRouteDecision auto-routes medium complexity prompts to subagent
   });
   assert.equal(decision.routeMode, 'subagent');
   assert.equal(decision.explicitTrigger, false);
+});
+
+test('resolveTaskRouteDecision auto-routes long-running resumable prompts to harness', () => {
+  const decision = resolveTaskRouteDecision({
+    routeMode: 'auto',
+    prompt: '请过夜持续推进这个长任务，保留 checkpoint 和明早交接 journal',
+  });
+  assert.equal(decision.routeMode, 'harness');
+  assert.equal(decision.explicitTrigger, false);
+  assert.match(decision.reason, /harness keyword signal/u);
 });
 
 test('resolveRoutedSubagentClient falls back to provider-supported runtimes', () => {
@@ -286,6 +304,80 @@ test('buildWorkspaceMemoryOverlay enforces max chars limit', async () => {
 
     assert.equal(overlay.length <= 512, true);
     assert.match(overlay, /truncated/);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('ctx-agent one-shot injected context includes persona and user profile overlays', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'aios-ctx-agent-persona-overlay-'));
+  const sessionId = 'ctx-persona-overlay';
+  const fakeBin = await createFakeCodexCommand();
+  const identityHome = path.join(workspaceRoot, '.identity');
+
+  try {
+    runContextDbCli([
+      'session:new',
+      '--workspace',
+      workspaceRoot,
+      '--agent',
+      'codex-cli',
+      '--project',
+      'tmp-project',
+      '--goal',
+      'Verify persona overlay injection',
+      '--session-id',
+      sessionId,
+    ]);
+
+    await mkdir(identityHome, { recursive: true });
+    await writeFile(path.join(identityHome, 'SOUL.md'), '# persona\nAlways show audit evidence.\n', 'utf8');
+    await writeFile(path.join(identityHome, 'USER.md'), '# user\nPrefers concise Chinese output.\n', 'utf8');
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        'scripts/ctx-agent.mjs',
+        '--agent',
+        'codex-cli',
+        '--workspace',
+        workspaceRoot,
+        '--project',
+        'tmp-project',
+        '--session',
+        sessionId,
+        '--prompt',
+        'summarize',
+        '--dry-run',
+        '--no-bootstrap',
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          CTXDB_PACK_STRICT: '0',
+          AIOS_IDENTITY_HOME: identityHome,
+          PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
+        },
+      }
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.match(result.stdout, /Memory prelude: enabled/);
+
+    const latestContextPath = path.join(
+      workspaceRoot,
+      'memory',
+      'context-db',
+      'exports',
+      'latest-codex-cli-context.md'
+    );
+    const latestContext = await readFile(latestContextPath, 'utf8');
+    assert.match(latestContext, /## Core Persona/);
+    assert.match(latestContext, /Always show audit evidence\./);
+    assert.match(latestContext, /## User Profile Memory/);
+    assert.match(latestContext, /Prefers concise Chinese output\./);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
   }
@@ -445,6 +537,46 @@ test('ctx-agent one-shot writes turn envelope metadata for prompt/response event
     );
     assert.match(contextPacket, /## Continuity Summary/);
     assert.match(contextPacket, /Continue with next prompt/);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('ctx-agent one-shot dry-run route harness prints trigger command', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'aios-ctx-agent-route-harness-'));
+
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [
+        'scripts/ctx-agent.mjs',
+        '--agent',
+        'codex-cli',
+        '--workspace',
+        workspaceRoot,
+        '--project',
+        'tmp-project',
+        '--route',
+        'harness',
+        '--route-execute',
+        'dry-run',
+        '--harness-max-iterations',
+        '5',
+        '--prompt',
+        '过夜整理明早交接清单',
+        '--dry-run',
+        '--no-bootstrap',
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+      }
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.match(result.stdout, /\[route\] mode=harness/);
+    assert.match(result.stdout, /Command: node /u);
+    assert.match(result.stdout, /node .*scripts\/aios\.mjs harness run --objective "过夜整理明早交接清单" --session codex-cli-[^\s]+ --provider codex --max-iterations 5 --worktree --workspace /u);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
   }

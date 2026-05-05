@@ -4,7 +4,7 @@ Updated: 2026-05-04T10:34:50+08:00
 
 ## Operating Memory
 
-- When the user says `更新竞品内容`, first run `npm run competitors:update` (or `node scripts/update-competitor-repos.mjs`) to refresh `temp/competitor-repos/`.
+- When the user says `更新竞品内容`, manually refresh relevant rows in `memory/knowledge/competitor-watchlist.json` as needed.
 - When the user asks `竞品列表有哪些`, answer with a Markdown table using the fields in `memory/knowledge/competitor-watchlist.json`.
 - Do not commit third-party source snapshots under `temp/competitor-repos/`; they are git-ignored and should remain local evidence.
 - If a short repository name becomes ambiguous, keep the current resolved repo but mention the resolution note from the JSON.

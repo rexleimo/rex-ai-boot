@@ -39,7 +39,7 @@ touch .contextdb-enable
 codex
 ```
 
-以後、同じプロジェクトで `codex`、`claude`、`gemini` を実行すると、すべて同じ ContextDB に接続します。
+以後、同じプロジェクトで `codex`、`claude`、`gemini`、`opencode` を実行すると、すべて同じ ContextDB に接続します。
 
 ## 継続的な運用メモを使いたい（Memo + Persona）
 
@@ -58,7 +58,9 @@ aios memo user add "Preferred language: zh-CN + technical English terms"
 
 - `memo add/list/search/recall` -> ContextDB イベント層
 - `memo pin` -> ワークスペースの pinned ファイル
-- `memo persona/user` -> グローバル identity ファイル
+- `memo persona/user` -> `ctx-agent` の Memory prelude に注入されるグローバル identity ファイル
+
+Persona は agent baseline（「この AI はどう振る舞うべきか」）用です。User profile は安定した operator preference（「このユーザーはどのような納品を望むか」）用です。どちらも注入前に安全スキャンと容量制限を受けます。
 
 ## CLI をまたいで引き継ぎたい
 
@@ -75,7 +77,7 @@ gemini   # 最後にレビューまたは比較
 向いている: 目標が明確、provider は1つでよい、夜間に継続実行したい、並列 worker は不要。
 
 ```bash
-aios harness run --objective "明朝の引き継ぎメモをまとめる" --session nightly-demo --worktree
+aios harness run --objective "明朝の引き継ぎメモをまとめる" --session nightly-demo --worktree --max-iterations 20
 aios harness status --session nightly-demo --json
 aios hud --session nightly-demo --json
 ```
@@ -95,6 +97,8 @@ aios harness resume --session nightly-demo --no-hooks
 ```
 
 「1つの agent に1つの目標を継続させたい」なら [ソロ Harness](solo-harness.md)。本当に並列化できるなら [Agent Team](team-ops.md) を使います。
+
+ヒント: ラップされた `codex` / `claude` / `gemini` / `opencode` から開始し、夜間・再開可能な作業を明示した場合、起動 route prompt は agent に同じ `aios harness run ... --workspace <project-root>` コマンドを自己トリガーさせます。手動で覚える必要はありません。
 
 ## Agent Team を使いたい
 
@@ -173,7 +177,7 @@ aios privacy read --file .env
 
 ## 選び方の目安
 
-- **日常開発**: `codex` / `claude` / `gemini`
+- **日常開発**: `codex` / `claude` / `gemini` / `opencode`
 - **インストール/更新**: `aios`
 - **ソロ夜間実行**: `aios harness run --objective "明朝の引き継ぎメモをまとめる" --worktree`
 - **Agent Team**: `aios team 3:codex "task"`

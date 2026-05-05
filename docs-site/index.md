@@ -79,6 +79,13 @@ If the task is still unclear, start with normal interactive `codex` and ask it t
 - **Do not start from the feature list**: start from “what do I want to do?” and copy the command.
 - **Do not skip Doctor**: run diagnostics before changing install, browser, skills, or native config by hand.
 
+## Release Notes And Deep Dives
+
+- [AIOS RL Training System](/blog/rl-training-system/): multi-environment training control plane and rollout model.
+- [ContextDB Search Upgrade](/blog/contextdb-fts-bm25-search/): FTS5 + BM25 search path and semantic rerank behavior.
+- [Windows CLI Startup Stability](/blog/windows-cli-startup-stability/): wrapper startup fixes and Windows launch reliability.
+- [Orchestrate Live](/blog/orchestrate-live/): live orchestration gates and execution workflow.
+
 ## Next Reads
 
 - [Quick Start](getting-started.md): install, Setup, Doctor, and first run.

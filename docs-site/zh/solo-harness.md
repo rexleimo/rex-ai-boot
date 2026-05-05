@@ -29,7 +29,7 @@ description: 用 ContextDB、run journal、resume/stop 控制和可选 worktree 
 
 ```bash
 # 在隔离 worktree 里启动夜跑
-aios harness run --objective "整理明早交接清单" --session nightly-demo --worktree
+aios harness run --objective "整理明早交接清单" --session nightly-demo --worktree --max-iterations 20
 
 # 查看结构化状态
 aios harness status --session nightly-demo --json
@@ -41,15 +41,39 @@ aios hud --session nightly-demo --json
 aios harness stop --session nightly-demo --reason "白天人工接手"
 
 # 后面继续同一个 session
-aios harness resume --session nightly-demo
+aios harness resume --session nightly-demo --max-iterations 10
 ```
+
+## 包装客户端里的 Agent 自触发
+
+启用 shell 包装后，交互式 `codex` / `claude` / `gemini` / `opencode` 会收到 AIOS 路由提示。默认仍然是 `single`；只有明确的长任务、过夜任务、可恢复任务、checkpoint 密集目标，才应该让 agent 自己选择 `harness`。
+
+这类任务注入的命令形态是：
+
+```bash
+node <AIOS_ROOT>/scripts/aios.mjs harness run \
+  --objective "<task>" \
+  --provider codex \
+  --max-iterations 8 \
+  --worktree \
+  --workspace <project-root>
+```
+
+可用下面变量调整注入的 provider 和循环预算：
+
+```bash
+export CTXDB_HARNESS_PROVIDER=claude
+export CTXDB_HARNESS_MAX_ITERATIONS=12
+```
+
+如果完全不想注入路由提示，设置 `CTXDB_INTERACTIVE_AUTO_ROUTE=0`。
 
 ## 先 dry-run 再 live
 
 如果你想先确认 artifact 结构，不想马上消耗 token：
 
 ```bash
-aios harness run --objective "整理明早交接清单" --session nightly-demo --worktree --dry-run --json
+aios harness run --objective "整理明早交接清单" --session nightly-demo --worktree --max-iterations 3 --dry-run --json
 ```
 
 dry-run 会创建 session journal，但不会真的调用 provider。
@@ -65,6 +89,12 @@ aios harness resume --session nightly-demo --no-hooks
 
 - 默认是 `--hooks`（开启），会记录 lifecycle hook 证据。
 - 如果你想要更低噪声的执行循环，可用 `--no-hooks` 关闭。
+
+## 迭代预算与工作区控制
+
+- `--max-iterations <n>` 控制 `run` / `resume` 的循环预算；CLI 默认是 `20`，包装客户端自触发提示默认注入 `8`。
+- `--workspace <path>` 强制把 ContextDB session artifact 写进指定项目根目录。适合从包装器、外部 checkout 或父目录触发 AIOS 时使用。
+- `--provider <codex|claude|gemini|opencode>` 选择循环底层调用的本地 CLI。
 
 ## Solo Harness 会写哪些文件
 

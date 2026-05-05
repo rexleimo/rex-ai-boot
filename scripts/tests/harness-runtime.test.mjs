@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -10,7 +10,9 @@ import {
   runSoloHarnessLoop,
 } from '../lib/harness/solo-runtime.mjs';
 import {
+  getSoloHarnessPaths,
   initSoloRunJournal,
+  readSoloRunSummary,
   readSoloControl,
   readSoloRunStatus,
   requestSoloHarnessStop,
@@ -183,6 +185,114 @@ test('runHarnessCommand supports dry-run, stop, status, and resume with injected
   }
 });
 
+test('runHarnessCommand forwards maxIterations budget to run and resume loops', async () => {
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), 'aios-solo-harness-budget-'));
+  const logs = [];
+
+  try {
+    const runResult = await runHarnessCommand(
+      {
+        subcommand: 'run',
+        objective: 'Budget test',
+        sessionId: 'budget-session',
+        provider: 'codex',
+        profile: 'standard',
+        worktree: false,
+        maxIterations: 1,
+        json: true,
+      },
+      {
+        rootDir,
+        io: { log: (line) => logs.push(String(line)) },
+        executeTurn: async ({ iteration }) => ({
+          outcome: 'success',
+          summary: `iteration ${iteration}`,
+          keyChanges: [],
+          keyLearnings: [],
+          nextAction: 'continue',
+          shouldStop: false,
+          failureClass: 'none',
+        }),
+        sleepImpl: async () => {},
+      }
+    );
+    assert.equal(runResult.exitCode, 0);
+    assert.equal(runResult.status.iterationCount, 2);
+    assert.equal(runResult.status.status, 'human-gate');
+    assert.equal(runResult.status.lastFailureClass, 'safety-gate');
+
+    const resumeResult = await runHarnessCommand(
+      {
+        subcommand: 'resume',
+        sessionId: 'budget-session',
+        maxIterations: 1,
+        json: true,
+      },
+      {
+        rootDir,
+        io: { log: (line) => logs.push(String(line)) },
+        executeTurn: async ({ iteration }) => ({
+          outcome: 'success',
+          summary: `resume iteration ${iteration}`,
+          keyChanges: [],
+          keyLearnings: [],
+          nextAction: 'continue',
+          shouldStop: false,
+          failureClass: 'none',
+        }),
+        sleepImpl: async () => {},
+      }
+    );
+    assert.equal(resumeResult.exitCode, 0);
+    assert.equal(resumeResult.status.iterationCount, 3);
+    assert.equal(resumeResult.status.status, 'human-gate');
+  } finally {
+    await rm(rootDir, { recursive: true, force: true });
+  }
+});
+
+test('runHarnessCommand persists AIOS install root for workspace-scoped live resumes', async () => {
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), 'aios-solo-harness-aios-root-'));
+  const logs = [];
+
+  try {
+    const runResult = await runHarnessCommand(
+      {
+        subcommand: 'run',
+        objective: 'External workspace',
+        sessionId: 'external-session',
+        provider: 'codex',
+        profile: 'standard',
+        worktree: false,
+        maxIterations: 1,
+        json: true,
+      },
+      {
+        rootDir,
+        aiosRootDir: '/opt/aios',
+        io: { log: (line) => logs.push(String(line)) },
+        executeTurn: async () => ({
+          outcome: 'success',
+          summary: 'stop after first pass',
+          keyChanges: [],
+          keyLearnings: [],
+          nextAction: 'done',
+          shouldStop: true,
+          failureClass: 'none',
+        }),
+        sleepImpl: async () => {},
+      }
+    );
+
+    assert.equal(runResult.exitCode, 0);
+    const summary = await readSoloRunSummary({ rootDir, sessionId: 'external-session' });
+    assert.equal(summary.aiosRootDir, '/opt/aios');
+    assert.equal(summary.workspaceRoot, rootDir);
+  } finally {
+    await rm(rootDir, { recursive: true, force: true });
+  }
+});
+
 test('runSoloHarnessLoop exits on requested stop before another executeTurn begins', async () => {
   const rootDir = await mkdtemp(path.join(os.tmpdir(), 'aios-solo-runtime-stop-'));
 
@@ -226,6 +336,91 @@ test('runSoloHarnessLoop exits on requested stop before another executeTurn begi
 
     assert.equal(called, 0);
     assert.equal(result.summary.status, 'stopped');
+  } finally {
+    await rm(rootDir, { recursive: true, force: true });
+  }
+});
+
+test('runSoloHarnessLoop emits lifecycle hook evidence and iteration hook logs', async () => {
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), 'aios-solo-runtime-hooks-'));
+
+  try {
+    await initSoloRunJournal({
+      rootDir,
+      sessionId: 'hook-session',
+      objective: 'Hook validation',
+      provider: 'codex',
+      clientId: 'codex-cli',
+      profile: 'standard',
+      worktree: {
+        enabled: false,
+        baseRef: 'HEAD',
+        path: '',
+        preserved: false,
+        cleanupReason: '',
+      },
+    });
+
+    const hookCalls = [];
+    const result = await runSoloHarnessLoop({
+      rootDir,
+      sessionId: 'hook-session',
+      objective: 'Hook validation',
+      provider: 'codex',
+      clientId: 'codex-cli',
+      profile: 'standard',
+      maxIterations: 1,
+      executeTurn: async () => ({
+        outcome: 'success',
+        summary: 'done with hooks',
+        keyChanges: ['scripts/lib/harness/solo-runtime.mjs'],
+        keyLearnings: [],
+        nextAction: 'none',
+        shouldStop: true,
+        failureClass: 'none',
+      }),
+      lifecycleHooks: {
+        onTurnStart: ({ iteration }) => {
+          hookCalls.push(`start:${iteration}`);
+          return 'turn start ok';
+        },
+        onTurnComplete: ({ outcome }) => {
+          hookCalls.push(`complete:${outcome.outcome}`);
+          return 'turn complete ok';
+        },
+        onBeforeContinuityCommit: () => {
+          hookCalls.push('pre-commit');
+          return 'continuity commit ok';
+        },
+        onSessionEnd: ({ reason }) => {
+          hookCalls.push(`end:${reason}`);
+          return 'session end ok';
+        },
+      },
+      sleepImpl: async () => {},
+    });
+
+    assert.equal(result.summary.status, 'done');
+    assert.equal(hookCalls.includes('start:1'), true);
+    assert.equal(hookCalls.includes('complete:success'), true);
+    assert.equal(hookCalls.includes('pre-commit'), true);
+    assert.equal(hookCalls.includes('end:iteration-stop'), true);
+
+    const paths = getSoloHarnessPaths({ rootDir, sessionId: 'hook-session' });
+    const hookRaw = await readFile(paths.hookEventsPath, 'utf8');
+    assert.match(hookRaw, /onTurnStart/);
+    assert.match(hookRaw, /onTurnComplete/);
+    assert.match(hookRaw, /onBeforeContinuityCommit/);
+    assert.match(hookRaw, /onSessionEnd/);
+
+    const logRaw = await readFile(
+      path.join(paths.iterationDir, 'iteration-0001.log.jsonl'),
+      'utf8'
+    );
+    assert.match(logRaw, /\"kind\":\"hook\"/);
+    assert.match(logRaw, /turn-start/);
+    assert.match(logRaw, /turn-complete/);
+    assert.match(logRaw, /pre-continuity-commit/);
   } finally {
     await rm(rootDir, { recursive: true, force: true });
   }

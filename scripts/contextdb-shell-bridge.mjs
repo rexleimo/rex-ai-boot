@@ -70,6 +70,8 @@ Environment:
   CTXDB_MARKER_FILE      Marker filename for opt-in mode (default: .contextdb-enable)
   CTXDB_AUTO_CREATE_MARKER 1/true/yes/on to auto-create marker in opt-in mode (default: on)
   CTXDB_INTERACTIVE_AUTO_ROUTE 1/true/yes/on to inject route auto prompt in interactive mode (default: on)
+  CTXDB_HARNESS_PROVIDER codex|claude|gemini|opencode for injected harness route (default: current CLI)
+  CTXDB_HARNESS_MAX_ITERATIONS Positive integer for injected harness route (default: 8)
   CTXDB_PRIVACY_BANNER   0/false/off to hide the interactive privacy banner (default: on)
   CTXDB_PRIVACY_COLOR    0/false/off to disable banner ANSI color (default: on unless NO_COLOR is set)
   CTXDB_CODEX_DISABLE_MCP 1/true/yes/on to launch Codex without MCP startup in wrapped runs
@@ -469,6 +471,43 @@ function buildCtxAgentRoutePreview({
   return `node ${args.map((item) => formatShellArg(item)).join(' ')}`;
 }
 
+
+function normalizeHarnessProvider(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'claude' || normalized === 'gemini' || normalized === 'codex' || normalized === 'opencode') {
+    return normalized;
+  }
+  return '';
+}
+
+function inferHarnessProviderFromCommand(command) {
+  if (command === 'claude') return 'claude';
+  if (command === 'gemini') return 'gemini';
+  if (command === 'opencode') return 'opencode';
+  return 'codex';
+}
+
+function buildHarnessRoutePreview({
+  workspaceRoot = '',
+  sessionId = '',
+  provider = 'codex',
+  taskPrompt = '<task>',
+  maxIterations = 8,
+} = {}) {
+  const args = [path.join(ROOT_DIR, 'scripts', 'aios.mjs'), 'harness', 'run'];
+  args.push('--objective', String(taskPrompt || '').trim() || '<task>');
+  if (String(sessionId || '').trim()) {
+    args.push('--session', String(sessionId).trim());
+  }
+  args.push('--provider', normalizeHarnessProvider(provider) || 'codex');
+  args.push('--max-iterations', String(parsePositiveInteger(maxIterations, 8)));
+  args.push('--worktree');
+  if (String(workspaceRoot || '').trim()) {
+    args.push('--workspace', String(workspaceRoot).trim());
+  }
+  return `node ${args.map((item) => formatShellArg(item)).join(' ')}`;
+}
+
 function normalizeTeamProvider(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'claude' || normalized === 'gemini' || normalized === 'codex') {
@@ -530,6 +569,10 @@ function buildInteractiveAutoPrompt({
     ? rawBlueprint
     : 'feature';
   const subagentClient = resolveSubagentClientForPrompt(command, provider, env);
+  const harnessProvider = normalizeHarnessProvider(env.CTXDB_HARNESS_PROVIDER)
+    || normalizeHarnessProvider(env.AIOS_HARNESS_PROVIDER)
+    || inferHarnessProviderFromCommand(command);
+  const harnessMaxIterations = parsePositiveInteger(env.CTXDB_HARNESS_MAX_ITERATIONS || env.AIOS_HARNESS_MAX_ITERATIONS, 8);
   const teamCommand = buildCtxAgentRoutePreview({
     agent,
     workspaceRoot,
@@ -551,6 +594,12 @@ function buildInteractiveAutoPrompt({
     blueprint,
     taskPrompt: '<task>',
   });
+  const harnessCommand = buildHarnessRoutePreview({
+    workspaceRoot,
+    provider: harnessProvider,
+    taskPrompt: '<task>',
+    maxIterations: harnessMaxIterations,
+  });
 
   return [
     'Continue from this state and execute the next best step.',
@@ -560,10 +609,12 @@ function buildInteractiveAutoPrompt({
     'Do not paste raw secrets, credentials, cookies, personal data, or private browser profile data into prompts/logs/checkpoints.',
     'Do not claim strict privacy compliance unless AIOS gates verified it; report what was checked and any remaining risk.',
     'Only choose team/subagent when the user explicitly asks for delegation/parallel work, or when there are 2+ clearly independent domains.',
+    'Only choose harness for explicit long-running, overnight, resumable, checkpoint-heavy objectives that need an iteration journal.',
     'Do NOT spawn built-in explorer/worker subagents just to scan a codebase; start single-agent first.',
     'If delegated workers are running, post a heartbeat every 30s and stop waiting after 120s with a fallback plan.',
     `If route=team, run: ${teamCommand}`,
     `If route=subagent, run: ${subagentCommand}`,
+    `If route=harness, run: ${harnessCommand}`,
     'Do not ask the user to manually trigger these commands unless they requested preview/dry-run.',
   ].join('\n');
 }

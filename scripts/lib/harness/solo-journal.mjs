@@ -7,6 +7,7 @@ const RUN_SUMMARY_FILENAME = 'run-summary.json';
 const CONTROL_FILENAME = 'control.json';
 const OBJECTIVE_FILENAME = 'objective.md';
 const OPERATOR_NOTES_FILENAME = 'operator-notes.md';
+const HOOK_EVENTS_FILENAME = 'hook-events.jsonl';
 const SOLO_HARNESS_DIRNAME = 'solo-harness';
 
 function normalizeText(value, fallback = '') {
@@ -17,6 +18,11 @@ function normalizeText(value, fallback = '') {
 function normalizeStringArray(value) {
   const raw = Array.isArray(value) ? value : [];
   return Array.from(new Set(raw.map((item) => String(item ?? '').trim()).filter(Boolean)));
+}
+
+function normalizeAbsolutePath(value) {
+  const text = normalizeText(value);
+  return text ? path.resolve(text) : '';
 }
 
 function toPosixPath(filePath = '') {
@@ -106,6 +112,8 @@ function normalizeRunSummary(input = {}) {
     provider: normalizeText(input.provider, 'codex'),
     clientId: normalizeText(input.clientId, 'codex-cli'),
     profile: normalizeText(input.profile, 'standard'),
+    aiosRootDir: normalizeAbsolutePath(input.aiosRootDir),
+    workspaceRoot: normalizeAbsolutePath(input.workspaceRoot),
     iterationCount: Number.isFinite(input.iterationCount) ? Math.max(0, Math.floor(input.iterationCount)) : 0,
     lastIteration: Number.isFinite(input.lastIteration) ? Math.max(0, Math.floor(input.lastIteration)) : 0,
     lastOutcome: normalizeText(input.lastOutcome),
@@ -179,6 +187,7 @@ export function getSoloHarnessPaths({ rootDir, sessionId } = {}) {
     operatorNotesPath: path.join(dir, OPERATOR_NOTES_FILENAME),
     summaryPath: path.join(dir, RUN_SUMMARY_FILENAME),
     controlPath: path.join(dir, CONTROL_FILENAME),
+    hookEventsPath: path.join(dir, HOOK_EVENTS_FILENAME),
     iterationDir,
   };
 }
@@ -240,6 +249,8 @@ export async function initSoloRunJournal(input = {}) {
     provider: normalizeText(input.provider, existingSummary?.provider || 'codex'),
     clientId: normalizeText(input.clientId, existingSummary?.clientId || 'codex-cli'),
     profile: normalizeText(input.profile, existingSummary?.profile || 'standard'),
+    aiosRootDir: normalizeText(input.aiosRootDir, existingSummary?.aiosRootDir || ''),
+    workspaceRoot: normalizeText(input.workspaceRoot, existingSummary?.workspaceRoot || ''),
     status: normalizeText(existingSummary?.status, 'running'),
     stopRequested: existingSummary?.stopRequested === true,
     worktree: {
@@ -278,12 +289,18 @@ export async function initSoloRunJournal(input = {}) {
   } catch {
     await writeFileAtomic(paths.operatorNotesPath, '');
   }
+  try {
+    await readFile(paths.hookEventsPath, 'utf8');
+  } catch {
+    await writeFileAtomic(paths.hookEventsPath, '');
+  }
 
   return {
     sessionId,
     dir: paths.dir,
     summaryPath: paths.summaryPath,
     controlPath: paths.controlPath,
+    hookEventsPath: paths.hookEventsPath,
     objectivePath: paths.objectivePath,
     operatorNotesPath: paths.operatorNotesPath,
     summary,
@@ -330,6 +347,29 @@ export async function appendSoloIteration({ rootDir, sessionId, iteration, outco
   };
 }
 
+export async function appendSoloHookEvent({ rootDir, sessionId, event = {} } = {}) {
+  const normalizedSessionId = normalizeText(sessionId);
+  if (!normalizedSessionId) {
+    throw new Error('solo hook event requires sessionId');
+  }
+  const payload = {
+    ts: normalizeText(event.ts, new Date().toISOString()),
+    kind: normalizeText(event.kind, 'hook'),
+    hook: normalizeText(event.hook),
+    phase: normalizeText(event.phase),
+    iteration: Number.isFinite(event.iteration) ? Math.max(0, Math.floor(event.iteration)) : 0,
+    status: normalizeText(event.status, 'ok'),
+    detail: normalizeText(event.detail),
+  };
+  const paths = getSoloHarnessPaths({ rootDir, sessionId: normalizedSessionId });
+  await mkdir(paths.dir, { recursive: true });
+  await appendFile(paths.hookEventsPath, `${JSON.stringify(payload)}\n`, 'utf8');
+  return {
+    ...payload,
+    hookEventsPath: paths.hookEventsPath,
+  };
+}
+
 export async function requestSoloHarnessStop({ rootDir, sessionId, reason = 'operator-request' } = {}) {
   return await writeSoloControl({
     rootDir,
@@ -357,6 +397,7 @@ export async function readSoloRunStatus({ rootDir, sessionId } = {}) {
   if (!summary) return null;
 
   const control = await readSoloControl({ rootDir, sessionId });
+  const paths = getSoloHarnessPaths({ rootDir, sessionId: summary.sessionId });
   return {
     sessionId: summary.sessionId,
     objective: summary.objective,
@@ -372,6 +413,7 @@ export async function readSoloRunStatus({ rootDir, sessionId } = {}) {
     worktree: defaultWorktreeState(summary.worktree),
     continuitySummaryPath: normalizeText(summary.continuity?.markdownPath),
     continuityJsonPath: normalizeText(summary.continuity?.jsonPath),
+    hookEventsPath: formatRelativePath(rootDir, paths.hookEventsPath),
     updatedAt: summary.updatedAt,
   };
 }

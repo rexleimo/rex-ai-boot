@@ -39,7 +39,7 @@ touch .contextdb-enable
 codex
 ```
 
-이후 같은 프로젝트에서 `codex`, `claude`, `gemini` 를 실행하면 모두 같은 ContextDB 에 연결됩니다.
+이후 같은 프로젝트에서 `codex`, `claude`, `gemini`, `opencode` 를 실행하면 모두 같은 ContextDB 에 연결됩니다.
 
 ## 지속 가능한 운영 메모를 쓰고 싶어요 (Memo + Persona)
 
@@ -58,7 +58,9 @@ aios memo user add "Preferred language: zh-CN + technical English terms"
 
 - `memo add/list/search/recall` -> ContextDB 이벤트 레이어
 - `memo pin` -> 워크스페이스 pinned 파일
-- `memo persona/user` -> 전역 identity 파일
+- `memo persona/user` -> `ctx-agent` Memory prelude 에 주입되는 전역 identity 파일
+
+Persona 는 agent baseline ("이 AI 가 어떻게 행동해야 하는가") 용도입니다. User profile 은 안정적인 operator preference ("이 사용자가 어떤 방식의 납품을 원하는가") 용도입니다. 둘 다 주입 전에 안전 스캔과 용량 제한을 거칩니다.
 
 ## CLI 를 바꿔가며 이어받고 싶어요
 
@@ -75,7 +77,7 @@ gemini   # 마지막 검토 또는 비교
 적합: 목표가 명확하고, provider 하나면 충분하고, 야간에 계속 진행시키고 싶으며, 병렬 worker 가 필요하지 않을 때.
 
 ```bash
-aios harness run --objective "내일 아침 인계 메모 정리" --session nightly-demo --worktree
+aios harness run --objective "내일 아침 인계 메모 정리" --session nightly-demo --worktree --max-iterations 20
 aios harness status --session nightly-demo --json
 aios hud --session nightly-demo --json
 ```
@@ -95,6 +97,8 @@ aios harness resume --session nightly-demo --no-hooks
 ```
 
 “한 agent 가 한 목표를 계속 밀어붙이게” 하고 싶다면 [솔로 Harness](solo-harness.md) 를 사용하세요. 작업이 정말 병렬 친화적일 때만 [Agent Team](team-ops.md) 을 쓰면 됩니다.
+
+팁: 래핑된 `codex` / `claude` / `gemini` / `opencode` 에서 시작하고 야간/재개 가능 작업을 명시하면, 시작 route prompt 가 agent 에게 같은 `aios harness run ... --workspace <project-root>` 명령을 자체 트리거하도록 안내합니다. 사용자가 직접 외울 필요가 없습니다.
 
 ## Agent Team 을 켜고 싶어요
 
@@ -173,7 +177,7 @@ aios privacy read --file .env
 
 ## 선택 기준
 
-- **일상 개발**: `codex` / `claude` / `gemini`
+- **일상 개발**: `codex` / `claude` / `gemini` / `opencode`
 - **설치/업데이트**: `aios`
 - **솔로 야간 실행**: `aios harness run --objective "내일 아침 인계 메모 정리" --worktree`
 - **Agent Team**: `aios team 3:codex "task"`

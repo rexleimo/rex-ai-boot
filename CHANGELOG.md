@@ -6,9 +6,14 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-05-05
+
+- feat: add self-trigger harness routing for wrapped agents
+
 ## [1.7.1] - 2026-04-26
 
 - docs(blog): add solo harness release post
+- docs(memo): clarify existing persona and user profile memory
 
 ## [1.7.0] - 2026-04-26
 

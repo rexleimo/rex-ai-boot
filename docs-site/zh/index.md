@@ -79,6 +79,13 @@ aios team status --provider codex --watch
 - **不是只看功能列表**：先按“我要做什么”找命令，再去看模块参考。
 - **不要忽略 Doctor**：安装、浏览器、skills、native 配置问题，先跑诊断再改。
 
+## 发布说明与深度文章
+
+- [AIOS RL Training System](/blog/rl-training-system/)：多环境训练控制平面与 rollout 模型。
+- [ContextDB Search Upgrade](/blog/contextdb-fts-bm25-search/)：FTS5 + BM25 检索路径和语义重排行为。
+- [Windows CLI Startup Stability](/blog/windows-cli-startup-stability/)：包装器启动修复与 Windows 启动稳定性。
+- [Orchestrate Live](/blog/orchestrate-live/)：live 编排门禁与执行流程。
+
 ## 下一步阅读
 
 - [快速开始](getting-started.md)：安装、Setup、Doctor、第一次运行。

@@ -1,11 +1,12 @@
 # RexCLI (AIOS)
 
 本项目是一个面向 `Codex CLI`、`Claude Code`、`Gemini CLI`、`OpenCode` 的本地 Agent 工作流仓库。  
-目标不是做一个新的聊天客户端，而是给现有 CLI 增加三件事：
+目标不是做一个新的聊天客户端，而是给现有 CLI 增加四件事：
 
 1. 统一浏览器自动化能力（Playwright MCP，`browser_*` 工具）
-2. 跨 CLI 共享的文件系统 Context DB（可追溯会话记忆）
-3. 配置/密钥文件读取前的 Privacy Guard 脱敏（`~/.rexcil/privacy-guard.json`）
+2. 跨 CLI 共享的文件系统 Context DB（项目 memo + persona/user profile 记忆）
+3. 让 coding agent 自己感知并触发 `single` / `subagent` / `team` / `harness` 路由
+4. 配置/密钥文件读取前的 Privacy Guard 脱敏（`~/.rexcil/privacy-guard.json`）
 
 ## 快速理解（RexCLI 到底是什么）
 
@@ -16,8 +17,10 @@ RexCLI 是一层“AI 记忆系统 + 编排层”，叠加在你已有的编码 
 
 - 面向 coding agent 的 AI 记忆系统（`ContextDB`）
 - 跨会话共享记忆
+- 稳定 agent 行为的人设记忆与用户偏好记忆
 - 类 Hermes 引擎的编排与自动化流程
 - 多智能体协作的 Agent Team 运行时
+- 面向长任务、过夜任务、可恢复任务的 Solo Harness 运行时
 - 自动化子代理规划与执行门控
 
 ## 先用起来（不想看原理就看这里）
@@ -90,9 +93,31 @@ powershell -ExecutionPolicy Bypass -File .\scripts\aios.ps1
 
 所以你仍然输入原命令，体验上不需要改操作习惯。
 
+### AIOS 自触发路由
+
+被包装的 `codex` / `claude` / `gemini` / `opencode` 启动时会收到一段路由提示。agent 默认应继续用 `single`，只有任务明确需要更强执行通道时才直接运行 AIOS 命令：
+
+- `single`：当前客户端里正常交互执行
+- `subagent`：单个主域，但需要阶段编排或验证门禁
+- `team`：2 个以上独立域，可并行执行
+- `harness`：明确的长任务、过夜任务、可恢复任务、需要 checkpoint/run journal 的任务
+
+适合 harness 的请求会注入类似命令：
+
+```bash
+node <AIOS_ROOT>/scripts/aios.mjs harness run \
+  --objective "<task>" \
+  --provider codex \
+  --max-iterations 8 \
+  --worktree \
+  --workspace <project-root>
+```
+
+可用 `CTXDB_HARNESS_PROVIDER` / `AIOS_HARNESS_PROVIDER` 以及 `CTXDB_HARNESS_MAX_ITERATIONS` / `AIOS_HARNESS_MAX_ITERATIONS` 调整注入的 harness 路由。
+
 ## 自动首任务 Bootstrap
 
-现在在某个工作区第一次运行 `codex` / `claude` / `gemini` 时，若满足以下条件，AIOS 会自动创建一个轻量引导任务：
+现在在某个工作区第一次运行 `codex` / `claude` / `gemini` / `opencode` 时，若满足以下条件，AIOS 会自动创建一个轻量引导任务：
 
 - `tasks/.current-task` 不存在或为空
 - `tasks/pending/` 没有非隐藏任务条目
@@ -152,6 +177,7 @@ aios release-status --format json --history-output memory/context-db/exports/rel
 ### Workspace Memo（项目记忆 + persona/user 层）
 
 `aios memo` 在 ContextDB 之上补了一层轻量的操作员记忆。
+persona/user profile 已经存在于 memo 运行时；这里补齐它的正式用法说明：把“AI 应该是谁 / 服务谁”做成全局身份覆盖层，不需要把人设反复写进每个项目 memo。
 
 存储边界（重点）：
 
@@ -160,6 +186,14 @@ aios release-status --format json --history-output memory/context-db/exports/rel
 - `memo pin show/set/add`：读写 `memory/context-db/sessions/workspace-memory--<space>/pinned.md`
 - `memo persona ...` / `memo user ...`：全局文件层（默认 `~/.aios/SOUL.md` 与 `~/.aios/USER.md`）
 - `AIOS_IDENTITY_HOME`、`AIOS_PERSONA_PATH`、`AIOS_USER_PROFILE_PATH` 可覆盖全局文件默认位置
+- `AIOS_PERSONA_MAX_CHARS`、`AIOS_USER_PROFILE_MAX_CHARS` 可限制每个全局身份层容量（默认 `2400`）
+
+运行时行为：
+
+- `persona`：agent 身份、人设、工作风格层
+- `user`：用户稳定偏好层
+- `ctx-agent` 会把这两层注入到 Memory prelude，顺序在项目 memo 之前
+- 类 prompt injection 的不安全 persona/user 内容会被 memo 安全扫描拦截或跳过
 
 常用链路：
 
@@ -169,8 +203,10 @@ aios memo add "Need strict pre-PR checks #quality"
 aios memo pin add "Never run destructive git commands without explicit approval."
 aios memo persona init
 aios memo persona add "Response style: concise, direct, evidence-first"
+aios memo persona show
 aios memo user init
 aios memo user add "Preferred language: zh-CN + technical English terms"
+aios memo user path
 aios memo list --limit 10
 aios memo recall "release gate" --limit 5
 ```
@@ -232,17 +268,17 @@ aios orchestrate --session <session-id> --dispatch local --execute live --format
 推荐操作链路：
 
 ```bash
-aios harness run --objective "整理明早交接清单" --session nightly-demo --worktree
+aios harness run --objective "整理明早交接清单" --session nightly-demo --worktree --max-iterations 20
 aios harness status --session nightly-demo --json
 aios hud --session nightly-demo --json
 aios harness stop --session nightly-demo --reason "白天人工接手"
-aios harness resume --session nightly-demo
+aios harness resume --session nightly-demo --max-iterations 10
 ```
 
 如果你先想验证 artifact 和目录结构，不想真的调用模型：
 
 ```bash
-aios harness run --objective "整理明早交接清单" --session nightly-demo --worktree --dry-run --json
+aios harness run --objective "整理明早交接清单" --session nightly-demo --worktree --max-iterations 3 --dry-run --json
 ```
 
 每个 solo harness session 会在 `memory/context-db/sessions/<session-id>/artifacts/solo-harness/` 下落这些文件：
@@ -257,6 +293,8 @@ aios harness run --objective "整理明早交接清单" --session nightly-demo -
 
 - live 模式复用现有 `scripts/ctx-agent.mjs` 的一次性 provider 调用链路，所以本机仍然需要安装并可运行对应 CLI（`codex`、`claude`、`gemini`、`opencode`）
 - `resume` 会先清掉之前的 stop 标记；如果原来的 worktree 路径已经不存在，会尝试自动重建
+- `--max-iterations <n>` 控制 `run` / `resume` 的迭代预算（默认 `20`；被包装客户端自触发时默认注入 `8`）
+- `--workspace <path>` 可在非目标目录调用 AIOS 时，强制把 ContextDB/session artifact 写入指定项目根目录
 - 如果你不想写入 hooks 证据，可在 `run` / `resume` 时显式使用 `--no-hooks`
 - `aios hud --session <session-id>` 现在能直接识别 solo harness session，不再要求先有 dispatch artifact
 
@@ -756,13 +794,14 @@ PowerShell 包装入口是 `scripts/contextdb-shell.ps1`，底层跨平台运行
 
 ## 两种运行模式
 
-### A. 交互模式（直接 `codex` / `claude` / `gemini`）
+### A. 交互模式（直接 `codex` / `claude` / `gemini` / `opencode`）
 
 - 自动做：`init`、`session:latest/new`、`context:pack`
 - 作用域：当前 git 项目根目录（`--workspace <git-root>`）
 - 用途：启动时自动带上历史上下文
-- `codex` / `claude` / `gemini` / `opencode` 包装器默认会注入自动路由启动提示；现在采用更保守策略（默认先走 `single`，只有在明确需要委派/并行时才升级到 `subagent/team`）
+- `codex` / `claude` / `gemini` / `opencode` 包装器默认会注入自动路由启动提示；策略保持保守（默认先走 `single`，明确需要委派/并行时才升级到 `subagent/team`，只有长任务/可恢复目标才走 `harness`）
 - 可设置 `CTXDB_INTERACTIVE_AUTO_ROUTE=0` 完全关闭交互模式的自动路由提示注入
+- 可设置 `CTXDB_HARNESS_PROVIDER=<codex|claude|gemini|opencode>` 和 `CTXDB_HARNESS_MAX_ITERATIONS=<n>` 调整注入的 `harness` 路由命令
 - 可设置 `CTXDB_CODEX_DISABLE_MCP=1` 让包装后的 Codex 会话跳过 MCP 启动（可规避 MCP 冷启动卡顿）
 - `opencode` 会自动回退到受支持的 subagent runtime（默认 `codex-cli`，也可用 `CTXDB_ROUTE_SUBAGENT_CLIENT=<codex-cli|claude-code|gemini-cli>` 覆盖）
 - 注意：CLI 内的重置命令（如 Codex 的 `/new`、Claude/Gemini 的 `/clear`）会清空对话状态。退出并重新启动 CLI 可重新注入；或在新对话第一句引用 `memory/context-db/exports/latest-<agent>-context.md`。

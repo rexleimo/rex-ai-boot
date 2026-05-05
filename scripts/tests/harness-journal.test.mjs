@@ -5,7 +5,9 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
+  appendSoloHookEvent,
   appendSoloIteration,
+  getSoloHarnessPaths,
   initSoloRunJournal,
   readSoloControl,
   readSoloRunStatus,
@@ -113,6 +115,53 @@ test('appendSoloIteration persists iteration artifact and stop control can be re
     assert.equal(status.iterationCount, 1);
     assert.equal(status.lastOutcome, 'success');
     assert.equal(status.stopRequested, true);
+  } finally {
+    await rm(rootDir, { recursive: true, force: true });
+  }
+});
+
+test('appendSoloHookEvent persists lifecycle hook evidence and surfaces hook path in status', async () => {
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), 'aios-solo-journal-hooks-'));
+
+  try {
+    await initSoloRunJournal({
+      rootDir,
+      sessionId: 'solo-hook-session',
+      objective: 'Hook journal test',
+      provider: 'codex',
+      clientId: 'codex-cli',
+      profile: 'standard',
+      worktree: {
+        enabled: false,
+        baseRef: 'HEAD',
+        path: '',
+        preserved: false,
+        cleanupReason: '',
+      },
+    });
+
+    const entry = await appendSoloHookEvent({
+      rootDir,
+      sessionId: 'solo-hook-session',
+      event: {
+        hook: 'onTurnStart',
+        phase: 'turn-start',
+        iteration: 2,
+        status: 'ok',
+        detail: 'iteration 2 started',
+      },
+    });
+    assert.match(entry.hookEventsPath, /hook-events\.jsonl$/);
+
+    const paths = getSoloHarnessPaths({ rootDir, sessionId: 'solo-hook-session' });
+    const raw = await readFile(paths.hookEventsPath, 'utf8');
+    assert.match(raw, /onTurnStart/);
+    assert.match(raw, /turn-start/);
+    assert.match(raw, /iteration 2 started/);
+
+    const status = await readSoloRunStatus({ rootDir, sessionId: 'solo-hook-session' });
+    assert.equal(typeof status.hookEventsPath, 'string');
+    assert.match(status.hookEventsPath, /hook-events\.jsonl$/);
   } finally {
     await rm(rootDir, { recursive: true, force: true });
   }

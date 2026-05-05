@@ -14,11 +14,20 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
 
 ## Latest Stable
 
+- `1.8.0` (2026-05-05):
+  - Adds self-trigger harness routing for wrapped `codex`, `claude`, `gemini`, and `opencode` sessions.
+
+## Earlier Stable
+
+- `1.7.1` (2026-04-26):
+  - Adds a Solo Harness release post.
+  - Clarifies the existing persona/user profile memory layer (`aios memo persona ...`, `aios memo user ...`) that was previously under-documented.
+
 - `1.7.0` (2026-04-26):
   - Adds `aios harness` for single-agent overnight runs with run journals, stop/resume controls, HUD surfacing, and optional worktree isolation.
   - Adds official Solo Harness documentation across English, Chinese, Japanese, and Korean docs.
 
-## Earlier Stable
+## Previous Stable
 
 - `1.6.3` (2026-04-25):
   - Syncs the Chinese visual onboarding structure to English, Japanese, and Korean pages.
@@ -35,6 +44,7 @@ Use this page to track what changed in `RexCLI` and jump to release-related docs
 ## Recent Versions
 
 - `main` (Unreleased):
+  - **Agent self-trigger harness routing** (2026-05-05): wrapped `codex` / `claude` / `gemini` / `opencode` sessions now advertise `single/subagent/team/harness`; long-running, overnight, resumable objectives can self-trigger `aios harness run ... --workspace <project-root>` with `--max-iterations`, plus env controls `CTXDB_HARNESS_PROVIDER` and `CTXDB_HARNESS_MAX_ITERATIONS`
   - **Privacy Shield for wrapped coding agents** (2026-04-24): interactive ContextDB shell launches now print a colored privacy panel with Privacy Guard status, custom relay/model endpoint detection, and the safe `aios privacy read --file <path>` path; auto prompts now clarify that LLM privacy instructions are advisory while deterministic AIOS gates provide verifiable enforcement
   - **Workspace-aware routed startup + project Node selection** (2026-04-23): routed `ctx-agent` startup now preserves the active git workspace even when launched from a non-AIOS repo; `mcp-server` package scripts run through `scripts/with-project-node.mjs` so `.nvmrc` / Node 22 is honored consistently, reducing `better-sqlite3` ABI drift and surfacing a clear error when Node 22 is unavailable
   - **ContextDB Shell startup optimization** (2026-04-22): `ctx()` now prefers compiled `mcp-server/dist/contextdb/cli.js` over `npm run -s contextdb`, cutting per-call overhead from ~0.3s to ~0.06s; one-shot agent launch improved from ~2.2s to ~0.5s (~78% faster); shell-bridge `detectRunner` no longer requires `tsx`; install flow auto-builds `dist/` when missing and gracefully falls back to npm-run mode on build failure

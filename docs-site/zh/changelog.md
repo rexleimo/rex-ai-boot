@@ -14,11 +14,20 @@ description: 版本历史、升级说明与文档变更入口。
 
 ## 最新稳定版
 
+- `1.8.0`（2026-05-05）：
+  - 新增包装式 `codex`、`claude`、`gemini`、`opencode` 会话的自触发 harness 路由。
+
+## 较早稳定版
+
+- `1.7.1`（2026-04-26）：
+  - 新增 Solo Harness 发布博客。
+  - 补齐既有 persona/user profile 记忆层说明（`aios memo persona ...`、`aios memo user ...`），修正此前文档漏写。
+
 - `1.7.0`（2026-04-26）：
   - 新增 `aios harness`，支持单 Agent 过夜执行、run journal、stop/resume 控制、HUD 可见性和可选 worktree 隔离。
   - 新增并同步官方 `Solo Harness` 文档到英文、中文、日文、韩文站点。
 
-## 较早稳定版
+## 更早稳定版
 
 - `1.6.3`（2026-04-25）：
   - 将中文官方文档的新手视觉引导同步到英文、日文、韩文站点。
@@ -35,6 +44,7 @@ description: 版本历史、升级说明与文档变更入口。
 ## 最近版本
 
 - `main`（未发布）：
+  - **Agent 自触发 harness 路由**（2026-05-05）：包装后的 `codex` / `claude` / `gemini` / `opencode` 会话现在会提示 `single/subagent/team/harness`；长任务、过夜任务、可恢复目标可自触发 `aios harness run ... --workspace <project-root>`，支持 `--max-iterations`，并可用 `CTXDB_HARNESS_PROVIDER`、`CTXDB_HARNESS_MAX_ITERATIONS` 控制
   - **包装式 coding agent 的 Privacy Shield**（2026-04-24）：ContextDB shell 启动交互式 CLI 时会打印彩色隐私面板，展示 Privacy Guard 状态、自定义模型中转端点检测，以及 `aios privacy read --file <path>` 安全读取路径；自动提示词也明确 LLM 隐私规则只是提示约束，可验证保护来自确定性的 AIOS gate
   - **按工作区路由启动 + 项目级 Node 选择**（2026-04-23）：`ctx-agent` 的路由启动现在会保留当前 git 工作区，即使它是从非 AIOS 仓库触发；`mcp-server` 的 npm scripts 统一经由 `scripts/with-project-node.mjs` 运行，持续遵循 `.nvmrc` / Node 22，降低 `better-sqlite3` ABI 漂移，并在本机缺少 Node 22 时给出明确报错
   - **ContextDB Shell 启动优化**（2026-04-22）：`ctx()` 优先使用编译后的 `mcp-server/dist/contextdb/cli.js`，单次调用开销从 ~0.3s 降至 ~0.06s；one-shot 代理启动从 ~2.2s 优化到 ~0.5s（快约 78%）；shell-bridge 的 `detectRunner` 不再依赖 `tsx`；安装时如缺少 `dist/` 自动触发 build，build 失败则优雅回退到 npm-run 模式

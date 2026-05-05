@@ -295,6 +295,7 @@ test('wrapped interactive codex runs inject route auto prompt by default', async
   assert.match(autoPrompt, /Do not claim strict privacy compliance unless AIOS gates verified it/u);
   assert.match(autoPrompt, /Do NOT spawn built-in explorer\/worker subagents just to scan a codebase/u);
   assert.match(autoPrompt, /post a heartbeat every 30s and stop waiting after 120s/u);
+  assert.match(autoPrompt, /Only choose harness for explicit long-running, overnight, resumable/u);
   assert.match(
     autoPrompt,
     new RegExp(`node ${escapeRegExp(CTX_AGENT_CLI)} --agent codex-cli --workspace ${escapeRegExp(cwd)} --project ${escapeRegExp(path.basename(cwd))} --route team --route-execute live --team-provider codex --team-workers 3 --prompt "<task>" --no-bootstrap`, 'u')
@@ -302,6 +303,10 @@ test('wrapped interactive codex runs inject route auto prompt by default', async
   assert.match(
     autoPrompt,
     new RegExp(`node ${escapeRegExp(CTX_AGENT_CLI)} --agent codex-cli --workspace ${escapeRegExp(cwd)} --project ${escapeRegExp(path.basename(cwd))} --route subagent --route-execute live --team-provider codex --team-workers 3 --blueprint feature --prompt "<task>" --no-bootstrap`, 'u')
+  );
+  assert.match(
+    autoPrompt,
+    new RegExp(`node .*scripts/aios\.mjs harness run --objective "<task>" --provider codex --max-iterations 8 --worktree --workspace ${escapeRegExp(cwd)}`, 'u')
   );
 });
 
@@ -367,6 +372,31 @@ test('privacy banner can be disabled via CTXDB_PRIVACY_BANNER', async () => {
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.doesNotMatch(result.stderr, /AIOS Privacy Shield/u);
+});
+
+test('wrapped interactive codex runs honors harness route env overrides', async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), 'aios-bridge-interactive-harness-env-'));
+  const fakeBin = await createFakeCodexCommand();
+  const fakeRunner = await createFakeRunner();
+
+  const result = runBridge({
+    cwd,
+    pathPrefix: fakeBin,
+    args: [],
+    env: {
+      CTXDB_RUNNER: fakeRunner,
+      CTXDB_WRAP_MODE: 'all',
+      CTXDB_HARNESS_PROVIDER: 'claude',
+      CTXDB_HARNESS_MAX_ITERATIONS: '4',
+    },
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const autoPrompt = parseRunnerAutoPrompt(result.stdout);
+  assert.match(
+    autoPrompt,
+    new RegExp(`node .*scripts/aios\.mjs harness run --objective "<task>" --provider claude --max-iterations 4 --worktree --workspace ${escapeRegExp(cwd)}`, 'u')
+  );
 });
 
 test('wrapped interactive codex runs can disable route auto prompt injection via env', async () => {
@@ -443,6 +473,10 @@ test('wrapped interactive claude and gemini runs inject provider-specific route 
       autoPrompt,
       new RegExp(`node ${escapeRegExp(CTX_AGENT_CLI)} --agent ${item.expectedClient} --workspace ${escapeRegExp(cwd)} --project ${escapeRegExp(path.basename(cwd))} --route subagent --route-execute live --team-provider ${item.expectedProvider} --team-workers 3 --blueprint feature --prompt "<task>" --no-bootstrap`)
     );
+    assert.match(
+      autoPrompt,
+      new RegExp(`node .*scripts/aios\.mjs harness run --objective "<task>" --provider ${item.expectedProvider} --max-iterations 8 --worktree --workspace ${escapeRegExp(cwd)}`, 'u')
+    );
   }
 });
 
@@ -472,6 +506,10 @@ test('wrapped interactive opencode runs fallback subagent client to codex-cli by
   assert.match(
     autoPrompt,
     new RegExp(`node ${escapeRegExp(CTX_AGENT_CLI)} --agent codex-cli --workspace ${escapeRegExp(cwd)} --project ${escapeRegExp(path.basename(cwd))} --route subagent --route-execute live --team-provider codex --team-workers 3 --blueprint feature --prompt "<task>" --no-bootstrap`, 'u')
+  );
+  assert.match(
+    autoPrompt,
+    new RegExp(`node .*scripts/aios\.mjs harness run --objective "<task>" --provider opencode --max-iterations 8 --worktree --workspace ${escapeRegExp(cwd)}`, 'u')
   );
 });
 

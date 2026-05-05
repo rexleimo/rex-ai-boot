@@ -79,6 +79,13 @@ aios team status --provider codex --watch
 - **機能一覧から始めない**: 「今何をしたいか」からコマンドを選びます。
 - **Doctor を飛ばさない**: install、browser、skills、native 設定を手で直す前に診断します。
 
+## リリースノートと詳細記事
+
+- [AIOS RL Training System](/blog/rl-training-system/): multi-environment training control plane と rollout model。
+- [ContextDB Search Upgrade](/blog/contextdb-fts-bm25-search/): FTS5 + BM25 search path と semantic rerank behavior。
+- [Windows CLI Startup Stability](/blog/windows-cli-startup-stability/): wrapper startup fix と Windows launch reliability。
+- [Orchestrate Live](/blog/orchestrate-live/): live orchestration gates と execution workflow。
+
 ## 次に読む
 
 - [クイックスタート](getting-started.md): install、Setup、Doctor、初回実行。

@@ -29,7 +29,7 @@ Not a good fit:
 
 ```bash
 # Start an overnight run in an isolated worktree
-aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --worktree
+aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --worktree --max-iterations 20
 
 # Check structured status
 aios harness status --session nightly-demo --json
@@ -41,15 +41,39 @@ aios hud --session nightly-demo --json
 aios harness stop --session nightly-demo --reason "morning handoff"
 
 # Continue later with the same session
-aios harness resume --session nightly-demo
+aios harness resume --session nightly-demo --max-iterations 10
 ```
+
+## Agent Self-Trigger From Wrapped CLIs
+
+When shell wrapping is enabled, interactive `codex` / `claude` / `gemini` / `opencode` sessions receive an AIOS route prompt. The default route is still `single`; the agent should only choose `harness` for explicit long-running, overnight, resumable, or checkpoint-heavy objectives.
+
+For those tasks, the injected command shape is:
+
+```bash
+node <AIOS_ROOT>/scripts/aios.mjs harness run \
+  --objective "<task>" \
+  --provider codex \
+  --max-iterations 8 \
+  --worktree \
+  --workspace <project-root>
+```
+
+You can override the injected provider and loop budget with:
+
+```bash
+export CTXDB_HARNESS_PROVIDER=claude
+export CTXDB_HARNESS_MAX_ITERATIONS=12
+```
+
+Use `CTXDB_INTERACTIVE_AUTO_ROUTE=0` if you want wrapped clients to start without any route prompt.
 
 ## Dry-Run First
 
 If you want to verify the artifact contract before spending tokens, start with dry-run:
 
 ```bash
-aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --worktree --dry-run --json
+aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --worktree --max-iterations 3 --dry-run --json
 ```
 
 Dry-run creates the session journal but does not invoke the provider.
@@ -65,6 +89,12 @@ aios harness resume --session nightly-demo --no-hooks
 
 - Default is `--hooks` (enabled), which records lifecycle hook evidence.
 - Use `--no-hooks` when you want a lower-noise run without hook traces.
+
+## Iteration And Workspace Controls
+
+- `--max-iterations <n>` caps the loop budget for `run` and `resume`; the CLI default is `20`, while wrapped-client self-trigger prompts default to `8`.
+- `--workspace <path>` forces ContextDB session artifacts into that project root. Use it when AIOS is invoked from a wrapper, an external checkout, or a parent directory.
+- `--provider <codex|claude|gemini|opencode>` selects the underlying local CLI used by the loop.
 
 ## What Solo Harness Writes
 

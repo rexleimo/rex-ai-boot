@@ -319,10 +319,13 @@ export function createDefaultHarnessRunOptions() {
     subcommand: 'run',
     objective: '',
     sessionId: '',
+    workspaceRoot: '',
     provider: 'codex',
     profile: 'standard',
     worktree: false,
     baseRef: 'HEAD',
+    maxIterations: 20,
+    lifecycleHooks: true,
     dryRun: false,
     json: false,
   };
@@ -332,6 +335,7 @@ export function createDefaultHarnessStatusOptions() {
   return {
     subcommand: 'status',
     sessionId: '',
+    workspaceRoot: '',
     json: false,
   };
 }
@@ -340,6 +344,9 @@ export function createDefaultHarnessResumeOptions() {
   return {
     subcommand: 'resume',
     sessionId: '',
+    workspaceRoot: '',
+    maxIterations: 20,
+    lifecycleHooks: true,
     json: false,
   };
 }
@@ -348,6 +355,7 @@ export function createDefaultHarnessStopOptions() {
   return {
     subcommand: 'stop',
     sessionId: '',
+    workspaceRoot: '',
     json: false,
     reason: 'operator-request',
   };

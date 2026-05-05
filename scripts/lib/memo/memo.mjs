@@ -6,6 +6,14 @@ import { ensureParentDir, readTextIfExists, writeText } from "../platform/fs.mjs
 import { runContextDbCli } from "../contextdb-cli.mjs";
 import { assertWorkspaceMemoryContentSafe } from "./safety.mjs";
 import {
+  ensurePersonaLayer,
+  getPersonaLayerDisplayName,
+  readPersonaLayer,
+  resolvePersonaPath,
+  resolveUserProfilePath,
+  writePersonaLayer,
+} from "./persona.mjs";
+import {
   DEFAULT_WORKSPACE_MEMORY_SPACE,
   WORKSPACE_MEMORY_AGENT,
   WORKSPACE_MEMORY_SESSION_PREFIX,
@@ -19,7 +27,10 @@ import {
 } from "./workspace-memory.mjs";
 
 const DEFAULT_LIST_LIMIT = 20;
+const DEFAULT_RECALL_HIGHLIGHT_LIMIT = 3;
 const MAX_PRINT_CHARS = 12_000;
+const DEFAULT_WORKSPACE_MEMO_ENTRY_MAX_CHARS = 1400;
+const DEFAULT_WORKSPACE_PINNED_MAX_CHARS = 5000;
 
 function usageError(message) {
   const error = new Error(`${message}\n\nRun: node scripts/aios.mjs memo --help`);
@@ -162,11 +173,30 @@ function parsePositiveLimit(raw) {
   return parsed;
 }
 
+function parseBoundedIntegerEnv(value, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return fallback;
+  }
+  const parsed = Number.parseInt(String(value).trim(), 10);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.min(Math.max(parsed, min), max);
+}
+
 function assertSafeMemoText(text, target = "memo content") {
   assertWorkspaceMemoryContentSafe(text, {
     allowEmpty: false,
     target,
   });
+}
+
+function assertMaxChars(text, maxChars, target = "memo content") {
+  const content = String(text ?? "");
+  if (content.length <= maxChars) return;
+  const error = new Error(`${target} exceeds capacity (${content.length}/${maxChars} chars)`);
+  error.code = "AIOS_MEMO_CAPACITY";
+  throw error;
 }
 
 function splitFlags(argv) {
@@ -195,6 +225,34 @@ function splitFlags(argv) {
   return { positionals, flags };
 }
 
+function splitRecallFlags(argv) {
+  const flags = {
+    limit: DEFAULT_LIST_LIMIT,
+    highlightLimit: DEFAULT_RECALL_HIGHLIGHT_LIMIT,
+  };
+  const positionals = [];
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "--") {
+      positionals.push(...argv.slice(i + 1));
+      break;
+    }
+    if (arg === "--limit") {
+      flags.limit = parsePositiveLimit(argv[i + 1]);
+      i += 1;
+      continue;
+    }
+    if (arg === "--highlight-limit") {
+      flags.highlightLimit = parsePositiveLimit(argv[i + 1]);
+      i += 1;
+      continue;
+    }
+    positionals.push(arg);
+  }
+  return { positionals, flags };
+}
+
 function formatRefs(refs = []) {
   if (!Array.isArray(refs) || refs.length === 0) return "";
   const tokens = refs
@@ -214,10 +272,52 @@ function renderMemoRow(row) {
   return `- [${ts}]${idLabel}${refsLabel}: ${text}`;
 }
 
+function renderRecallRow(row, index) {
+  const rank = Number.isFinite(index) ? index + 1 : 1;
+  const score = Number.isFinite(row?.matchScore) ? Number(row.matchScore).toFixed(4) : "0.0000";
+  const status = String(row?.status || "running");
+  const sessionId = String(row?.sessionId || "");
+  const project = String(row?.project || "");
+  const updatedAt = String(row?.updatedAt || "");
+  const goal = String(row?.goal || "").replace(/\s+/g, " ").trim();
+  const summary = String(row?.summary || "").replace(/\s+/g, " ").trim();
+  const highlights = Array.isArray(row?.highlights) ? row.highlights : [];
+
+  const lines = [
+    `${rank}. [${status}] ${sessionId} score=${score}${project ? ` project=${project}` : ""}${updatedAt ? ` updated=${updatedAt}` : ""}`,
+  ];
+  if (goal) {
+    lines.push(`   goal: ${goal}`);
+  }
+  if (summary) {
+    lines.push(`   summary: ${summary}`);
+  }
+  if (highlights.length > 0) {
+    lines.push("   highlights:");
+    for (const highlight of highlights) {
+      const label = String(highlight?.label || "");
+      const text = String(highlight?.text || "").replace(/\s+/g, " ").trim();
+      const itemScore = Number.isFinite(highlight?.score) ? Number(highlight.score).toFixed(4) : "0.0000";
+      lines.push(`   - [${label}] (score=${itemScore}) ${text}`);
+    }
+  }
+  return lines.join("\n");
+}
+
 export async function runMemo(rawOptions = {}, { io = console } = {}) {
   const argv = Array.isArray(rawOptions.argv) ? rawOptions.argv : [];
   const workspaceRoot = detectWorkspaceRoot(process.cwd());
   const activeSpace = resolveActiveSpace(workspaceRoot);
+  const workspaceMemoEntryMaxChars = parseBoundedIntegerEnv(
+    process.env.WORKSPACE_MEMORY_MEMO_ENTRY_MAX_CHARS,
+    DEFAULT_WORKSPACE_MEMO_ENTRY_MAX_CHARS,
+    { min: 256, max: 12000 }
+  );
+  const workspacePinnedMaxChars = parseBoundedIntegerEnv(
+    process.env.WORKSPACE_MEMORY_PINNED_MAX_CHARS,
+    DEFAULT_WORKSPACE_PINNED_MAX_CHARS,
+    { min: 512, max: 20000 }
+  );
 
   const [primary, secondary, ...rest] = argv;
   if (!primary) {
@@ -256,6 +356,50 @@ export async function runMemo(rawOptions = {}, { io = console } = {}) {
     return;
   }
 
+  if (primary === "persona" || primary === "user") {
+    const layer = primary === "persona" ? "persona" : "user";
+    const action = String(secondary || "").toLowerCase();
+    if (!action) {
+      throw usageError(`Usage: memo ${primary} <show|set|add|init|path> ...`);
+    }
+
+    if (action === "path") {
+      const resolvedPath = layer === "persona" ? resolvePersonaPath(process.env) : resolveUserProfilePath(process.env);
+      io.log(resolvedPath);
+      return;
+    }
+
+    if (action === "init") {
+      const seeded = ensurePersonaLayer(layer, { env: process.env });
+      io.log(`${getPersonaLayerDisplayName(layer)} ${seeded.created ? "initialized" : "already exists"}.`);
+      io.log(`Path: ${seeded.path}`);
+      return;
+    }
+
+    if (action === "show") {
+      const state = readPersonaLayer(layer, { env: process.env });
+      if (!state.exists || !String(state.content || "").trim()) {
+        io.log("(none)");
+        return;
+      }
+      safePrintText(io, state.content);
+      return;
+    }
+
+    if (action !== "set" && action !== "add") {
+      throw usageError(`Unknown ${primary} action: ${secondary}`);
+    }
+    const text = rest.join(" ").trim();
+    if (!text) {
+      throw usageError(`${primary} ${action} requires text`);
+    }
+    const updated = writePersonaLayer(layer, text, { mode: action, env: process.env });
+    io.log(`${getPersonaLayerDisplayName(layer)} memory ${action === "set" ? "updated" : "appended"}.`);
+    io.log(`Path: ${updated.path}`);
+    io.log(`Usage: ${updated.length}/${updated.maxChars} chars`);
+    return;
+  }
+
   if (primary === "pin") {
     const action = String(secondary || "").toLowerCase();
     if (!action) throw usageError("Usage: memo pin <show|set|add> ...");
@@ -278,12 +422,16 @@ export async function runMemo(rawOptions = {}, { io = console } = {}) {
 
     ensureWorkspaceMemorySession(workspaceRoot, space);
     if (action === "set") {
+      assertMaxChars(text, workspacePinnedMaxChars, "pinned workspace memory");
       writePinned(workspaceRoot, sessionId, text);
       io.log("Pinned memory updated.");
       return;
     }
     if (action === "add") {
-      appendPinned(workspaceRoot, sessionId, text);
+      const existing = readPinned(workspaceRoot, sessionId).trimEnd();
+      const next = existing ? `${existing}\n\n${text}` : text;
+      assertMaxChars(next, workspacePinnedMaxChars, "pinned workspace memory");
+      writePinned(workspaceRoot, sessionId, next);
       io.log("Pinned memory appended.");
       return;
     }
@@ -294,6 +442,7 @@ export async function runMemo(rawOptions = {}, { io = console } = {}) {
     const text = [secondary, ...rest].join(" ").trim();
     if (!text) throw usageError("memo add requires text");
     assertSafeMemoText(text, "memo entry");
+    assertMaxChars(text, workspaceMemoEntryMaxChars, "memo entry");
 
     const space = activeSpace;
     const { sessionId } = ensureWorkspaceMemorySession(workspaceRoot, space);
@@ -318,6 +467,35 @@ export async function runMemo(rawOptions = {}, { io = console } = {}) {
     const event = runContextDbCli(args);
     const eventId = event?.seq ? `${sessionId}#${event.seq}` : "";
     io.log(`Memo added${eventId ? `: ${eventId}` : "."}`);
+    return;
+  }
+
+  if (primary === "recall") {
+    const { positionals, flags } = splitRecallFlags(argv);
+    if (positionals[0] !== "recall") {
+      throw usageError("Usage: memo recall [query] [--limit N] [--highlight-limit N]");
+    }
+    const query = positionals.slice(1).join(" ").trim();
+    const args = [
+      "recall:sessions",
+      "--workspace", workspaceRoot,
+      "--project", workspaceProjectName(workspaceRoot),
+      "--limit", String(flags.limit),
+      "--highlight-limit", String(flags.highlightLimit),
+    ];
+    if (query) {
+      args.push("--query", query);
+    }
+
+    const result = runContextDbCli(args);
+    const rows = Array.isArray(result?.results) ? result.results : [];
+    if (rows.length === 0) {
+      io.log("(none)");
+      return;
+    }
+    for (let index = 0; index < rows.length; index += 1) {
+      io.log(renderRecallRow(rows[index], index));
+    }
     return;
   }
 

@@ -14,6 +14,7 @@ import {
   workspaceMemorySessionId,
   workspaceMemoryStatePath,
 } from './lib/memo/workspace-memory.mjs';
+import { buildPersonaOverlay } from './lib/memo/persona.mjs';
 import { scanWorkspaceMemoryContent } from './lib/memo/safety.mjs';
 import { extractTouchedFilesFromText, writeContinuitySummary } from './lib/contextdb/continuity.mjs';
 
@@ -22,9 +23,10 @@ const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 const MCP_DIR = path.join(ROOT_DIR, 'mcp-server');
 const CTX_AGENT_CLI_PATH = path.join(ROOT_DIR, 'scripts', 'ctx-agent.mjs');
-const ROUTE_MODES = new Set(['auto', 'single', 'team', 'subagent']);
+const ROUTE_MODES = new Set(['auto', 'single', 'team', 'subagent', 'harness']);
 const ROUTE_EXECUTION_MODES = new Set(['dry-run', 'live']);
 const TEAM_ROUTE_PROVIDERS = new Set(['auto', 'codex', 'claude', 'gemini']);
+const HARNESS_ROUTE_PROVIDERS = new Set(['auto', 'codex', 'claude', 'gemini', 'opencode']);
 const ORCHESTRATE_BLUEPRINTS = new Set(['feature', 'bugfix', 'refactor', 'security']);
 const SUPPORTED_SUBAGENT_CLIENT_IDS = new Set(['codex-cli', 'claude-code', 'gemini-cli']);
 const CTXDB_CODEX_DISABLE_MCP_ENV = 'CTXDB_CODEX_DISABLE_MCP';
@@ -33,6 +35,7 @@ const TEAM_ROUTE_KEYWORD_PATTERNS = [
   /subagent|agent\s*team|multi[-\s]?agent|parallel|split/i,
   /frontend|backend|api|database|测试|test|文档|docs/i,
 ];
+const HARNESS_ROUTE_KEYWORD_PATTERN = /\b(harness|overnight|long[-\s]?running|resumable|resume|checkpoint|journal|handoff)\b|过夜|长任务|长期|可恢复|恢复|持续推进|交接|迭代|检查点/iu;
 
 function usage() {
   console.log(`Usage:
@@ -47,10 +50,12 @@ Options:
   --prompt <text>     Run one-shot mode and auto log request/response/checkpoint
   --limit <n>         Number of recent events in context packet (default: 30)
   --status <state>    Checkpoint status on success: running|blocked|done (default: running)
-  --route <mode>      One-shot routing mode: auto|single|team|subagent (default: auto)
+  --route <mode>      One-shot routing mode: auto|single|team|subagent|harness (default: auto)
   --route-execute <mode> Routed execution mode: dry-run|live (default: live)
   --team-provider <name> Team provider for routed commands: auto|codex|claude|gemini (default: auto)
   --team-workers <n>  Team workers for routed commands (default: 3)
+  --harness-provider <name> Harness provider for routed harness: codex|claude|gemini|opencode (default: inferred)
+  --harness-max-iterations <n> Harness iteration budget for routed harness (default: 8)
   --blueprint <name>  Orchestrate blueprint for routed subagent: feature|bugfix|refactor|security (default: feature)
   --no-bootstrap      Disable automatic first-task bootstrap for this run
   --no-checkpoint     Disable automatic checkpoint write in one-shot mode
@@ -147,7 +152,7 @@ function parsePositiveInteger(rawValue, fallback, flagName = 'value') {
 function normalizeRouteMode(rawValue = 'auto') {
   const value = String(rawValue || 'auto').trim().toLowerCase();
   if (!ROUTE_MODES.has(value)) {
-    throw new Error('--route must be one of: auto, single, team, subagent');
+    throw new Error('--route must be one of: auto, single, team, subagent, harness');
   }
   return value;
 }
@@ -174,6 +179,22 @@ function normalizeOrchestrateBlueprint(rawValue = 'feature') {
     throw new Error('--blueprint must be one of: feature, bugfix, refactor, security');
   }
   return value;
+}
+
+function normalizeHarnessRouteProvider(rawValue = 'auto') {
+  const value = String(rawValue || 'auto').trim().toLowerCase();
+  if (!HARNESS_ROUTE_PROVIDERS.has(value)) {
+    throw new Error('--harness-provider must be one of: auto, codex, claude, gemini, opencode');
+  }
+  return value;
+}
+
+function inferHarnessProviderFromAgent(agent = '') {
+  const normalized = String(agent || '').trim().toLowerCase();
+  if (normalized === 'claude-code') return 'claude';
+  if (normalized === 'gemini-cli') return 'gemini';
+  if (normalized === 'opencode-cli') return 'opencode';
+  return 'codex';
 }
 
 function inferTeamProviderFromAgent(agent = '') {
@@ -270,6 +291,36 @@ function buildCtxAgentRoutePreview({
   return `node ${args.map((item) => formatShellArg(item)).join(' ')}`;
 }
 
+
+function resolveHarnessRouteProviderForAgent({ agent = 'codex-cli', harnessProvider = 'auto' } = {}) {
+  const normalized = normalizeHarnessRouteProvider(harnessProvider);
+  return normalized === 'auto' ? inferHarnessProviderFromAgent(agent) : normalized;
+}
+
+function buildHarnessRoutePreview({
+  workspaceRoot = '',
+  sessionId = '',
+  provider = 'codex',
+  taskPrompt = '<task>',
+  maxIterations = 8,
+  worktree = true,
+} = {}) {
+  const args = [path.join(ROOT_DIR, 'scripts', 'aios.mjs'), 'harness', 'run'];
+  args.push('--objective', String(taskPrompt || '').trim() || '<task>');
+  if (String(sessionId || '').trim()) {
+    args.push('--session', String(sessionId).trim());
+  }
+  args.push('--provider', normalizeHarnessRouteProvider(provider));
+  args.push('--max-iterations', String(parsePositiveInteger(maxIterations, 8)));
+  if (worktree) {
+    args.push('--worktree');
+  }
+  if (String(workspaceRoot || '').trim()) {
+    args.push('--workspace', String(workspaceRoot).trim());
+  }
+  return `node ${args.map((item) => formatShellArg(item)).join(' ')}`;
+}
+
 function buildRouteRuntimeEnv({
   agent = 'codex-cli',
   teamProvider = 'auto',
@@ -300,6 +351,8 @@ function buildTaskRouterGuide({
   project = '',
   teamProvider = 'auto',
   teamWorkers = 3,
+  harnessProvider = 'auto',
+  harnessMaxIterations = 8,
   blueprint = 'feature',
   routeMode = 'auto',
   sessionId = '',
@@ -336,6 +389,13 @@ function buildTaskRouterGuide({
     blueprint: resolvedBlueprint,
     taskPrompt: '<task>',
   });
+  const harnessCommand = buildHarnessRoutePreview({
+    workspaceRoot,
+    sessionId,
+    provider: resolveHarnessRouteProviderForAgent({ agent, harnessProvider }),
+    taskPrompt: '<task>',
+    maxIterations: harnessMaxIterations,
+  });
 
   return [
     '## AIOS Task Router',
@@ -344,17 +404,20 @@ function buildTaskRouterGuide({
     '- single: one focused domain with low coupling; continue in the active client.',
     '- subagent: one primary domain but needs staged orchestration/verification gates.',
     '- team: 2+ independent domains, parallelizable work-items, or merge-gate heavy delivery.',
+    '- harness: one long-running, overnight, resumable objective that needs an iteration journal and human handoff.',
     'Guardrails:',
-    '- Prefer single by default; do not escalate to subagent/team unless delegation is explicitly requested or clearly necessary.',
+    '- Prefer single by default; do not escalate to subagent/team/harness unless the trigger is explicit or clearly necessary.',
     '- Do not spawn built-in explorer/worker subagents only to "scan/explain a codebase".',
     '- If waiting for delegated workers, emit heartbeat every 30s; stop waiting after 120s and provide fallback next steps.',
-    'Policy: when route=subagent/team, execute the matching AIOS command directly (live) unless user explicitly requests preview/dry-run.',
+    'Policy: when route=subagent/team/harness, execute the matching AIOS command directly (live) unless user explicitly requests preview/dry-run.',
     'User trigger shortcuts in one-shot prompt text:',
     '- /single <task>',
     '- /subagent <task>',
     '- /team <task>',
+    '- /harness <task>',
     `Team trigger command: ${teamCommand}`,
     `Subagent trigger command: ${subagentCommand}`,
+    `Harness trigger command: ${harnessCommand}`,
   ].join('\n');
 }
 
@@ -364,6 +427,8 @@ function buildInteractiveRouteAutoPrompt({
   project = '',
   teamProvider = 'auto',
   teamWorkers = 3,
+  harnessProvider = 'auto',
+  harnessMaxIterations = 8,
   blueprint = 'feature',
   sessionId = '',
 } = {}) {
@@ -400,14 +465,23 @@ function buildInteractiveRouteAutoPrompt({
     blueprint: resolvedBlueprint,
     taskPrompt: '<task>',
   });
+  const harnessCommand = buildHarnessRoutePreview({
+    workspaceRoot,
+    sessionId,
+    provider: resolveHarnessRouteProviderForAgent({ agent, harnessProvider }),
+    taskPrompt: '<task>',
+    maxIterations: harnessMaxIterations,
+  });
   return [
     'Continue from this state and execute the next best step.',
     'Routing policy: default to single-route execution.',
     'Only choose team/subagent when the user explicitly asks for delegation/parallel work, or when there are 2+ clearly independent domains.',
+    'Only choose harness for explicit long-running, overnight, resumable, checkpoint-heavy objectives that need an iteration journal.',
     'Do NOT spawn built-in explorer/worker subagents just to scan a codebase; start single-agent first.',
     'If delegated workers are running, post a heartbeat every 30s and stop waiting after 120s with a fallback plan.',
     `If route=team, run: ${teamCommand}`,
     `If route=subagent, run: ${subagentCommand}`,
+    `If route=harness, run: ${harnessCommand}`,
     'Do not ask the user to manually trigger these commands unless they requested dry-run/preview.',
   ].join('\n');
 }
@@ -475,7 +549,7 @@ export function resolveTaskRouteDecision({
 } = {}) {
   const rawPrompt = String(prompt || '').trim();
   const normalizedRouteMode = normalizeRouteMode(routeMode);
-  const commandMatch = /^\/(single|team|subagent)\b[:\s-]*/iu.exec(rawPrompt);
+  const commandMatch = /^\/(single|team|subagent|harness)\b[:\s-]*/iu.exec(rawPrompt);
 
   if (commandMatch) {
     const commandRoute = normalizeRouteMode(commandMatch[1]);
@@ -496,6 +570,16 @@ export function resolveTaskRouteDecision({
       explicitTrigger: true,
       reason: `flag route=${normalizedRouteMode}`,
       signal: null,
+    };
+  }
+
+  if (HARNESS_ROUTE_KEYWORD_PATTERN.test(rawPrompt)) {
+    return {
+      routeMode: 'harness',
+      taskPrompt: rawPrompt,
+      explicitTrigger: false,
+      reason: 'harness keyword signal',
+      signal: { recommendedRoute: 'harness' },
     };
   }
 
@@ -695,6 +779,42 @@ export async function buildWorkspaceMemoryOverlay(workspaceRoot, env = process.e
   return `${trimmed}${suffix}`;
 }
 
+async function buildMemoryPrelude(workspaceRoot, env = process.env) {
+  const sections = [];
+
+  try {
+    const personaOverlay = buildPersonaOverlay('persona', { workspaceRoot, env });
+    if (personaOverlay) {
+      sections.push(personaOverlay.trim());
+    }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn(`[warn] persona overlay skipped: ${reason}`);
+  }
+
+  try {
+    const userProfileOverlay = buildPersonaOverlay('user', { workspaceRoot, env });
+    if (userProfileOverlay) {
+      sections.push(userProfileOverlay.trim());
+    }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn(`[warn] user profile overlay skipped: ${reason}`);
+  }
+
+  try {
+    const workspaceMemoryOverlay = await buildWorkspaceMemoryOverlay(workspaceRoot, env);
+    if (workspaceMemoryOverlay) {
+      sections.push(workspaceMemoryOverlay.trim());
+    }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn(`[warn] workspace memory overlay skipped: ${reason}`);
+  }
+
+  return sections.join('\n\n').trim();
+}
+
 export function shouldAutoRebuildNative(env = process.env) {
   return parseBoolEnv(env.CTXDB_AUTO_REBUILD_NATIVE, true);
 }
@@ -883,6 +1003,8 @@ function parseArgs(argv) {
     routeExecutionMode: 'live',
     teamProvider: 'auto',
     teamWorkers: '3',
+    harnessProvider: 'auto',
+    harnessMaxIterations: '8',
     blueprint: 'feature',
     autoBootstrap: true,
     autoCheckpoint: true,
@@ -930,6 +1052,12 @@ function parseArgs(argv) {
         break;
       case '--team-workers':
         opts.teamWorkers = argv[++i] || '3';
+        break;
+      case '--harness-provider':
+        opts.harnessProvider = argv[++i] || 'auto';
+        break;
+      case '--harness-max-iterations':
+        opts.harnessMaxIterations = argv[++i] || '8';
         break;
       case '--blueprint':
         opts.blueprint = argv[++i] || 'feature';
@@ -989,6 +1117,8 @@ function validateOpts(opts) {
   opts.routeExecutionMode = normalizeRouteExecutionMode(opts.routeExecutionMode);
   opts.teamProvider = normalizeTeamRouteProvider(opts.teamProvider);
   opts.teamWorkers = String(parsePositiveInteger(opts.teamWorkers, undefined, '--team-workers'));
+  opts.harnessProvider = normalizeHarnessRouteProvider(opts.harnessProvider);
+  opts.harnessMaxIterations = String(parsePositiveInteger(opts.harnessMaxIterations, undefined, '--harness-max-iterations'));
   opts.blueprint = normalizeOrchestrateBlueprint(opts.blueprint);
 }
 
@@ -1155,6 +1285,8 @@ function buildRoutedCommandSpec({
   routeExecutionMode = 'dry-run',
   teamProvider = 'auto',
   teamWorkers = 3,
+  harnessProvider = 'auto',
+  harnessMaxIterations = 8,
   blueprint = 'feature',
   taskPrompt = '',
   sessionId = '',
@@ -1226,6 +1358,28 @@ function buildRoutedCommandSpec({
     };
   }
 
+  if (effectiveRoute === 'harness') {
+    const provider = resolveHarnessRouteProviderForAgent({ agent, harnessProvider });
+    return {
+      command: process.execPath,
+      args: [],
+      env: commandEnv,
+      cwd: workspaceRoot,
+      preview: buildHarnessRoutePreview({
+        workspaceRoot,
+        sessionId,
+        provider,
+        taskPrompt: effectivePrompt,
+        maxIterations: harnessMaxIterations,
+      }),
+      provider,
+      workers,
+      executionMode,
+      routeMode: effectiveRoute,
+      harnessMaxIterations: parsePositiveInteger(harnessMaxIterations, 8),
+    };
+  }
+
   throw new Error(`Unsupported routed mode: ${effectiveRoute}`);
 }
 
@@ -1237,6 +1391,8 @@ async function runRoutedOneShotTask({
   routeExecutionMode = 'dry-run',
   teamProvider = 'auto',
   teamWorkers = 3,
+  harnessProvider = 'auto',
+  harnessMaxIterations = 8,
   blueprint = 'feature',
   taskPrompt = '',
   sessionId = '',
@@ -1249,10 +1405,54 @@ async function runRoutedOneShotTask({
     routeExecutionMode,
     teamProvider,
     teamWorkers,
+    harnessProvider,
+    harnessMaxIterations,
     blueprint,
     taskPrompt,
     sessionId,
   });
+  if (spec.routeMode === 'harness') {
+    const { runHarnessCommand } = await import('./lib/lifecycle/harness.mjs');
+    const outputChunks = [];
+    const io = {
+      log: (...parts) => outputChunks.push(parts.join(' ')),
+      warn: (...parts) => outputChunks.push(parts.join(' ')),
+      error: (...parts) => outputChunks.push(parts.join(' ')),
+    };
+    const result = await runHarnessCommand({
+      subcommand: 'run',
+      objective: String(taskPrompt || '').trim(),
+      sessionId: String(sessionId || '').trim(),
+      provider: spec.provider,
+      profile: 'standard',
+      worktree: true,
+      baseRef: 'HEAD',
+      maxIterations: spec.harnessMaxIterations,
+      lifecycleHooks: true,
+      dryRun: spec.executionMode !== 'live',
+      json: true,
+    }, {
+      rootDir: workspaceRoot,
+      aiosRootDir: ROOT_DIR,
+      io,
+    });
+    const commandOutput = outputChunks.join('\n').trim();
+    const lines = [
+      `[ctx-agent route] mode=${spec.routeMode} execute=${spec.executionMode}`,
+      `Command: ${spec.preview}`,
+    ];
+    if (commandOutput) {
+      lines.push(commandOutput);
+    }
+    return {
+      output: `${lines.join('\n')}\n`,
+      exitCode: result.exitCode ?? 1,
+      preview: spec.preview,
+      routeMode: spec.routeMode,
+      executionMode: spec.executionMode,
+    };
+  }
+
   const { runOrchestrate } = await import('./lib/lifecycle/orchestrate.mjs');
   const outputChunks = [];
   const io = {
@@ -1303,6 +1503,8 @@ function runInteractiveAgent(
     project = '',
     teamProvider = 'auto',
     teamWorkers = 3,
+    harnessProvider = 'auto',
+    harnessMaxIterations = 8,
     blueprint = 'feature',
     sessionId = '',
   } = {},
@@ -1329,6 +1531,8 @@ function runInteractiveAgent(
       project,
       teamProvider,
       teamWorkers,
+      harnessProvider,
+      harnessMaxIterations,
       blueprint,
       sessionId,
     });
@@ -1362,6 +1566,8 @@ function runInteractiveAgent(
           project,
           teamProvider,
           teamWorkers,
+          harnessProvider,
+          harnessMaxIterations,
           blueprint,
           sessionId,
         }));
@@ -1488,6 +1694,7 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
   const lazyMode = shouldLazyLoad(process.env);
 
   if (lazyMode && !opts.prompt) {
+    const memoryPrelude = await buildMemoryPrelude(opts.workspaceRoot, process.env);
     let facadeResult = await loadFacade(opts.workspaceRoot);
     if (!facadeResult.ok) {
       const fallbackFacade = await generateFacadeFromSession(opts.workspaceRoot, opts.agent, opts.project);
@@ -1501,18 +1708,26 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
           project: opts.project,
           teamProvider: opts.teamProvider,
           teamWorkers: opts.teamWorkers,
+          harnessProvider: opts.harnessProvider,
+          harnessMaxIterations: opts.harnessMaxIterations,
           blueprint: opts.blueprint,
           routeMode: opts.routeMode,
           sessionId: facadeResult.facade?.sessionId || '',
         })
       : '';
-    const effectivePrompt = routerGuide
-      ? `${facadePrompt}\n\n${routerGuide}`
+    const basePrompt = memoryPrelude
+      ? `${memoryPrelude}\n\n${facadePrompt}`
       : facadePrompt;
+    const effectivePrompt = routerGuide
+      ? `${basePrompt}\n\n${routerGuide}`
+      : basePrompt;
 
     console.log(`Session: ${facadeResult.facade?.sessionId || '(new)'}`);
     console.log(`Workspace: ${opts.workspaceRoot}`);
     console.log('Context packet: (lazy-load; agent self-discovers memory)');
+    if (memoryPrelude) {
+      console.log('Memory prelude: enabled (persona/user/workspace layers)');
+    }
     if (routerGuide) {
       console.log(`Task router guide: enabled (mode=${opts.routeMode})`);
     }
@@ -1527,6 +1742,8 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
       project: opts.project,
       teamProvider: opts.teamProvider,
       teamWorkers: opts.teamWorkers,
+      harnessProvider: opts.harnessProvider,
+      harnessMaxIterations: opts.harnessMaxIterations,
       blueprint: opts.blueprint,
       sessionId: facadeResult.facade?.sessionId || '',
     });
@@ -1563,22 +1780,15 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
   }, { strict: strictPack });
   const packAbs = packResult.packAbs;
   const contextText = packResult.contextText;
-  let workspaceMemoryOverlay = '';
-  try {
-    workspaceMemoryOverlay = await buildWorkspaceMemoryOverlay(opts.workspaceRoot, process.env);
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    console.warn(`[warn] workspace memory overlay skipped: ${reason}`);
+  const memoryPrelude = await buildMemoryPrelude(opts.workspaceRoot, process.env);
+  if (memoryPrelude) {
+    console.log('Memory prelude: enabled (persona/user/workspace layers)');
   }
 
-  if (workspaceMemoryOverlay) {
-    console.log('Workspace memory overlay: enabled');
-  }
-
-  const baseContextText = workspaceMemoryOverlay
+  const baseContextText = memoryPrelude
     ? contextText
-      ? `${workspaceMemoryOverlay}\n\n${contextText}`
-      : workspaceMemoryOverlay
+      ? `${memoryPrelude}\n\n${contextText}`
+      : memoryPrelude
     : contextText;
   const routerGuide = shouldInjectTaskRouterGuide(process.env)
     ? buildTaskRouterGuide({
@@ -1587,6 +1797,8 @@ export async function runCtxAgent(argv = process.argv.slice(2)) {
       project: opts.project,
       teamProvider: opts.teamProvider,
       teamWorkers: opts.teamWorkers,
+      harnessProvider: opts.harnessProvider,
+      harnessMaxIterations: opts.harnessMaxIterations,
       blueprint: opts.blueprint,
       routeMode: opts.routeMode,
       sessionId: opts.sessionId,
@@ -1687,6 +1899,8 @@ Prompt: ${routedPrompt}`;
           routeExecutionMode: opts.routeExecutionMode,
           teamProvider: opts.teamProvider,
           teamWorkers: opts.teamWorkers,
+          harnessProvider: opts.harnessProvider,
+          harnessMaxIterations: opts.harnessMaxIterations,
           blueprint: opts.blueprint,
           taskPrompt: routedPrompt,
           sessionId: opts.sessionId,
@@ -1712,6 +1926,8 @@ Task: ${routedPrompt}`;
           routeExecutionMode: opts.routeExecutionMode,
           teamProvider: opts.teamProvider,
           teamWorkers: opts.teamWorkers,
+          harnessProvider: opts.harnessProvider,
+          harnessMaxIterations: opts.harnessMaxIterations,
           blueprint: opts.blueprint,
           taskPrompt: routedPrompt,
           sessionId: opts.sessionId,
@@ -1808,6 +2024,8 @@ Task: ${routedPrompt}`;
     project: opts.project,
     teamProvider: opts.teamProvider,
     teamWorkers: opts.teamWorkers,
+    harnessProvider: opts.harnessProvider,
+    harnessMaxIterations: opts.harnessMaxIterations,
     blueprint: opts.blueprint,
     sessionId: opts.sessionId,
   });

@@ -92,6 +92,7 @@ export async function checkSoloHarnessProfileReadiness({
 
 export function buildSoloHarnessCommand({
   rootDir,
+  aiosRootDir = '',
   sessionId,
   objective,
   provider = 'codex',
@@ -107,9 +108,10 @@ export function buildSoloHarnessCommand({
 
   const normalizedObjective = normalizeText(objective, 'Solo harness objective');
   const validatedExtraArgs = validateSoloHarnessExtraArgs(extraArgs);
-  const project = path.basename(path.resolve(rootDir || process.cwd()));
-  const ctxAgentPath = path.join(path.resolve(rootDir || process.cwd()), 'scripts', 'ctx-agent.mjs');
+  const aiosRoot = path.resolve(aiosRootDir || rootDir || process.cwd());
   const effectiveWorkspace = path.resolve(workspaceRoot || rootDir || process.cwd());
+  const project = path.basename(effectiveWorkspace);
+  const ctxAgentPath = path.join(aiosRoot, 'scripts', 'ctx-agent.mjs');
   const args = [
     ctxAgentPath,
     '--agent',

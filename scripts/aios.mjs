@@ -126,6 +126,15 @@ async function runInternal(options) {
   throw new Error(`Unsupported internal action: ${target} ${action}`);
 }
 
+
+function resolveRuntimeWorkspace(command, options = {}) {
+  const workspaceScoped = new Set(['harness', 'hud', 'memo', 'orchestrate', 'team', 'quality-gate', 'snapshot-rollback', 'entropy-gc', 'learn-eval', 'release-status']);
+  if (!workspaceScoped.has(command)) return rootDir;
+  const explicit = String(options.workspaceRoot || options.rootDir || '').trim();
+  if (explicit) return path.resolve(explicit);
+  return projectRoot;
+}
+
 function buildTeamRuntimeEnv(options = {}, baseEnv = process.env) {
   const runtimeEnv = { ...baseEnv };
   const clientId = String(options.clientId || '').trim();
@@ -217,7 +226,7 @@ async function main() {
 
   if (parsed.command === 'quality-gate') {
     const { runQualityGate } = await import('./lib/lifecycle/quality-gate.mjs');
-    const result = await runQualityGate(parsed.options, { rootDir });
+    const result = await runQualityGate(parsed.options, { rootDir: resolveRuntimeWorkspace(parsed.command, parsed.options) });
     if (result.exitCode !== 0) {
       process.exitCode = result.exitCode;
     }
@@ -226,7 +235,7 @@ async function main() {
 
   if (parsed.command === 'orchestrate') {
     const { runOrchestrate } = await import('./lib/lifecycle/orchestrate.mjs');
-    const result = await runOrchestrate(parsed.options, { rootDir });
+    const result = await runOrchestrate(parsed.options, { rootDir: resolveRuntimeWorkspace(parsed.command, parsed.options) });
     if (result.exitCode !== 0) {
       process.exitCode = result.exitCode;
     }
@@ -235,7 +244,7 @@ async function main() {
 
   if (parsed.command === 'snapshot-rollback') {
     const { runSnapshotRollback } = await import('./lib/lifecycle/snapshot-rollback.mjs');
-    const result = await runSnapshotRollback(parsed.options, { rootDir });
+    const result = await runSnapshotRollback(parsed.options, { rootDir: resolveRuntimeWorkspace(parsed.command, parsed.options) });
     if (result.exitCode !== 0) {
       process.exitCode = result.exitCode;
     }
@@ -245,7 +254,7 @@ async function main() {
   if (parsed.command === 'team') {
     if (parsed.options.subcommand === 'status') {
       const { runTeamStatus } = await import('./lib/lifecycle/team-ops.mjs');
-      const result = await runTeamStatus(parsed.options, { rootDir });
+      const result = await runTeamStatus(parsed.options, { rootDir: resolveRuntimeWorkspace(parsed.command, parsed.options) });
       if (result.exitCode !== 0) {
         process.exitCode = result.exitCode;
       }
@@ -253,7 +262,7 @@ async function main() {
     }
     if (parsed.options.subcommand === 'history') {
       const { runTeamHistory } = await import('./lib/lifecycle/team-ops.mjs');
-      const result = await runTeamHistory(parsed.options, { rootDir });
+      const result = await runTeamHistory(parsed.options, { rootDir: resolveRuntimeWorkspace(parsed.command, parsed.options) });
       if (result.exitCode !== 0) {
         process.exitCode = result.exitCode;
       }
@@ -261,7 +270,7 @@ async function main() {
     }
     if (parsed.options.subcommand === 'watchdog') {
       const { runTeamWatchdog } = await import('./lib/lifecycle/watchdog.mjs');
-      const result = await runTeamWatchdog(parsed.options, { rootDir });
+      const result = await runTeamWatchdog(parsed.options, { rootDir: resolveRuntimeWorkspace(parsed.command, parsed.options) });
       if (result.exitCode !== 0) {
         process.exitCode = result.exitCode;
       }
@@ -270,7 +279,7 @@ async function main() {
     if (parsed.options.subcommand === 'skill-candidates') {
       if (parsed.options.action === 'list') {
         const { runTeamSkillCandidatesList } = await import('./lib/lifecycle/team-ops.mjs');
-        const result = await runTeamSkillCandidatesList(parsed.options, { rootDir });
+        const result = await runTeamSkillCandidatesList(parsed.options, { rootDir: resolveRuntimeWorkspace(parsed.command, parsed.options) });
         if (result.exitCode !== 0) {
           process.exitCode = result.exitCode;
         }
@@ -278,7 +287,7 @@ async function main() {
       }
       if (parsed.options.action === 'export') {
         const { runTeamSkillCandidatesExport } = await import('./lib/lifecycle/team-ops.mjs');
-        const result = await runTeamSkillCandidatesExport(parsed.options, { rootDir });
+        const result = await runTeamSkillCandidatesExport(parsed.options, { rootDir: resolveRuntimeWorkspace(parsed.command, parsed.options) });
         if (result.exitCode !== 0) {
           process.exitCode = result.exitCode;
         }
@@ -304,7 +313,7 @@ async function main() {
       preflightMode: parsed.options.preflightMode,
       format: parsed.options.format,
     }, {
-      rootDir,
+      rootDir: resolveRuntimeWorkspace(parsed.command, parsed.options),
       env: runtimeEnv,
     });
     if (result.exitCode !== 0) {
@@ -315,7 +324,10 @@ async function main() {
 
   if (parsed.command === 'harness') {
     const { runHarnessCommand } = await import('./lib/lifecycle/harness.mjs');
-    const result = await runHarnessCommand(parsed.options, { rootDir });
+    const result = await runHarnessCommand(parsed.options, {
+      rootDir: resolveRuntimeWorkspace(parsed.command, parsed.options),
+      aiosRootDir: rootDir,
+    });
     if (result.exitCode !== 0) {
       process.exitCode = result.exitCode;
     }
@@ -324,7 +336,7 @@ async function main() {
 
   if (parsed.command === 'hud') {
     const { runHud } = await import('./lib/lifecycle/hud.mjs');
-    const result = await runHud(parsed.options, { rootDir });
+    const result = await runHud(parsed.options, { rootDir: resolveRuntimeWorkspace(parsed.command, parsed.options) });
     if (result.exitCode !== 0) {
       process.exitCode = result.exitCode;
     }
@@ -333,7 +345,7 @@ async function main() {
 
   if (parsed.command === 'learn-eval') {
     const { runLearnEval } = await import('./lib/lifecycle/learn-eval.mjs');
-    const result = await runLearnEval(parsed.options, { rootDir });
+    const result = await runLearnEval(parsed.options, { rootDir: resolveRuntimeWorkspace(parsed.command, parsed.options) });
     if (result.exitCode !== 0) {
       process.exitCode = result.exitCode;
     }
@@ -342,7 +354,7 @@ async function main() {
 
   if (parsed.command === 'entropy-gc') {
     const { runEntropyGc } = await import('./lib/lifecycle/entropy-gc.mjs');
-    const result = await runEntropyGc(parsed.options, { rootDir });
+    const result = await runEntropyGc(parsed.options, { rootDir: resolveRuntimeWorkspace(parsed.command, parsed.options) });
     if (result.exitCode !== 0) {
       process.exitCode = result.exitCode;
     }
@@ -351,7 +363,7 @@ async function main() {
 
   if (parsed.command === 'release-status') {
     const { runReleaseStatus } = await import('./lib/lifecycle/release-status.mjs');
-    const result = await runReleaseStatus(parsed.options, { rootDir });
+    const result = await runReleaseStatus(parsed.options, { rootDir: resolveRuntimeWorkspace(parsed.command, parsed.options) });
     if (result.exitCode !== 0) {
       process.exitCode = result.exitCode;
     }
@@ -360,7 +372,7 @@ async function main() {
 
   if (parsed.command === 'memo') {
     const { runMemo } = await import('./lib/memo/memo.mjs');
-    await runMemo(parsed.options, { rootDir });
+    await runMemo(parsed.options, { rootDir: resolveRuntimeWorkspace(parsed.command, parsed.options) });
     return;
   }
 }

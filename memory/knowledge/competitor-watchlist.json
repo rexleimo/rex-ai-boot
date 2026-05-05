@@ -3,7 +3,7 @@
   "purpose": "AIOS competitor/reference watchlist. When the user asks to update competitor content, sync these project snapshots before analyzing impact.",
   "default_local_root": "temp/competitor-repos",
   "reporting_preference": "When asked for the competitor list, answer in a Markdown table.",
-  "last_updated_at": "2026-05-03T16:50:11.767Z",
+  "last_updated_at": "2026-05-04T14:59:32.682Z",
   "projects": [
     {
       "input_name": "volcengine/OpenViking",
@@ -526,6 +526,48 @@
       "license": "MIT",
       "local_path": "temp/competitor-repos/kunchenguid__gnhf",
       "last_synced_at": "2026-04-25T22:53:16.597Z"
+    },
+    {
+      "input_name": "nousresearch/hermes-agent",
+      "canonical_repo": "nousresearch/hermes-agent",
+      "github_url": "https://github.com/nousresearch/hermes-agent",
+      "local_slug": "nousresearch__hermes-agent",
+      "category": "agent_os_or_harness",
+      "resolution": "Exact owner/repo from user input.",
+      "status": "active",
+      "description": "The self-improving AI agent built by Nous Research. Full TUI, multi-platform gateway, closed learning loop, session search + summarization, cron, delegation, multiple terminal backends.",
+      "default_branch": "main",
+      "last_commit_sha": "54e78cadb2e6d16a4f82185b2dc81c9dc176a813",
+      "last_pushed_at": "2026-05-04T06:54:27-07:00",
+      "last_github_updated_at": "2026-05-04T06:54:27-07:00",
+      "stars": 132000,
+      "forks": 20100,
+      "license": "MIT",
+      "local_path": "temp/competitor-repos/nousresearch__hermes-agent",
+      "last_synced_at": "2026-05-04T14:59:26.847Z",
+      "essence": "Monolithic session-centric agent product: core agent loop + tool registry/toolsets + durable session DB + recall via FTS5 + auxiliary summarization + subagent delegation + cron + multi-platform gateway + Ink TUI.",
+      "core_functions": [
+        "agent loop (run_agent.py)",
+        "tool registry + toolsets",
+        "session persistence (SQLite/FTS5)",
+        "session search + summarization (aux model)",
+        "context compression",
+        "subagent delegation",
+        "cron scheduler",
+        "multi-platform gateway (telegram/discord/slack/whatsapp/signal)",
+        "Ink TUI"
+      ],
+      "aios_relevance": "High-value reference for: (1) session-aware recall UX (FTS5 + summarization), (2) delegation progress streaming, (3) tool capability/permission surfaces, (4) cron/scheduler patterns, (5) “closed learning loop” guardrails and memory hygiene.",
+      "similarity_score": 4,
+      "impact_score": 5,
+      "watch_priority": "P0",
+      "adoption_ideas": [
+        "Expose a first-class solo “goal” surface on top of existing harness, similar to Hermes session-centric UX.",
+        "Add optional auxiliary summarization path for cross-session recall when presenting recall results to operators.",
+        "Add a tool-capability manifest + dangerous-command approval patterns as reusable policy objects (not only text reports).",
+        "Add scheduler/cron hooks for recurring runbooks (backup/audit/report) with explicit delivery targets."
+      ],
+      "open_issues": null
     }
   ]
 }

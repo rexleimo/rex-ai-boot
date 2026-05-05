@@ -39,7 +39,7 @@ touch .contextdb-enable
 codex
 ```
 
-之后在同一项目里运行 `codex`、`claude`、`gemini`，都会接入同一个 ContextDB。
+之后在同一项目里运行 `codex`、`claude`、`gemini`、`opencode`，都会接入同一个 ContextDB。
 
 ## 我想要可持续的操作记忆（Memo + Persona）
 
@@ -58,7 +58,9 @@ aios memo user add "Preferred language: zh-CN + technical English terms"
 
 - `memo add/list/search/recall` -> ContextDB 事件层
 - `memo pin` -> 当前工作区 pinned 文件
-- `memo persona/user` -> 全局身份文件
+- `memo persona/user` -> 全局身份文件，会注入 `ctx-agent` 的 Memory prelude
+
+Persona 用来描述 agent 基线（“这个 AI 应该怎么工作”），User profile 用来描述用户稳定偏好（“这个用户希望怎么交付”）。两者注入前都会经过安全扫描和容量限制。
 
 ## 我想跨 CLI 接力
 
@@ -75,7 +77,7 @@ gemini   # 最后复查或对比
 适合：目标明确、只需要一个 provider、希望夜里持续推进，而且没必要拆成并行 worker。
 
 ```bash
-aios harness run --objective "整理明早交接清单" --session nightly-demo --worktree
+aios harness run --objective "整理明早交接清单" --session nightly-demo --worktree --max-iterations 20
 aios harness status --session nightly-demo --json
 aios hud --session nightly-demo --json
 ```
@@ -95,6 +97,8 @@ aios harness resume --session nightly-demo --no-hooks
 ```
 
 如果你要的是“一个 agent 盯一个目标持续做”，用 [单 Agent 夜跑](solo-harness.md)。如果任务本身适合并行拆分，再用 [多 Agent 实战](team-ops.md)。
+
+提示：如果你是从包装后的 `codex` / `claude` / `gemini` / `opencode` 开始，并明确提出过夜/可恢复任务，启动路由提示会让 agent 自己触发同样的 `aios harness run ... --workspace <project-root>` 命令，不需要你手动记。
 
 ## 我想开多 Agent
 
@@ -173,7 +177,7 @@ aios privacy read --file .env
 
 ## 选择口诀
 
-- **日常开发**：`codex` / `claude` / `gemini`
+- **日常开发**：`codex` / `claude` / `gemini` / `opencode`
 - **安装更新**：`aios`
 - **单 Agent 夜跑**：`aios harness run --objective "整理明早交接清单" --worktree`
 - **多 Agent**：`aios team 3:codex "任务"`

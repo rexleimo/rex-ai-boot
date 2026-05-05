@@ -39,7 +39,7 @@ touch .contextdb-enable
 codex
 ```
 
-After that, `codex`, `claude`, and `gemini` in the same project all connect to the same ContextDB.
+After that, `codex`, `claude`, `gemini`, and `opencode` in the same project all connect to the same ContextDB.
 
 ## I Want Durable Operator Memory (Memo + Persona)
 
@@ -58,7 +58,9 @@ Rule of thumb:
 
 - `memo add/list/search/recall` -> ContextDB-backed memory
 - `memo pin` -> workspace pinned file
-- `memo persona/user` -> global identity files
+- `memo persona/user` -> global identity files injected into the `ctx-agent` Memory prelude
+
+Persona is for the agent baseline ("how this AI should behave"). User profile is for stable operator preferences ("how this user wants work delivered"). Both are safety-scanned and capacity-limited before injection.
 
 ## I Want Cross-CLI Handoff
 
@@ -75,7 +77,7 @@ As long as all three run in the same project directory, ContextDB saves events a
 Good fit: one clear objective, one provider, resumable overnight work, and no need for parallel workers.
 
 ```bash
-aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --worktree
+aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --worktree --max-iterations 20
 aios harness status --session nightly-demo --json
 aios hud --session nightly-demo --json
 ```
@@ -95,6 +97,8 @@ aios harness resume --session nightly-demo --no-hooks
 ```
 
 Use [Solo Harness](solo-harness.md) when you want one agent to stay on one objective. Use [Agent Team](team-ops.md) when the work is truly parallel-friendly.
+
+Tip: if you start from wrapped `codex` / `claude` / `gemini` / `opencode` and ask for explicit overnight/resumable work, the startup route prompt tells the agent to self-trigger the same `aios harness run ... --workspace <project-root>` command instead of asking you to remember it manually.
 
 ## I Want To Start Agent Team
 
@@ -173,7 +177,7 @@ Do not paste `.env`, cookies, tokens, or browser profiles directly into a model.
 
 ## Selection Mnemonic
 
-- **Daily development**: `codex` / `claude` / `gemini`
+- **Daily development**: `codex` / `claude` / `gemini` / `opencode`
 - **Install/update**: `aios`
 - **Solo overnight run**: `aios harness run --objective "Draft tomorrow handoff" --worktree`
 - **Agent Team**: `aios team 3:codex "task"`

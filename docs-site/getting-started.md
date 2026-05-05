@@ -12,7 +12,7 @@ If you do not know every RexCLI feature yet, that is fine. Follow this page firs
 ## What You Need
 
 - Node.js **22 LTS** and `npm`
-- At least one coding CLI: `codex`, `claude`, or `gemini`
+- At least one coding CLI: `codex`, `claude`, `gemini`, or `opencode`
 - A project directory where you want to work
 
 Check Node:
@@ -71,7 +71,7 @@ Recommended order:
 
 <figure class="rex-visual">
   <img src="assets/visual-tui-setup-doctor.svg" alt="Illustration of choosing Setup first and Doctor second in the aios TUI">
-  <figcaption>Illustration: after the TUI opens, run Setup first, then Doctor. When critical errors are 0, go into your project and start `codex` / `claude` / `gemini`.</figcaption>
+  <figcaption>Illustration: after the TUI opens, run Setup first, then Doctor. When critical errors are 0, go into your project and start `codex` / `claude` / `gemini` / `opencode`.</figcaption>
 </figure>
 
 If you changed shell wrappers, reload the current shell:
@@ -137,7 +137,7 @@ Run inside the project:
 
 If you see directories such as `sessions/`, `index/`, or `exports/`, ContextDB has started recording.
 
-If the directory does not exist yet, start `codex` / `claude` / `gemini` once normally and let RexCLI initialize it automatically. You do not need to reinstall immediately.
+If the directory does not exist yet, start `codex` / `claude` / `gemini` / `opencode` once normally and let RexCLI initialize it automatically. You do not need to reinstall immediately.
 
 If it still does not appear, run:
 
@@ -145,13 +145,14 @@ If it still does not appear, run:
 aios doctor --native --fix
 ```
 
-## 5) The 6 Most Used Commands
+## 5) The 7 Most Used Commands
 
 | Scenario | Command |
 |---|---|
 | Open the TUI | `aios` |
 | Start Codex with memory | `codex` |
 | View current session status | `aios hud --provider codex` |
+| Run one agent overnight | `aios harness run --objective "Draft tomorrow handoff" --worktree --max-iterations 20` |
 | Run a multi-agent task | `aios team 3:codex "Implement X and run tests before finishing"` |
 | Watch team progress | `aios team status --provider codex --watch` |
 | Pre-submit quality check | `aios quality-gate pre-pr --profile strict` |
@@ -164,6 +165,10 @@ If you need durable project notes without manually touching ContextDB files:
 aios memo use release-train
 aios memo add "Need strict pre-PR checks #quality"
 aios memo pin add "Avoid destructive git commands."
+aios memo persona init
+aios memo persona add "Response style: concise, direct, evidence-first"
+aios memo user init
+aios memo user add "Preferred language: zh-CN + technical English terms"
 aios memo recall "quality gate" --limit 5
 ```
 
@@ -171,7 +176,7 @@ Memory layering:
 
 - `memo add/list/search/recall` -> ContextDB events
 - `memo pin` -> workspace `pinned.md`
-- `memo persona/user` -> global identity files (`~/.aios/SOUL.md`, `~/.aios/USER.md`)
+- `memo persona/user` -> global identity files (`~/.aios/SOUL.md`, `~/.aios/USER.md`) injected into the `ctx-agent` Memory prelude before workspace memo content
 
 ## 7) Shortest Agent Team Usage
 
@@ -190,7 +195,20 @@ codex
 
 See [Agent Team](team-ops.md) for more decision rules.
 
-## 8) Browser Automation Troubleshooting
+## 8) Let One Agent Run Overnight
+
+Use Solo Harness when one provider should keep working on one clear objective and leave a run journal:
+
+```bash
+aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --worktree --max-iterations 20
+aios harness status --session nightly-demo --json
+```
+
+When you start from wrapped `codex` / `claude` / `gemini` / `opencode`, the startup route prompt lets the agent self-trigger this lane for explicit long-running, overnight, resumable, or checkpoint-heavy tasks. The injected command includes `--workspace <project-root>` so ContextDB artifacts stay in the active project.
+
+Use `CTXDB_HARNESS_MAX_ITERATIONS=<n>` to change the default injected loop budget.
+
+## 9) Browser Automation Troubleshooting
 
 RexCLI uses a CDP/browser-use path for browser automation by default. For browser-related issues, start with:
 
@@ -201,7 +219,7 @@ aios internal browser cdp-status
 
 For complex pages, ask the agent to read page text/DOM first, then use screenshots as fallback. Do not start by blindly clicking buttons.
 
-## 9) Privacy-Safe Reads
+## 10) Privacy-Safe Reads
 
 Do not paste `.env`, tokens, cookies, or cloud config directly into a model. Use:
 
@@ -209,9 +227,9 @@ Do not paste `.env`, tokens, cookies, or cloud config directly into a model. Use
 aios privacy read --file <path>
 ```
 
-When RexCLI-wrapped `codex` / `claude` / `gemini` starts, the Privacy Shield panel shows the current privacy protection status.
+When RexCLI-wrapped `codex` / `claude` / `gemini` / `opencode` starts, the Privacy Shield panel shows the current privacy protection status.
 
-## 10) Update And Uninstall
+## 11) Update And Uninstall
 
 Prefer the TUI:
 
@@ -226,7 +244,7 @@ aios update --components all --client all
 aios uninstall --components shell,skills,native
 ```
 
-## 11) Development Install Path
+## 12) Development Install Path
 
 Maintainers or users testing unreleased features can use:
 
@@ -241,9 +259,9 @@ Maintainers or users testing unreleased features can use:
 === "Windows PowerShell"
 
     ```powershell
-    git clone https://github.com/rexleimo/rex-cli.git $HOME\.rexcilex-cli
-    cd $HOME\.rexcilex-cli
-    powershell -ExecutionPolicy Bypass -File .\scriptsios.ps1
+    git clone https://github.com/rexleimo/rex-cli.git $HOME\.rexcil\rex-cli
+    cd $HOME\.rexcil\rex-cli
+    powershell -ExecutionPolicy Bypass -File .\scripts\aios.ps1
     ```
 
 Development install is not the same as stable release. Most users should use the one-liner in step 1.
@@ -252,7 +270,11 @@ Development install is not the same as stable release. Most users should use the
 
 ### Does RexCLI replace native CLIs?
 
-No. You still run `codex`, `claude`, and `gemini`. RexCLI adds memory, skills, diagnostics, and orchestration around them.
+No. You still run `codex`, `claude`, `gemini`, and `opencode`. RexCLI adds memory, skills, diagnostics, and orchestration around them.
+
+### Can agents trigger AIOS themselves?
+
+Yes, when they are launched through the wrapped clients. The startup prompt tells the agent when to stay on `single`, when to use `team`/`subagent`, and when a long-running objective should invoke `aios harness run ... --workspace <project-root>`.
 
 ### Why create `.contextdb-enable`?
 

@@ -173,6 +173,10 @@ function parseHudArgs(argv) {
         options.sessionId = takeValue(rest, index, '--session');
         index += 1;
         break;
+      case '--workspace':
+        options.workspaceRoot = takeValue(rest, index, '--workspace');
+        index += 1;
+        break;
       case '--provider':
         options.provider = normalizeTeamProvider(takeValue(rest, index, '--provider'));
         index += 1;
@@ -325,6 +329,10 @@ function parseHarnessRunArgs(argv) {
         options.sessionId = takeValue(rest, index, '--session');
         index += 1;
         break;
+      case '--workspace':
+        options.workspaceRoot = takeValue(rest, index, '--workspace');
+        index += 1;
+        break;
       case '--provider':
         options.provider = normalizeSoloHarnessProvider(takeValue(rest, index, '--provider'));
         index += 1;
@@ -340,8 +348,18 @@ function parseHarnessRunArgs(argv) {
         options.baseRef = normalizeBaseRef(takeValue(rest, index, '--base-ref'));
         index += 1;
         break;
+      case '--max-iterations':
+        options.maxIterations = parsePositiveInteger(takeValue(rest, index, '--max-iterations'), '--max-iterations');
+        index += 1;
+        break;
       case '--dry-run':
         options.dryRun = true;
+        break;
+      case '--hooks':
+        options.lifecycleHooks = true;
+        break;
+      case '--no-hooks':
+        options.lifecycleHooks = false;
         break;
       case '--json':
         options.json = true;
@@ -375,6 +393,10 @@ function parseHarnessStatusArgs(argv) {
     switch (arg) {
       case '--session':
         options.sessionId = takeValue(rest, index, '--session');
+        index += 1;
+        break;
+      case '--workspace':
+        options.workspaceRoot = takeValue(rest, index, '--workspace');
         index += 1;
         break;
       case '--json':
@@ -411,6 +433,20 @@ function parseHarnessResumeArgs(argv) {
         options.sessionId = takeValue(rest, index, '--session');
         index += 1;
         break;
+      case '--workspace':
+        options.workspaceRoot = takeValue(rest, index, '--workspace');
+        index += 1;
+        break;
+      case '--max-iterations':
+        options.maxIterations = parsePositiveInteger(takeValue(rest, index, '--max-iterations'), '--max-iterations');
+        index += 1;
+        break;
+      case '--hooks':
+        options.lifecycleHooks = true;
+        break;
+      case '--no-hooks':
+        options.lifecycleHooks = false;
+        break;
       case '--json':
         options.json = true;
         break;
@@ -443,6 +479,10 @@ function parseHarnessStopArgs(argv) {
     switch (arg) {
       case '--session':
         options.sessionId = takeValue(rest, index, '--session');
+        index += 1;
+        break;
+      case '--workspace':
+        options.workspaceRoot = takeValue(rest, index, '--workspace');
         index += 1;
         break;
       case '--reason':

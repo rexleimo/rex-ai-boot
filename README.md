@@ -1,11 +1,12 @@
 # RexCLI (AIOS)
 
 This repository provides a local-first agent workflow for `Codex CLI`, `Claude Code`, `Gemini CLI`, and `OpenCode`.
-It does not replace those clients. Instead, it adds three shared capabilities:
+It does not replace those clients. Instead, it adds four shared capabilities:
 
 1. Unified browser automation via Playwright MCP (`browser_*` tools)
-2. Cross-CLI filesystem Context DB for resumable task memory
-3. Privacy Guard redaction before reading config/secret-like files (`~/.rexcil/privacy-guard.json`)
+2. Cross-CLI filesystem Context DB with workspace memo and persona/user profile memory
+3. Self-triggered AIOS routing for `single`, `subagent`, `team`, and `harness` execution
+4. Privacy Guard redaction before reading config/secret-like files (`~/.rexcil/privacy-guard.json`)
 
 ## Quick Answer (What RexCLI Is)
 
@@ -16,8 +17,10 @@ Common search intents this repo targets:
 
 - AI memory system for coding agents (`ContextDB`)
 - Shared memory across CLI sessions
+- Persona and user profile memory for consistent agent behavior
 - Hermes engine style orchestration and automation pipelines
 - Agent Team runtime for multi-agent collaboration
+- Solo Harness runtime for long-running, resumable, overnight coding tasks
 - Automatic subagent planning and execution gates
 
 ## Start Here (Use First, Read Later)
@@ -90,6 +93,28 @@ The mechanism is **transparent zsh wrapping**:
 
 So you keep using the same command names and normal interactive flow.
 
+### AIOS Self-Trigger Routing
+
+Wrapped `codex` / `claude` / `gemini` / `opencode` sessions receive a startup route prompt. The agent should continue as `single` by default, and only run an AIOS command when the task clearly needs a stronger lane:
+
+- `single`: normal interactive work in the current client
+- `subagent`: staged orchestration or verification gates around one main domain
+- `team`: 2+ independent domains that can run in parallel
+- `harness`: explicit long-running, overnight, resumable, checkpoint-heavy work
+
+For a harness-worthy request, the injected command shape is:
+
+```bash
+node <AIOS_ROOT>/scripts/aios.mjs harness run \
+  --objective "<task>" \
+  --provider codex \
+  --max-iterations 8 \
+  --worktree \
+  --workspace <project-root>
+```
+
+Operators can tune the injected harness route with `CTXDB_HARNESS_PROVIDER` / `AIOS_HARNESS_PROVIDER` and `CTXDB_HARNESS_MAX_ITERATIONS` / `AIOS_HARNESS_MAX_ITERATIONS`.
+
 ## Automatic First Task Bootstrap
 
 On the first `codex`/`claude`/`gemini` run in a workspace, AIOS now auto-creates a lightweight bootstrap task when:
@@ -152,6 +177,7 @@ aios release-status --format json --history-output memory/context-db/exports/rel
 ### Workspace Memo (project memory + persona/user layers)
 
 `aios memo` adds a lightweight operator memory layer on top of ContextDB.
+The persona/user layers already exist in the memo runtime; this section documents their intended use as a stable "who I am / who I am helping" overlay without copying that identity into every project memory event.
 
 Storage boundaries (important):
 
@@ -161,6 +187,14 @@ Storage boundaries (important):
 - `memo persona ...` uses global persona memory (default: `~/.aios/SOUL.md`)
 - `memo user ...` uses global user profile memory (default: `~/.aios/USER.md`)
 - `AIOS_IDENTITY_HOME`, `AIOS_PERSONA_PATH`, and `AIOS_USER_PROFILE_PATH` override the default global file locations
+- `AIOS_PERSONA_MAX_CHARS` and `AIOS_USER_PROFILE_MAX_CHARS` cap each global identity layer (default: `2400`)
+
+Runtime behavior:
+
+- `persona` is the agent identity / operating style layer.
+- `user` is the stable operator preference layer.
+- `ctx-agent` injects both layers into the Memory prelude before workspace memo content.
+- Unsafe prompt-injection-like persona/user content is blocked or skipped by the memo safety scanner.
 
 Common flow:
 
@@ -170,8 +204,10 @@ aios memo add "Need strict pre-PR checks #quality"
 aios memo pin add "Never run destructive git commands without explicit approval."
 aios memo persona init
 aios memo persona add "Response style: concise, direct, evidence-first"
+aios memo persona show
 aios memo user init
 aios memo user add "Preferred language: zh-CN + technical English terms"
+aios memo user path
 aios memo list --limit 10
 aios memo recall "release gate" --limit 5
 ```
@@ -247,17 +283,17 @@ What it does:
 Recommended flow:
 
 ```bash
-aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --worktree
+aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --worktree --max-iterations 20
 aios harness status --session nightly-demo --json
 aios hud --session nightly-demo --json
 aios harness stop --session nightly-demo --reason "morning handoff"
-aios harness resume --session nightly-demo
+aios harness resume --session nightly-demo --max-iterations 10
 ```
 
 Dry-run the journal contract without invoking a provider:
 
 ```bash
-aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --worktree --dry-run --json
+aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --worktree --max-iterations 3 --dry-run --json
 ```
 
 Journal files created for each run:
@@ -272,6 +308,8 @@ Operational notes:
 
 - Live execution reuses the existing `scripts/ctx-agent.mjs` one-shot provider path, so the matching local CLI (`codex`, `claude`, `gemini`, or `opencode`) still needs to be installed and runnable
 - `resume` clears a prior stop request and recreates the isolated worktree when the previous path no longer exists
+- `--max-iterations <n>` caps the loop budget for `run` and `resume` (default: `20`; wrapped-client self-trigger prompts default to `8`)
+- `--workspace <path>` forces ContextDB/session artifacts into that project root when invoking AIOS from another current directory
 - Use `--no-hooks` when you want a low-noise loop without lifecycle hook evidence rows
 - HUD auto-detects solo harness sessions, so `aios hud --session <session-id>` shows the latest run summary without requiring a dispatch artifact
 
@@ -802,13 +840,14 @@ After setup, the same behavior works in other git repositories too (they write t
 
 ## Two Runtime Modes
 
-### A) Interactive mode (`codex` / `claude` / `gemini`)
+### A) Interactive mode (`codex` / `claude` / `gemini` / `opencode`)
 
 - Automatically performs: `init`, `session:latest/new`, `context:pack`
 - Scope: current git project root (`--workspace <git-root>`)
 - Best for normal interactive work with startup context resume
-- `codex` / `claude` / `gemini` / `opencode` wrappers seed an auto-route startup prompt by default; policy is now conservative (`single` first, escalate to `subagent/team` only when delegation is explicit or clearly necessary)
+- `codex` / `claude` / `gemini` / `opencode` wrappers seed an auto-route startup prompt by default; policy is conservative (`single` first, escalate to `subagent/team` only when delegation is explicit or clearly necessary, and `harness` only for long-running/resumable objectives)
 - Set `CTXDB_INTERACTIVE_AUTO_ROUTE=0` to disable interactive auto-route prompt injection entirely
+- Set `CTXDB_HARNESS_PROVIDER=<codex|claude|gemini|opencode>` and `CTXDB_HARNESS_MAX_ITERATIONS=<n>` to tune the injected `harness` route command
 - Set `CTXDB_CODEX_DISABLE_MCP=1` to run wrapped Codex sessions without MCP startup (helps avoid MCP cold-start stalls)
 - `opencode` uses a supported subagent runtime fallback (`codex-cli` by default, or `CTXDB_ROUTE_SUBAGENT_CLIENT=<codex-cli|claude-code|gemini-cli>`)
 - Note: in-CLI reset commands like `/new` (Codex) or `/clear` (Claude/Gemini) reset the conversation state. Exit and re-run the CLI to re-inject, or attach `memory/context-db/exports/latest-<agent>-context.md` as the first prompt.

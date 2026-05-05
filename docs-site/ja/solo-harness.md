@@ -29,7 +29,7 @@ description: ContextDB、run journal、resume/stop 制御、必要に応じた w
 
 ```bash
 # 分離 worktree で夜間実行を開始
-aios harness run --objective "明朝の引き継ぎメモをまとめる" --session nightly-demo --worktree
+aios harness run --objective "明朝の引き継ぎメモをまとめる" --session nightly-demo --worktree --max-iterations 20
 
 # 構造化ステータス確認
 aios harness status --session nightly-demo --json
@@ -41,15 +41,39 @@ aios hud --session nightly-demo --json
 aios harness stop --session nightly-demo --reason "朝に人が引き継ぐ"
 
 # 後で同じ session を再開
-aios harness resume --session nightly-demo
+aios harness resume --session nightly-demo --max-iterations 10
 ```
+
+## ラップされた CLI からの agent 自己トリガー
+
+shell wrapping が有効な場合、対話型 `codex` / `claude` / `gemini` / `opencode` セッションは AIOS route prompt を受け取ります。通常は `single` のまま進め、明示的な長時間・夜間・再開可能・checkpoint 重視の目標だけ `harness` を選びます。
+
+この場合に注入されるコマンドの形は次の通りです:
+
+```bash
+node <AIOS_ROOT>/scripts/aios.mjs harness run \
+  --objective "<task>" \
+  --provider codex \
+  --max-iterations 8 \
+  --worktree \
+  --workspace <project-root>
+```
+
+provider とループ予算は環境変数で上書きできます:
+
+```bash
+export CTXDB_HARNESS_PROVIDER=claude
+export CTXDB_HARNESS_MAX_ITERATIONS=12
+```
+
+route prompt 自体を無効化する場合は `CTXDB_INTERACTIVE_AUTO_ROUTE=0` を設定してください。
 
 ## まず dry-run
 
 token を使う前に artifact 契約だけ確認したい場合:
 
 ```bash
-aios harness run --objective "明朝の引き継ぎメモをまとめる" --session nightly-demo --worktree --dry-run --json
+aios harness run --objective "明朝の引き継ぎメモをまとめる" --session nightly-demo --worktree --max-iterations 3 --dry-run --json
 ```
 
 Dry-run は session journal を作りますが、provider は呼びません。
@@ -65,6 +89,12 @@ aios harness resume --session nightly-demo --no-hooks
 
 - 既定は `--hooks`（有効）で、lifecycle hook 証跡を記録します。
 - 低ノイズ運用にしたい場合は `--no-hooks` を使ってください。
+
+## 反復予算と workspace 制御
+
+- `--max-iterations <n>` は `run` / `resume` のループ予算を制限します。CLI の既定値は `20`、ラップ済みクライアントの自己トリガー prompt は `8` です。
+- `--workspace <path>` は ContextDB session artifact をそのプロジェクトルートへ強制的に書き込みます。wrapper、外部 checkout、親ディレクトリから AIOS を起動する時に使います。
+- `--provider <codex|claude|gemini|opencode>` はループで使うローカル CLI を選びます。
 
 ## 生成されるファイル
 

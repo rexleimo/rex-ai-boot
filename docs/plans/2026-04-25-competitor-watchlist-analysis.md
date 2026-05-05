@@ -8,7 +8,7 @@
 - Local clones: `temp/competitor-repos/` (ignored by git, safe for large third-party code)
 - Manifest: `memory/knowledge/competitor-watchlist.json`
 - Analysis report: `memory/knowledge/competitor-analysis.md`
-- Update helper: `scripts/update-competitor-repos.mjs`
+- Update helper: removed (manual watchlist maintenance only)
 
 **Stop conditions:**
 - Do not commit third-party repositories into AIOS.

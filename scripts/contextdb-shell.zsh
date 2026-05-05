@@ -9,12 +9,15 @@
 # - CTXDB_WRAP_MODE: all|repo-only|opt-in|off (default: repo-only, read by bridge)
 # - CTXDB_MARKER_FILE: marker filename for opt-in mode (default: .contextdb-enable, read by bridge)
 # - CTXDB_AUTO_CREATE_MARKER: auto-create marker in opt-in mode (default: on, read by bridge)
+# - CTXDB_INTERACTIVE_AUTO_ROUTE: inject single/subagent/team/harness route prompt (default: on, read by bridge)
+# - CTXDB_HARNESS_PROVIDER: provider for injected harness route (default: current CLI, read by bridge)
+# - CTXDB_HARNESS_MAX_ITERATIONS: iteration budget for injected harness route (default: 8, read by bridge)
 # - CTXDB_PRIVACY_BANNER: show/hide interactive Privacy Shield banner (default: on, read by bridge)
 # - CTXDB_PRIVACY_COLOR: enable/disable banner ANSI color (default: on unless NO_COLOR is set, read by bridge)
 
 typeset -g CTXDB_LAST_WORKSPACE=""
 
-_ctxdb_normalize_codex_home() {
+ctxdb_normalize_codex_home() {
   local codex_home="${CODEX_HOME:-}"
   if [[ -z "$codex_home" ]]; then
     return 0
@@ -37,7 +40,7 @@ _ctxdb_normalize_codex_home() {
   fi
 }
 
-_ctxdb_find_bridge() {
+ctxdb_find_bridge() {
   if [[ -n "${CTXDB_SHELL_BRIDGE:-}" ]] && [[ -f "${CTXDB_SHELL_BRIDGE}" ]]; then
     printf '%s\n' "${CTXDB_SHELL_BRIDGE}"
     return 0
@@ -55,7 +58,7 @@ _ctxdb_find_bridge() {
   return 1
 }
 
-_ctxdb_update_last_workspace() {
+ctxdb_update_last_workspace() {
   local workspace=""
   workspace="$(command git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || true)"
   if [[ -n "$workspace" ]]; then
@@ -63,20 +66,20 @@ _ctxdb_update_last_workspace() {
   fi
 }
 
-_ctxdb_invoke_bridge_or_passthrough() {
+ctxdb_invoke_bridge_or_passthrough() {
   local agent="$1"
   shift
   local passthrough="$1"
   shift
 
   local bridge=""
-  bridge="$(_ctxdb_find_bridge || true)"
+  bridge="$(ctxdb_find_bridge || true)"
   if [[ -z "$bridge" ]] || ! command -v node >/dev/null 2>&1; then
     command "$passthrough" "$@"
     return $?
   fi
 
-  _ctxdb_update_last_workspace
+  ctxdb_update_last_workspace
   # Avoid bricking interactive wrappers if someone left CTXDB_PACK_STRICT=1 in
   # their shell env. Quality gates can still enforce strict mode explicitly.
   local strict_interactive="${CTXDB_PACK_STRICT_INTERACTIVE:-}"
@@ -89,20 +92,20 @@ _ctxdb_invoke_bridge_or_passthrough() {
 }
 
 codex() {
-  _ctxdb_normalize_codex_home
-  _ctxdb_invoke_bridge_or_passthrough codex-cli codex "$@"
+  ctxdb_normalize_codex_home
+  ctxdb_invoke_bridge_or_passthrough codex-cli codex "$@"
 }
 
 claude() {
-  _ctxdb_invoke_bridge_or_passthrough claude-code claude "$@"
+  ctxdb_invoke_bridge_or_passthrough claude-code claude "$@"
 }
 
 gemini() {
-  _ctxdb_invoke_bridge_or_passthrough gemini-cli gemini "$@"
+  ctxdb_invoke_bridge_or_passthrough gemini-cli gemini "$@"
 }
 
 opencode() {
-  _ctxdb_invoke_bridge_or_passthrough opencode-cli opencode "$@"
+  ctxdb_invoke_bridge_or_passthrough opencode-cli opencode "$@"
 }
 
 aios() {

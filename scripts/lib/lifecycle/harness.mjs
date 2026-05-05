@@ -96,6 +96,9 @@ function formatHarnessStatusText(status = null) {
   if (status.continuitySummaryPath) {
     lines.push(`Continuity: ${status.continuitySummaryPath}`);
   }
+  if (status.hookEventsPath) {
+    lines.push(`Hook events: ${status.hookEventsPath}`);
+  }
   return `${lines.join('\n')}\n`;
 }
 
@@ -163,7 +166,8 @@ function parseHarnessJsonOutput(rawOutput = '') {
   }
 }
 
-function buildProductionExecuteTurn({ rootDir, sessionId, objective, provider } = {}) {
+function buildProductionExecuteTurn({ rootDir, aiosRootDir = '', sessionId, objective, provider } = {}) {
+  const runtimeAiosRootDir = path.resolve(normalizeText(aiosRootDir, rootDir));
   return async ({ iteration, continuity, summary, worktree }) => {
     const prompt = buildIterationPrompt({
       objective,
@@ -173,7 +177,8 @@ function buildProductionExecuteTurn({ rootDir, sessionId, objective, provider } 
     });
     const workspaceRoot = worktree?.enabled && worktree?.path ? worktree.path : rootDir;
     const built = buildSoloHarnessCommand({
-      rootDir,
+      rootDir: summary?.workspaceRoot || rootDir,
+      aiosRootDir: summary?.aiosRootDir || runtimeAiosRootDir,
       sessionId,
       objective,
       provider,
@@ -296,13 +301,41 @@ async function resolveResumeWorktree({ rootDir, summary } = {}) {
   }
 }
 
+function createLifecycleHooks({ enabled = true } = {}) {
+  if (enabled !== true) {
+    return {};
+  }
+  return {
+    onTurnStart: ({ iteration }) => `iteration ${iteration} started`,
+    onTurnComplete: ({ outcome }) => {
+      const result = normalizeSoloIterationOutcome({
+        sessionId: normalizeText(outcome?.sessionId, 'hook-session'),
+        iteration: Number.isFinite(outcome?.iteration) ? outcome.iteration : 1,
+        ...(outcome && typeof outcome === 'object' ? outcome : {}),
+      });
+      return `outcome=${result.outcome} failureClass=${result.failureClass}`;
+    },
+    onBeforeContinuityCommit: ({ outcome }) => {
+      const status = normalizeText(outcome?.checkpointStatus, 'running');
+      return `checkpointStatus=${status}`;
+    },
+    onSessionEnd: ({ summary, reason = '' }) => {
+      const finalStatus = normalizeText(summary?.status, 'running');
+      const normalizedReason = normalizeText(reason, 'completed');
+      return `finalStatus=${finalStatus} reason=${normalizedReason}`;
+    },
+  };
+}
+
 export async function runHarnessCommand(options = {}, {
   rootDir,
+  aiosRootDir = '',
   io = console,
   executeTurn = null,
   sleepImpl,
 } = {}) {
   const subcommand = normalizeText(options.subcommand, 'run');
+  const runtimeAiosRootDir = path.resolve(normalizeText(aiosRootDir, rootDir));
 
   if (subcommand === 'status') {
     const status = await readSoloRunStatus({ rootDir, sessionId: options.sessionId });
@@ -340,6 +373,7 @@ export async function runHarnessCommand(options = {}, {
     if (!objective) {
       throw new Error('harness run requires --objective');
     }
+    const hooksEnabled = options.lifecycleHooks !== false;
     const session = ensureSoloHarnessSession({
       rootDir,
       sessionId: options.sessionId,
@@ -361,6 +395,8 @@ export async function runHarnessCommand(options = {}, {
         preserved: false,
         cleanupReason: '',
       },
+      aiosRootDir: runtimeAiosRootDir,
+      workspaceRoot: path.resolve(rootDir),
     });
 
     if (options.dryRun === true) {
@@ -422,7 +458,10 @@ export async function runHarnessCommand(options = {}, {
           sessionId: session.sessionId,
           objective,
           provider,
+          aiosRootDir: runtimeAiosRootDir,
         }),
+        maxIterations: options.maxIterations,
+        lifecycleHooks: createLifecycleHooks({ enabled: hooksEnabled }),
         sleepImpl,
       });
       let summary = result.summary;
@@ -466,6 +505,7 @@ export async function runHarnessCommand(options = {}, {
   }
 
   if (subcommand === 'resume') {
+    const hooksEnabled = options.lifecycleHooks !== false;
     const existing = await readSoloRunSummary({ rootDir, sessionId: options.sessionId });
     if (!existing) {
       return { exitCode: 1 };
@@ -489,10 +529,13 @@ export async function runHarnessCommand(options = {}, {
       worktree: restoredWorktree,
       executeTurn: executeTurn || buildProductionExecuteTurn({
         rootDir,
+        aiosRootDir: existing.aiosRootDir || runtimeAiosRootDir,
         sessionId: summary.sessionId,
         objective: summary.objective,
         provider: summary.provider,
       }),
+      maxIterations: options.maxIterations,
+      lifecycleHooks: createLifecycleHooks({ enabled: hooksEnabled }),
       sleepImpl,
     });
     if (restoredWorktree?.enabled && restoredWorktree?.path) {

@@ -24,6 +24,25 @@ ContextDB는 다중 CLI agent를 위한 파일시스템 세션 계층입니다. 
 - 인터랙티브 모드는 보통 CLI 열기 전에 단계 `1, 2, 5`를 실행.
 - 원샷 모드는 `1..5`를 단일 명령으로 실행.
 
+## 시작 자동 route prompt
+
+래핑된 대화형 클라이언트(`codex`, `claude`, `gemini`, `opencode`)는 보수적인 시작 route prompt 를 받습니다. 일반 작업은 `single` 로 유지하고, 명확히 다른 레인이 필요할 때만 AIOS 명령을 자체 트리거합니다:
+
+- `single`: 현재 클라이언트에서 계속 진행.
+- `subagent`: 하나의 주 도메인에 staged orchestration / verification gate 가 필요.
+- `team`: 2개 이상의 독립 도메인을 병렬 worker 로 진행 가능.
+- `harness`: 명시적인 장시간/야간/재개 가능/checkpoint 중심 목표.
+
+제어:
+
+```bash
+export CTXDB_INTERACTIVE_AUTO_ROUTE=0      # 시작 route prompt 비활성화
+export CTXDB_HARNESS_PROVIDER=codex       # codex|claude|gemini|opencode
+export CTXDB_HARNESS_MAX_ITERATIONS=8     # 주입되는 harness 루프 예산
+```
+
+주입되는 `harness` 명령에는 `--workspace <project-root>` 가 포함되므로 session artifact 는 AIOS 설치 디렉터리가 아니라 활성 프로젝트에 기록됩니다.
+
 ## Fail-Open Packing
 
 `contextdb context:pack`이 실패하면, `ctx-agent`는 **경고 후 계속 진행** 합니다 (컨텍스트 미주입 상태로 CLI 실행).
@@ -56,6 +75,7 @@ npm run contextdb -- index:rebuild
 ## Workspace Memory (`aios memo`)
 
 CLI 흐름 안에서 지속적인 운영자 메모를 관리하려면 `aios memo`를 사용하세요.
+persona/user profile 은 전역 레이어입니다. Agent 의 안정적인 행동 방식과 사용자 선호를 프로젝트 간에 재사용하고, 프로젝트별 사실은 ContextDB 에 남깁니다.
 
 저장 경계:
 
@@ -78,6 +98,42 @@ aios memo persona add "Response style: concise, direct, evidence-first"
 aios memo user init
 aios memo user add "Preferred language: zh-CN + technical English terms"
 ```
+
+### Persona / User Profile Memory
+
+래핑된 coding agent 가 "나는 누구이고, 어떻게 일하며, 누구를 돕는가"를 매번 project prompt 에 반복하지 않고 알게 하고 싶을 때 사용합니다.
+
+- `persona` 는 agent baseline 을 저장합니다: identity, tone, engineering standards, safety posture.
+- `user` 는 안정적인 operator preference 를 저장합니다: language, delivery style, recurring priorities.
+- `ctx-agent` 는 persona, user profile, workspace memo 순서로 Memory prelude 를 구성합니다.
+- persona/user 파일은 쓰기 전과 주입 전에 unsafe prompt-injection 유사 내용을 스캔합니다.
+- 각 identity file 은 startup prompt 가 과도하게 커지지 않도록 용량 제한을 가집니다.
+
+Commands:
+
+```bash
+aios memo persona init
+aios memo persona set "Identity: pragmatic AI engineering partner"
+aios memo persona add "Response style: concise, direct, evidence-first"
+aios memo persona show
+aios memo persona path
+
+aios memo user init
+aios memo user set "Preferred language: zh-CN + technical English terms"
+aios memo user add "Delivery preference: implementation first, concise review second"
+aios memo user show
+aios memo user path
+```
+
+Configuration:
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `AIOS_IDENTITY_HOME` | 전역 identity file directory | `~/.aios` |
+| `AIOS_PERSONA_PATH` | 명시적 persona file path | `~/.aios/SOUL.md` |
+| `AIOS_USER_PROFILE_PATH` | 명시적 user profile file path | `~/.aios/USER.md` |
+| `AIOS_PERSONA_MAX_CHARS` | persona capacity limit | `2400` |
+| `AIOS_USER_PROFILE_MAX_CHARS` | user profile capacity limit | `2400` |
 
 ## 레이지 로드 시작 (P0) {#lazy-load}
 
@@ -246,7 +302,7 @@ memory/context-db/
 
 복구 방법:
 
-- 권장: CLI를 종료한 뒤 셸에서 `codex` / `claude` / `gemini`를 다시 실행 (래퍼가 다시 `context:pack` 후 주입).
+- 권장: CLI를 종료한 뒤 셸에서 `codex` / `claude` / `gemini` / `opencode`를 다시 실행 (래퍼가 다시 `context:pack` 후 주입).
 - 같은 프로세스에서 계속해야 한다면: 새 대화 첫 메시지에서 최신 스냅샷을 읽도록 요청:
   - `@memory/context-db/exports/latest-codex-cli-context.md`
   - `@memory/context-db/exports/latest-claude-code-context.md`

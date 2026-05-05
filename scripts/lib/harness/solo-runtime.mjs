@@ -1,5 +1,11 @@
 import { readContinuitySummary, writeContinuitySummary } from '../contextdb/continuity.mjs';
-import { appendSoloIteration, readSoloControl, readSoloRunSummary, writeSoloRunSummary } from './solo-journal.mjs';
+import {
+  appendSoloHookEvent,
+  appendSoloIteration,
+  readSoloControl,
+  readSoloRunSummary,
+  writeSoloRunSummary,
+} from './solo-journal.mjs';
 
 const SOLO_OUTCOMES = new Set(['success', 'noop', 'blocked', 'infra-retry', 'human-gate', 'stopped', 'failed']);
 const SOLO_FAILURE_CLASSES = new Set([
@@ -121,6 +127,109 @@ export function classifySoloFailure(value = {}) {
   if (normalized.includes('tool')) return 'tool-error';
   if (normalized.includes('workspace') || normalized.includes('git')) return 'workspace-mutation';
   return 'runtime-error';
+}
+
+function buildHookDetail(value = '') {
+  const normalized = normalizeText(value);
+  if (!normalized) return '';
+  return normalized.length > 280 ? `${normalized.slice(0, 280).trimEnd()}…` : normalized;
+}
+
+function buildHookLogEntry({ hook = '', phase = '', iteration = 0, status = 'ok', detail = '' } = {}) {
+  return {
+    ts: new Date().toISOString(),
+    kind: 'hook',
+    hook: normalizeText(hook),
+    phase: normalizeText(phase),
+    iteration: Number.isFinite(iteration) ? Math.max(0, Math.floor(iteration)) : 0,
+    status: normalizeText(status, 'ok'),
+    detail: buildHookDetail(detail),
+  };
+}
+
+async function invokeLifecycleHook({
+  rootDir,
+  sessionId,
+  hook = '',
+  phase = '',
+  iteration = 0,
+  callback = null,
+  payload = {},
+} = {}) {
+  if (typeof callback !== 'function') {
+    return null;
+  }
+
+  const baseEvent = {
+    kind: 'lifecycle-hook',
+    hook,
+    phase,
+    iteration,
+  };
+
+  try {
+    await appendSoloHookEvent({
+      rootDir,
+      sessionId,
+      event: {
+        ...baseEvent,
+        status: 'start',
+      },
+    });
+  } catch {
+    // Best-effort audit trail only.
+  }
+
+  try {
+    const result = await callback(payload);
+    const detail = typeof result === 'string'
+      ? result
+      : normalizeText(result?.detail || result?.summary || '');
+    const logEntry = buildHookLogEntry({
+      hook,
+      phase,
+      iteration,
+      status: 'ok',
+      detail,
+    });
+    try {
+      await appendSoloHookEvent({
+        rootDir,
+        sessionId,
+        event: {
+          ...baseEvent,
+          status: 'ok',
+          detail: logEntry.detail,
+        },
+      });
+    } catch {
+      // Best-effort audit trail only.
+    }
+    return { ok: true, logEntry, result };
+  } catch (error) {
+    const detail = buildHookDetail(error instanceof Error ? error.message : String(error));
+    const logEntry = buildHookLogEntry({
+      hook,
+      phase,
+      iteration,
+      status: 'error',
+      detail,
+    });
+    try {
+      await appendSoloHookEvent({
+        rootDir,
+        sessionId,
+        event: {
+          ...baseEvent,
+          status: 'error',
+          detail: logEntry.detail,
+        },
+      });
+    } catch {
+      // Best-effort audit trail only.
+    }
+    return { ok: false, logEntry, error };
+  }
 }
 
 export function resolveSoloBackoffState({ previous = null, outcome = {}, nowIso = new Date().toISOString() } = {}) {
@@ -274,6 +383,7 @@ export async function runSoloHarnessLoop({
   worktree = null,
   maxIterations = 20,
   executeTurn,
+  lifecycleHooks = {},
   sleepImpl = sleep,
 } = {}) {
   if (typeof executeTurn !== 'function') {
@@ -305,6 +415,23 @@ export async function runSoloHarnessLoop({
         summary,
         outcome: buildStopOutcome({ sessionId, iteration }),
       });
+      await invokeLifecycleHook({
+        rootDir,
+        sessionId,
+        hook: 'onSessionEnd',
+        phase: 'session-end',
+        iteration,
+        callback: lifecycleHooks?.onSessionEnd,
+        payload: {
+          rootDir,
+          sessionId,
+          objective: summary.objective,
+          iteration,
+          summary,
+          stoppedByControl: true,
+          reason: 'control-stop-request',
+        },
+      });
       return {
         summary,
         stoppedByControl: true,
@@ -315,6 +442,30 @@ export async function runSoloHarnessLoop({
     const untilMs = Date.parse(summary.backoff?.until || '');
     if (Number.isFinite(untilMs) && untilMs > nowMs) {
       await sleepImpl(untilMs - nowMs);
+    }
+
+    const turnLogEntries = [];
+    const onTurnStartResult = await invokeLifecycleHook({
+      rootDir,
+      sessionId,
+      hook: 'onTurnStart',
+      phase: 'turn-start',
+      iteration,
+      callback: lifecycleHooks?.onTurnStart,
+      payload: {
+        rootDir,
+        sessionId,
+        objective: summary.objective,
+        iteration,
+        summary,
+        provider: summary.provider,
+        clientId: summary.clientId,
+        profile: summary.profile,
+        worktree,
+      },
+    });
+    if (onTurnStartResult?.logEntry) {
+      turnLogEntries.push(onTurnStartResult.logEntry);
     }
 
     const continuity = await readContinuitySummary({ workspaceRoot: rootDir, sessionId });
@@ -336,6 +487,48 @@ export async function runSoloHarnessLoop({
       iteration,
       ...(rawTurn && typeof rawTurn === 'object' ? rawTurn : {}),
     });
+
+    const onTurnCompleteResult = await invokeLifecycleHook({
+      rootDir,
+      sessionId,
+      hook: 'onTurnComplete',
+      phase: 'turn-complete',
+      iteration,
+      callback: lifecycleHooks?.onTurnComplete,
+      payload: {
+        rootDir,
+        sessionId,
+        objective: summary.objective,
+        iteration,
+        summary,
+        outcome,
+        rawTurn: rawTurn && typeof rawTurn === 'object' ? rawTurn : {},
+      },
+    });
+    if (onTurnCompleteResult?.logEntry) {
+      turnLogEntries.push(onTurnCompleteResult.logEntry);
+    }
+
+    const onBeforeContinuityCommitResult = await invokeLifecycleHook({
+      rootDir,
+      sessionId,
+      hook: 'onBeforeContinuityCommit',
+      phase: 'pre-continuity-commit',
+      iteration,
+      callback: lifecycleHooks?.onBeforeContinuityCommit,
+      payload: {
+        rootDir,
+        sessionId,
+        objective: summary.objective,
+        iteration,
+        summary,
+        outcome,
+      },
+    });
+    if (onBeforeContinuityCommitResult?.logEntry) {
+      turnLogEntries.push(onBeforeContinuityCommitResult.logEntry);
+    }
+
     summary = await persistIterationState({
       rootDir,
       sessionId,
@@ -343,10 +536,27 @@ export async function runSoloHarnessLoop({
       outcome,
       prompt: rawTurn?.prompt || '',
       rawOutput: rawTurn?.rawOutput || '',
-      extraLogEntries: rawTurn?.logEntries || [],
+      extraLogEntries: [...(rawTurn?.logEntries || []), ...turnLogEntries],
     });
 
     if (outcome.shouldStop) {
+      await invokeLifecycleHook({
+        rootDir,
+        sessionId,
+        hook: 'onSessionEnd',
+        phase: 'session-end',
+        iteration,
+        callback: lifecycleHooks?.onSessionEnd,
+        payload: {
+          rootDir,
+          sessionId,
+          objective: summary.objective,
+          iteration,
+          summary,
+          stoppedByControl: false,
+          reason: 'iteration-stop',
+        },
+      });
       return {
         summary,
         stoppedByControl: false,
@@ -370,6 +580,24 @@ export async function runSoloHarnessLoop({
     sessionId,
     summary,
     outcome: maxOutcome,
+  });
+
+  await invokeLifecycleHook({
+    rootDir,
+    sessionId,
+    hook: 'onSessionEnd',
+    phase: 'session-end',
+    iteration,
+    callback: lifecycleHooks?.onSessionEnd,
+    payload: {
+      rootDir,
+      sessionId,
+      objective: summary.objective,
+      iteration,
+      summary,
+      stoppedByControl: false,
+      reason: 'max-iterations',
+    },
   });
 
   return {
