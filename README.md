@@ -139,6 +139,43 @@ aios learn-eval --limit 10
 aios learn-eval --session <session-id> --format json
 ```
 
+### Release Status (RL gate health + trend)
+
+```bash
+aios release-status --recent 12
+aios release-status --strict
+aios release-status --format json --history-output memory/context-db/exports/release-trend.csv --history-format csv
+```
+
+`--strict` returns non-zero when the recent release-health window does not pass the configured gate.
+
+### Workspace Memo (project memory + persona/user layers)
+
+`aios memo` adds a lightweight operator memory layer on top of ContextDB.
+
+Storage boundaries (important):
+
+- `memo add/list/search` writes and queries memo events in ContextDB session `workspace-memory--<space>`
+- `memo recall` runs cross-session recall (`recall:sessions`) for the current project
+- `memo pin show/set/add` reads and writes `memory/context-db/sessions/workspace-memory--<space>/pinned.md`
+- `memo persona ...` uses global persona memory (default: `~/.aios/SOUL.md`)
+- `memo user ...` uses global user profile memory (default: `~/.aios/USER.md`)
+- `AIOS_IDENTITY_HOME`, `AIOS_PERSONA_PATH`, and `AIOS_USER_PROFILE_PATH` override the default global file locations
+
+Common flow:
+
+```bash
+aios memo use release-train
+aios memo add "Need strict pre-PR checks #quality"
+aios memo pin add "Never run destructive git commands without explicit approval."
+aios memo persona init
+aios memo persona add "Response style: concise, direct, evidence-first"
+aios memo user init
+aios memo user add "Preferred language: zh-CN + technical English terms"
+aios memo list --limit 10
+aios memo recall "release gate" --limit 5
+```
+
 ### Orchestrate (blueprints + local dispatch skeleton + token-free dry-run)
 
 Preview a blueprint:
@@ -203,6 +240,7 @@ What it does:
 
 - Keeps `ContextDB` as the canonical session memory and adds a human-readable solo run journal under `memory/context-db/sessions/<session-id>/artifacts/solo-harness/`
 - Supports `run`, `status`, `resume`, and `stop` for the same session instead of forcing a one-shot workflow
+- Supports `--hooks` / `--no-hooks` on `run` and `resume`; hooks are enabled by default and log lifecycle evidence into `hook-events.jsonl`
 - Uses `--worktree` to isolate overnight changes in a disposable git worktree instead of mutating the main checkout directly
 - Avoids blanket recovery tactics such as `git reset --hard`; preserved worktrees stay available for manual review
 
@@ -227,12 +265,14 @@ Journal files created for each run:
 - `objective.md`: the normalized objective stored with the session
 - `run-summary.json`: current status, iteration counters, backoff state, and worktree metadata
 - `control.json`: stop requests and operator notes
+- `hook-events.jsonl`: lifecycle hook traces when hooks are enabled
 - `iteration-0001.json` / `iteration-0001.log.jsonl`: per-iteration summary plus raw provider output
 
 Operational notes:
 
 - Live execution reuses the existing `scripts/ctx-agent.mjs` one-shot provider path, so the matching local CLI (`codex`, `claude`, `gemini`, or `opencode`) still needs to be installed and runnable
 - `resume` clears a prior stop request and recreates the isolated worktree when the previous path no longer exists
+- Use `--no-hooks` when you want a low-noise loop without lifecycle hook evidence rows
 - HUD auto-detects solo harness sessions, so `aios hud --session <session-id>` shows the latest run summary without requiring a dispatch artifact
 
 ### Incident Recovery (pre-mutation snapshots)

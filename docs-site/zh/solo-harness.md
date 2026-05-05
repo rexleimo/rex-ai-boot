@@ -17,6 +17,7 @@ description: 用 ContextDB、run journal、resume/stop 控制和可选 worktree 
 - 任务不值得拆成多个并行 worker。
 - 你想要可恢复的 operator loop，而不是一次性命令。
 - 你希望夜跑改动尽量不污染主工作区。
+- 你希望按需启用 lifecycle hooks 证据（`--hooks` / `--no-hooks`）。
 
 不适合用：
 
@@ -53,6 +54,18 @@ aios harness run --objective "整理明早交接清单" --session nightly-demo -
 
 dry-run 会创建 session journal，但不会真的调用 provider。
 
+## Hooks 开关
+
+`run` 与 `resume` 支持显式 hooks 开关：
+
+```bash
+aios harness run --objective "整理明早交接清单" --session nightly-demo --hooks
+aios harness resume --session nightly-demo --no-hooks
+```
+
+- 默认是 `--hooks`（开启），会记录 lifecycle hook 证据。
+- 如果你想要更低噪声的执行循环，可用 `--no-hooks` 关闭。
+
 ## Solo Harness 会写哪些文件
 
 artifact 统一落在：
@@ -66,6 +79,7 @@ memory/context-db/sessions/<session-id>/artifacts/solo-harness/
 - `objective.md`：标准化后的目标描述。
 - `run-summary.json`：当前状态、迭代次数、backoff、worktree 信息。
 - `control.json`：停止请求和 operator 备注。
+- `hook-events.jsonl`：hooks 启用时的生命周期证据记录。
 - `iteration-0001.json`：每轮归一化后的结果。
 - `iteration-0001.log.jsonl`：每轮的原始日志流，方便排查。
 

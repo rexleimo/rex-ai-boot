@@ -41,6 +41,25 @@ codex
 
 以後、同じプロジェクトで `codex`、`claude`、`gemini` を実行すると、すべて同じ ContextDB に接続します。
 
+## 継続的な運用メモを使いたい（Memo + Persona）
+
+CLI 上で長期的な制約や好みを残すなら `aios memo` を使います:
+
+```bash
+aios memo use release-train
+aios memo add "Need strict pre-PR checks #quality"
+aios memo pin add "Avoid destructive git commands."
+aios memo recall "quality gate" --limit 5
+aios memo persona add "Response style: concise, direct, evidence-first"
+aios memo user add "Preferred language: zh-CN + technical English terms"
+```
+
+記憶レイヤーの目安:
+
+- `memo add/list/search/recall` -> ContextDB イベント層
+- `memo pin` -> ワークスペースの pinned ファイル
+- `memo persona/user` -> グローバル identity ファイル
+
 ## CLI をまたいで引き継ぎたい
 
 ```bash
@@ -66,6 +85,13 @@ aios hud --session nightly-demo --json
 ```bash
 aios harness stop --session nightly-demo --reason "朝に人が引き継ぐ"
 aios harness resume --session nightly-demo
+```
+
+hooks 証跡を制御したい場合は明示指定できます:
+
+```bash
+aios harness run --objective "明朝の引き継ぎメモをまとめる" --session nightly-demo --hooks
+aios harness resume --session nightly-demo --no-hooks
 ```
 
 「1つの agent に1つの目標を継続させたい」なら [ソロ Harness](solo-harness.md)。本当に並列化できるなら [Agent Team](team-ops.md) を使います。
@@ -102,6 +128,13 @@ aios quality-gate pre-pr --profile strict
 ```
 
 PR 前、または大きな変更後に実行します。ContextDB、native/sync、release health などの確認を含みます。
+
+RL のリリースゲート状態と推移を直接確認したい場合:
+
+```bash
+aios release-status --recent 12
+aios release-status --strict
+```
 
 ## RexCLI に段階的に orchestration させたい
 

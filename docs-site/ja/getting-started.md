@@ -156,7 +156,24 @@ aios doctor --native --fix
 | team 進捗を監視 | `aios team status --provider codex --watch` |
 | 提出前 quality check | `aios quality-gate pre-pr --profile strict` |
 
-## 6) Agent Team の最短利用
+## 6) Memo で継続メモを管理
+
+ContextDB ファイルを手で触らず、継続的なプロジェクトメモを残したい場合:
+
+```bash
+aios memo use release-train
+aios memo add "Need strict pre-PR checks #quality"
+aios memo pin add "Avoid destructive git commands."
+aios memo recall "quality gate" --limit 5
+```
+
+記憶レイヤー:
+
+- `memo add/list/search/recall` -> ContextDB イベント
+- `memo pin` -> ワークスペースの `pinned.md`
+- `memo persona/user` -> グローバル identity ファイル（`~/.aios/SOUL.md`、`~/.aios/USER.md`）
+
+## 7) Agent Team の最短利用
 
 タスクが比較的独立した部分へ分割できる時だけ使います:
 
@@ -173,7 +190,7 @@ codex
 
 判断基準は [Agent Team](team-ops.md) を参照してください。
 
-## 7) ブラウザ自動化の最初の診断
+## 8) ブラウザ自動化の最初の診断
 
 RexCLI は既定で CDP/browser-use 経路のブラウザ自動化を使います。ブラウザ関連の問題はまず次を実行してください:
 
@@ -184,7 +201,7 @@ aios internal browser cdp-status
 
 複雑なページでは、まず agent にページテキスト/DOM を読ませ、スクリーンショットは fallback として使ってください。最初から盲目的にボタンを押さないでください。
 
-## 8) Privacy-safe read
+## 9) Privacy-safe read
 
 `.env`、token、cookies、クラウド設定をそのまま model に貼らないでください。次を使います:
 
@@ -194,7 +211,7 @@ aios privacy read --file <path>
 
 RexCLI に wrap された `codex` / `claude` / `gemini` 起動時には、Privacy Shield パネルで現在の保護状態が表示されます。
 
-## 9) 更新とアンインストール
+## 10) 更新とアンインストール
 
 TUI を優先します:
 
@@ -209,7 +226,7 @@ aios update --components all --client all
 aios uninstall --components shell,skills,native
 ```
 
-## 10) 開発インストール経路
+## 11) 開発インストール経路
 
 メンテナー、または未リリース機能を試したい場合:
 

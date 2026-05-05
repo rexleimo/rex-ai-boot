@@ -53,7 +53,33 @@ npm run contextdb -- index:sync --stats --jsonl-out memory/context-db/exports/in
 npm run contextdb -- index:rebuild
 ```
 
-## 懒加载启动（P0）
+## Workspace Memory（`aios memo`）
+
+当你希望在 CLI 流程里维护可持续的操作员记忆时，使用 `aios memo`。
+
+存储边界：
+
+- `memo add/list/search`：在 ContextDB 的 `workspace-memory--<space>` 会话中写入/读取 memo 事件
+- `memo recall`：调用 ContextDB `recall:sessions` 做跨会话项目召回
+- `memo pin show/set/add`：读写 `memory/context-db/sessions/workspace-memory--<space>/pinned.md`
+- `memo persona ...` 和 `memo user ...`：全局文件层（默认 `~/.aios/SOUL.md` 与 `~/.aios/USER.md`）
+
+示例：
+
+```bash
+aios memo use release-train
+aios memo add "Need strict pre-PR gate before merge #quality"
+aios memo pin add "Never run destructive git commands without explicit approval."
+aios memo list --limit 10
+aios memo search "pre-PR" --limit 5
+aios memo recall "release gate" --limit 5
+aios memo persona init
+aios memo persona add "Response style: concise, direct, evidence-first"
+aios memo user init
+aios memo user add "Preferred language: zh-CN + technical English terms"
+```
+
+## 懒加载启动（P0） {#lazy-load}
 
 ContextDB 现在支持交互式 CLI 会话的**懒加载模式**。不再在每次启动时运行完整的 `context:pack`（2~5 秒），而是让包装器加载轻量缓存的 Facade（< 50 ms），并让 Agent 在需要时自主发现记忆。
 

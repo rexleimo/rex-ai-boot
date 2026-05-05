@@ -53,7 +53,33 @@ npm run contextdb -- index:sync --stats --jsonl-out memory/context-db/exports/in
 npm run contextdb -- index:rebuild
 ```
 
-## Lazy Load Startup (P0)
+## Workspace Memory (`aios memo`)
+
+Use `aios memo` when you want durable operator memory without leaving the CLI flow.
+
+Storage boundaries:
+
+- `memo add/list/search` writes and reads memo events inside ContextDB session `workspace-memory--<space>`
+- `memo recall` calls ContextDB `recall:sessions` for cross-session project recall
+- `memo pin show/set/add` reads and writes `memory/context-db/sessions/workspace-memory--<space>/pinned.md`
+- `memo persona ...` and `memo user ...` are global file layers (default: `~/.aios/SOUL.md` and `~/.aios/USER.md`)
+
+Examples:
+
+```bash
+aios memo use release-train
+aios memo add "Need strict pre-PR gate before merge #quality"
+aios memo pin add "Never run destructive git commands without explicit approval."
+aios memo list --limit 10
+aios memo search "pre-PR" --limit 5
+aios memo recall "release gate" --limit 5
+aios memo persona init
+aios memo persona add "Response style: concise, direct, evidence-first"
+aios memo user init
+aios memo user add "Preferred language: zh-CN + technical English terms"
+```
+
+## Lazy Load Startup (P0) {#lazy-load}
 
 ContextDB now supports **lazy load mode** for interactive CLI sessions. Instead of running a full `context:pack` on every startup (2–5 s), the wrapper loads a lightweight cached facade (< 50 ms) and lets the agent self-discover memory when needed.
 

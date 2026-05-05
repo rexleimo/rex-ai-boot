@@ -156,7 +156,24 @@ aios doctor --native --fix
 | Watch team progress | `aios team status --provider codex --watch` |
 | Pre-submit quality check | `aios quality-gate pre-pr --profile strict` |
 
-## 6) Shortest Agent Team Usage
+## 6) Use Memo For Persistent Operator Memory
+
+If you need durable project notes without manually touching ContextDB files:
+
+```bash
+aios memo use release-train
+aios memo add "Need strict pre-PR checks #quality"
+aios memo pin add "Avoid destructive git commands."
+aios memo recall "quality gate" --limit 5
+```
+
+Memory layering:
+
+- `memo add/list/search/recall` -> ContextDB events
+- `memo pin` -> workspace `pinned.md`
+- `memo persona/user` -> global identity files (`~/.aios/SOUL.md`, `~/.aios/USER.md`)
+
+## 7) Shortest Agent Team Usage
 
 Use this only when the task can be split into relatively independent parts:
 
@@ -173,7 +190,7 @@ codex
 
 See [Agent Team](team-ops.md) for more decision rules.
 
-## 7) Browser Automation Troubleshooting
+## 8) Browser Automation Troubleshooting
 
 RexCLI uses a CDP/browser-use path for browser automation by default. For browser-related issues, start with:
 
@@ -184,7 +201,7 @@ aios internal browser cdp-status
 
 For complex pages, ask the agent to read page text/DOM first, then use screenshots as fallback. Do not start by blindly clicking buttons.
 
-## 8) Privacy-Safe Reads
+## 9) Privacy-Safe Reads
 
 Do not paste `.env`, tokens, cookies, or cloud config directly into a model. Use:
 
@@ -194,7 +211,7 @@ aios privacy read --file <path>
 
 When RexCLI-wrapped `codex` / `claude` / `gemini` starts, the Privacy Shield panel shows the current privacy protection status.
 
-## 9) Update And Uninstall
+## 10) Update And Uninstall
 
 Prefer the TUI:
 
@@ -209,7 +226,7 @@ aios update --components all --client all
 aios uninstall --components shell,skills,native
 ```
 
-## 10) Development Install Path
+## 11) Development Install Path
 
 Maintainers or users testing unreleased features can use:
 

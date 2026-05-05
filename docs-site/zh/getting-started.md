@@ -156,7 +156,24 @@ aios doctor --native --fix
 | 监控 team 进度 | `aios team status --provider codex --watch` |
 | 提交前质量检查 | `aios quality-gate pre-pr --profile strict` |
 
-## 6) 多 Agent 的最短用法
+## 6) 用 Memo 管理持续记忆
+
+如果你想要可持续的项目笔记，但不想手动改 ContextDB 文件：
+
+```bash
+aios memo use release-train
+aios memo add "Need strict pre-PR checks #quality"
+aios memo pin add "Avoid destructive git commands."
+aios memo recall "quality gate" --limit 5
+```
+
+记忆分层：
+
+- `memo add/list/search/recall` -> ContextDB 事件层
+- `memo pin` -> 工作区 `pinned.md`
+- `memo persona/user` -> 全局身份文件（`~/.aios/SOUL.md`、`~/.aios/USER.md`）
+
+## 7) 多 Agent 的最短用法
 
 当任务能拆成多个相对独立的部分时再用：
 
@@ -173,7 +190,7 @@ codex
 
 更多判断标准看 [多 Agent 实战](team-ops.md)。
 
-## 7) 浏览器自动化先这样排查
+## 8) 浏览器自动化先这样排查
 
 RexCLI 默认使用 CDP/browser-use 路线做浏览器自动化。出现浏览器相关问题先跑：
 
@@ -184,7 +201,7 @@ aios internal browser cdp-status
 
 复杂页面操作时，优先让 agent 读取页面文本/DOM，再截图；不要一开始就盲点按钮。
 
-## 8) 隐私读取
+## 9) 隐私读取
 
 读取 `.env`、token、cookies、云服务配置时，不要直接贴给模型。用：
 
@@ -194,7 +211,7 @@ aios privacy read --file <path>
 
 启动被 RexCLI 包装的 `codex` / `claude` / `gemini` 时，会出现 Privacy Shield 提示，说明当前隐私保护状态。
 
-## 9) 更新和卸载
+## 10) 更新和卸载
 
 优先走 TUI：
 
@@ -209,7 +226,7 @@ aios update --components all --client all
 aios uninstall --components shell,skills,native
 ```
 
-## 10) 开发安装路径
+## 11) 开发安装路径
 
 维护者或想测试未发布功能时使用：
 

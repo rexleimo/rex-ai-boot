@@ -53,7 +53,33 @@ npm run contextdb -- index:sync --stats --jsonl-out memory/context-db/exports/in
 npm run contextdb -- index:rebuild
 ```
 
-## レイジーロード起動（P0）
+## Workspace Memory（`aios memo`）
+
+CLI 作業の中で継続的なオペレーター記憶を扱いたい場合は `aios memo` を使います。
+
+保存境界:
+
+- `memo add/list/search` は ContextDB の `workspace-memory--<space>` セッションへ memo イベントを書き込み/検索
+- `memo recall` は ContextDB `recall:sessions` を呼び、プロジェクト横断でセッション想起
+- `memo pin show/set/add` は `memory/context-db/sessions/workspace-memory--<space>/pinned.md` を読み書き
+- `memo persona ...` と `memo user ...` はグローバルファイル層（既定: `~/.aios/SOUL.md` と `~/.aios/USER.md`）
+
+例:
+
+```bash
+aios memo use release-train
+aios memo add "Need strict pre-PR gate before merge #quality"
+aios memo pin add "Never run destructive git commands without explicit approval."
+aios memo list --limit 10
+aios memo search "pre-PR" --limit 5
+aios memo recall "release gate" --limit 5
+aios memo persona init
+aios memo persona add "Response style: concise, direct, evidence-first"
+aios memo user init
+aios memo user add "Preferred language: zh-CN + technical English terms"
+```
+
+## レイジーロード起動（P0） {#lazy-load}
 
 ContextDB はインタラクティブ CLI セッション用に **レイジーロードモード** をサポートしています。毎回起動時に完全な `context:pack` を実行する代わりに（2〜5秒）、ラッパーは軽量なキャッシュ済みファサード（< 50 ms）を読み込み、エージェントが必要に応じてメモリを自律発見できるようにします。
 

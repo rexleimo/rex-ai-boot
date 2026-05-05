@@ -17,6 +17,7 @@ description: ContextDB、run journal、resume/stop 制御、必要に応じた w
 - 複数 worker に分割するほどではない。
 - one-shot ではなく、再開可能な operator loop が欲しい。
 - 夜間の変更をメイン checkout から分離したい。
+- `--hooks` / `--no-hooks` で lifecycle hook 証跡を制御したい。
 
 向いていない場面:
 
@@ -53,6 +54,18 @@ aios harness run --objective "明朝の引き継ぎメモをまとめる" --sess
 
 Dry-run は session journal を作りますが、provider は呼びません。
 
+## Hooks 切り替え
+
+`run` と `resume` は hooks を明示的に切り替えできます:
+
+```bash
+aios harness run --objective "明朝の引き継ぎメモをまとめる" --session nightly-demo --hooks
+aios harness resume --session nightly-demo --no-hooks
+```
+
+- 既定は `--hooks`（有効）で、lifecycle hook 証跡を記録します。
+- 低ノイズ運用にしたい場合は `--no-hooks` を使ってください。
+
 ## 生成されるファイル
 
 artifact は次の場所に保存されます:
@@ -66,6 +79,7 @@ memory/context-db/sessions/<session-id>/artifacts/solo-harness/
 - `objective.md`: 正規化された目標。
 - `run-summary.json`: 現在状態、反復回数、backoff、worktree 情報。
 - `control.json`: stop 要求と operator メモ。
+- `hook-events.jsonl`: hooks 有効時の lifecycle 証跡ログ。
 - `iteration-0001.json`: 各反復の正規化結果。
 - `iteration-0001.log.jsonl`: デバッグ用の生ログ。
 

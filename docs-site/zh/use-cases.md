@@ -41,6 +41,25 @@ codex
 
 之后在同一项目里运行 `codex`、`claude`、`gemini`，都会接入同一个 ContextDB。
 
+## 我想要可持续的操作记忆（Memo + Persona）
+
+如果你希望在 CLI 里快速记录长期偏好/项目约束，用 `aios memo`：
+
+```bash
+aios memo use release-train
+aios memo add "Need strict pre-PR checks #quality"
+aios memo pin add "Avoid destructive git commands."
+aios memo recall "quality gate" --limit 5
+aios memo persona add "Response style: concise, direct, evidence-first"
+aios memo user add "Preferred language: zh-CN + technical English terms"
+```
+
+记忆分层规则：
+
+- `memo add/list/search/recall` -> ContextDB 事件层
+- `memo pin` -> 当前工作区 pinned 文件
+- `memo persona/user` -> 全局身份文件
+
 ## 我想跨 CLI 接力
 
 ```bash
@@ -66,6 +85,13 @@ aios hud --session nightly-demo --json
 ```bash
 aios harness stop --session nightly-demo --reason "白天人工接手"
 aios harness resume --session nightly-demo
+```
+
+如果你需要 lifecycle hook 证据，可显式指定：
+
+```bash
+aios harness run --objective "整理明早交接清单" --session nightly-demo --hooks
+aios harness resume --session nightly-demo --no-hooks
 ```
 
 如果你要的是“一个 agent 盯一个目标持续做”，用 [单 Agent 夜跑](solo-harness.md)。如果任务本身适合并行拆分，再用 [多 Agent 实战](team-ops.md)。
@@ -102,6 +128,13 @@ aios quality-gate pre-pr --profile strict
 ```
 
 适合提交 PR 前或大改后跑一遍。它会把 ContextDB、native/sync、release health 等检查纳入门禁。
+
+如果你想直接看 RL 发布门禁状态和趋势：
+
+```bash
+aios release-status --recent 12
+aios release-status --strict
+```
 
 ## 我想让 RexCLI 分阶段编排
 

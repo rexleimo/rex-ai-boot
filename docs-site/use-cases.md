@@ -41,6 +41,25 @@ codex
 
 After that, `codex`, `claude`, and `gemini` in the same project all connect to the same ContextDB.
 
+## I Want Durable Operator Memory (Memo + Persona)
+
+Use `aios memo` when you want lightweight memory without manually editing ContextDB files:
+
+```bash
+aios memo use release-train
+aios memo add "Need strict pre-PR checks #quality"
+aios memo pin add "Avoid destructive git commands."
+aios memo recall "quality gate" --limit 5
+aios memo persona add "Response style: concise, direct, evidence-first"
+aios memo user add "Preferred language: zh-CN + technical English terms"
+```
+
+Rule of thumb:
+
+- `memo add/list/search/recall` -> ContextDB-backed memory
+- `memo pin` -> workspace pinned file
+- `memo persona/user` -> global identity files
+
 ## I Want Cross-CLI Handoff
 
 ```bash
@@ -66,6 +85,13 @@ If you need the run to stop cleanly or continue later:
 ```bash
 aios harness stop --session nightly-demo --reason "morning handoff"
 aios harness resume --session nightly-demo
+```
+
+If you want lifecycle hook evidence, keep default hooks on or set them explicitly:
+
+```bash
+aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --hooks
+aios harness resume --session nightly-demo --no-hooks
 ```
 
 Use [Solo Harness](solo-harness.md) when you want one agent to stay on one objective. Use [Agent Team](team-ops.md) when the work is truly parallel-friendly.
@@ -102,6 +128,13 @@ aios quality-gate pre-pr --profile strict
 ```
 
 Use this before a PR or after a large change. It includes ContextDB, native/sync, and release-health checks.
+
+If you want the RL release gate status and trend report directly:
+
+```bash
+aios release-status --recent 12
+aios release-status --strict
+```
 
 ## I Want RexCLI To Orchestrate Stages
 

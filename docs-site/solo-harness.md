@@ -17,6 +17,7 @@ Good fit:
 - The task is not worth splitting into multiple parallel workers.
 - You want a resumable operator loop instead of a one-shot command.
 - You want overnight changes isolated from the main checkout.
+- You want optional lifecycle hook evidence (`--hooks` / `--no-hooks`) for each run.
 
 Not a good fit:
 
@@ -53,6 +54,18 @@ aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --w
 
 Dry-run creates the session journal but does not invoke the provider.
 
+## Hook Controls
+
+`run` and `resume` accept explicit hook toggles:
+
+```bash
+aios harness run --objective "Draft tomorrow handoff" --session nightly-demo --hooks
+aios harness resume --session nightly-demo --no-hooks
+```
+
+- Default is `--hooks` (enabled), which records lifecycle hook evidence.
+- Use `--no-hooks` when you want a lower-noise run without hook traces.
+
 ## What Solo Harness Writes
 
 Artifacts live under:
@@ -66,6 +79,7 @@ Main files:
 - `objective.md` - normalized objective stored with the session.
 - `run-summary.json` - current state, iteration counters, backoff state, and worktree metadata.
 - `control.json` - stop requests and operator notes.
+- `hook-events.jsonl` - lifecycle hook evidence (when hooks are enabled).
 - `iteration-0001.json` - normalized per-iteration outcome.
 - `iteration-0001.log.jsonl` - raw iteration log stream for debugging.
 

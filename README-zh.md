@@ -139,6 +139,42 @@ aios learn-eval --limit 10
 aios learn-eval --session <session-id> --format json
 ```
 
+### Release Status（RL 发布门禁状态 + 趋势）
+
+```bash
+aios release-status --recent 12
+aios release-status --strict
+aios release-status --format json --history-output memory/context-db/exports/release-trend.csv --history-format csv
+```
+
+`--strict` 会在最近发布健康窗口未通过门禁时返回非零退出码。
+
+### Workspace Memo（项目记忆 + persona/user 层）
+
+`aios memo` 在 ContextDB 之上补了一层轻量的操作员记忆。
+
+存储边界（重点）：
+
+- `memo add/list/search`：写入/查询 ContextDB 中 `workspace-memory--<space>` 会话的 memo 事件
+- `memo recall`：走 ContextDB `recall:sessions` 做跨会话召回
+- `memo pin show/set/add`：读写 `memory/context-db/sessions/workspace-memory--<space>/pinned.md`
+- `memo persona ...` / `memo user ...`：全局文件层（默认 `~/.aios/SOUL.md` 与 `~/.aios/USER.md`）
+- `AIOS_IDENTITY_HOME`、`AIOS_PERSONA_PATH`、`AIOS_USER_PROFILE_PATH` 可覆盖全局文件默认位置
+
+常用链路：
+
+```bash
+aios memo use release-train
+aios memo add "Need strict pre-PR checks #quality"
+aios memo pin add "Never run destructive git commands without explicit approval."
+aios memo persona init
+aios memo persona add "Response style: concise, direct, evidence-first"
+aios memo user init
+aios memo user add "Preferred language: zh-CN + technical English terms"
+aios memo list --limit 10
+aios memo recall "release gate" --limit 5
+```
+
 ### Orchestrate（蓝图 + 本地调度骨架 + 免 token dry-run）
 
 预览蓝图：
@@ -189,6 +225,7 @@ aios orchestrate --session <session-id> --dispatch local --execute live --format
 
 - `ContextDB` 仍然是正式会话记忆层；`harness` 只是额外补一层人类可快速阅读的 run journal
 - 不会为了“恢复现场”直接做粗暴的 `git reset --hard`
+- `run` / `resume` 支持 `--hooks` / `--no-hooks`；默认开启 hooks 并记录 lifecycle evidence
 - `--worktree` 会把夜跑放进隔离的 git worktree，尽量不污染主工作区
 - `status` / `resume` / `stop` 让你可以中途观察、叫停、第二天继续
 
@@ -213,12 +250,14 @@ aios harness run --objective "整理明早交接清单" --session nightly-demo -
 - `objective.md`：标准化后的目标描述
 - `run-summary.json`：当前状态、迭代次数、backoff、worktree 信息
 - `control.json`：停止请求和 operator 备注
+- `hook-events.jsonl`：hooks 启用时的生命周期事件记录
 - `iteration-0001.json` / `iteration-0001.log.jsonl`：每轮总结和原始输出日志
 
 补充说明：
 
 - live 模式复用现有 `scripts/ctx-agent.mjs` 的一次性 provider 调用链路，所以本机仍然需要安装并可运行对应 CLI（`codex`、`claude`、`gemini`、`opencode`）
 - `resume` 会先清掉之前的 stop 标记；如果原来的 worktree 路径已经不存在，会尝试自动重建
+- 如果你不想写入 hooks 证据，可在 `run` / `resume` 时显式使用 `--no-hooks`
 - `aios hud --session <session-id>` 现在能直接识别 solo harness session，不再要求先有 dispatch artifact
 
 ### HUD（会话可见性）

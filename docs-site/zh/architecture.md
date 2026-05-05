@@ -70,7 +70,7 @@ AIOS 在 ContextDB 之上提供面向运营的 harness：
 
 旧版 Playwright MCP（`mcp-server/`）仍保留用于兼容，但不再是默认。
 
-## RL 训练层（AIOS）
+## RL 训练层（AIOS） {#rl-training-layer-aios}
 
 AIOS 包含一个多环境强化学习系统，持续在 shell、浏览器和编排器任务中改进共享的学生策略。
 
