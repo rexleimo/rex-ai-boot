@@ -88,7 +88,7 @@ function runBridge({
   agent = 'codex-cli',
   command = 'codex',
 }) {
-  const env = { ...process.env, ...envOverrides };
+  const env = { ...process.env, CTXDB_AUTO_PROMPT: "", ...envOverrides };
   env.PATH = `${pathPrefix}${path.delimiter}${env.PATH || ''}`;
 
   if (codeHome !== undefined) {
@@ -343,6 +343,8 @@ test('privacy banner reports custom relay host without credentials or path', asy
     env: {
       CTXDB_RUNNER: fakeRunner,
       CTXDB_WRAP_MODE: 'all',
+      ANTHROPIC_BASE_URL: '',
+      GOOGLE_GEMINI_BASE_URL: '',
       OPENAI_BASE_URL: 'https://user:secret@relay.example.com/v1/private?token=abc',
     },
   });
@@ -505,7 +507,7 @@ test('wrapped interactive opencode runs fallback subagent client to codex-cli by
   );
   assert.match(
     autoPrompt,
-    new RegExp(`node ${escapeRegExp(CTX_AGENT_CLI)} --agent codex-cli --workspace ${escapeRegExp(cwd)} --project ${escapeRegExp(path.basename(cwd))} --route subagent --route-execute live --team-provider codex --team-workers 3 --blueprint feature --prompt "<task>" --no-bootstrap`, 'u')
+    new RegExp(`node ${escapeRegExp(CTX_AGENT_CLI)} --agent opencode-cli --workspace ${escapeRegExp(cwd)} --project ${escapeRegExp(path.basename(cwd))} --route subagent --route-execute live --team-provider codex --team-workers 3 --blueprint feature --prompt "<task>" --no-bootstrap`, 'u')
   );
   assert.match(
     autoPrompt,

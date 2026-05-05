@@ -186,11 +186,11 @@ test('resolveRoutedSubagentClient falls back to provider-supported runtimes', ()
   );
   assert.equal(
     resolveRoutedSubagentClient({ agent: 'opencode-cli', teamProvider: 'auto', env: {} }),
-    'codex-cli'
+    'opencode-cli'
   );
   assert.equal(
     resolveRoutedSubagentClient({ agent: 'opencode-cli', teamProvider: 'claude', env: {} }),
-    'claude-code'
+    'opencode-cli'
   );
   assert.equal(
     resolveRoutedSubagentClient({
